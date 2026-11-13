@@ -6,8 +6,14 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
-import app.models  # noqa: F401  (registra los modelos en Base.metadata)
-from app.db import Base
+from app.config import Settings, get_settings
+
+# Los tests nunca leen el backend/.env real (tiene claves): se desactiva antes de importar la app.
+Settings.model_config["env_file"] = None
+get_settings.cache_clear()
+
+import app.models  # noqa: E402, F401  (registra los modelos en Base.metadata)
+from app.db import Base  # noqa: E402
 
 
 @pytest.fixture
