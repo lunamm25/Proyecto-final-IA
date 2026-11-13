@@ -13,9 +13,18 @@
 | RF-09 | Mapa mental | Rol 1 + 2 + 3 | Pendiente | |
 | RF-10 | Configuración de IA | Rol 1 + 3 | Pendiente | |
 | RF-11 | Proyecto y equipo | Rol 3 | Pendiente | |
-| Deploy | URL pública + datos demo | Rol 4 | Pendiente | |
+| Deploy | URL pública + datos demo | Rol 4 |  ✅ Completado | |
 
 ## Bitácora de sesiones
 <!-- Formato: fecha · integrante · qué se hizo · siguiente paso -->
 - 2026-11-13 · Laura (Rol 1) · base del motor IA: schemas, providers, tests · siguiente paso: prueba real con Gemini y prompts versionados
 - 2026-11-13 · Laura (Rol 1) · RF-03 CA1: extracción de rúbricas con IA (prompt extraer_rubrica v1.0, rubricas.py, lectura .md/.docx/.pdf, probado con 3 rúbricas reales en Gemini) · siguiente paso: afinar descriptores de niveles generados (idea: que el LLM extraiga elementos literales y el código arme la plantilla); validador RF-03 CA2 · pendientes: el modelo no respeta siempre los puntajes 5.0/3.5/0.0 de niveles generados (en LAB01 salieron 10/5/0): asignarlos en código; el título de Manizales pierde el subtítulo; descriptores generados pueden traer adjetivos no presentes en el documento
+
+
+## 2026-11-13 — Luna (Rol 4 DevOps/Calidad)
+
+- ✅ Creado workflow de CI en `.github/workflows/ci.yml` con jobs para backend (ruff + pytest) y frontend (lint + tsc + build)
+- ✅ Corregida ruta `cache-dependency-path` para caché de npm en CI
+- ✅ PR `rol4-devops` → `main` creado y mergeado con todos los checks en verde
+- ✅ Frontend desplegado en Vercel: https://proyecto-final-ia-vaiw.vercel.app
+- ✅ Revisión del PR #1 de Laura (Rol 1) — cambios aprobados y mergeados a `main`
