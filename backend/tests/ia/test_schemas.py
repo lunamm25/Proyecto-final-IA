@@ -38,14 +38,25 @@ def test_criterio_valido() -> None:
     assert len(criterio.niveles) == 3
 
 
-def test_criterio_con_un_nivel_falla() -> None:
-    with pytest.raises(ValidationError, match="al menos 2 niveles"):
-        Criterio(**_criterio(niveles=_niveles(5)))
+def test_criterio_con_un_nivel_valida() -> None:
+    assert len(Criterio(**_criterio(niveles=_niveles(5))).niveles) == 1
 
 
-def test_criterio_con_puntajes_repetidos_falla() -> None:
-    with pytest.raises(ValidationError, match="puntajes repetidos"):
-        Criterio(**_criterio(niveles=_niveles(5, 5)))
+def test_criterio_sin_niveles_valida() -> None:
+    assert Criterio(**_criterio(niveles=[])).niveles == []
+
+
+def test_criterio_con_puntajes_repetidos_valida() -> None:
+    criterio = Criterio(**_criterio(niveles=_niveles(5, 5)))
+    assert [n.puntaje for n in criterio.niveles] == [5, 5]
+
+
+def test_criterio_con_nombres_repetidos_valida() -> None:
+    niveles = [
+        {"nombre": "Alto", "puntaje": 5, "descriptor": "a"},
+        {"nombre": "alto", "puntaje": 3, "descriptor": "b"},
+    ]
+    assert len(Criterio(**_criterio(niveles=niveles)).niveles) == 2
 
 
 @pytest.mark.parametrize("ponderacion", [-1, 101])

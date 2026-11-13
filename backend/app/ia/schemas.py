@@ -5,7 +5,7 @@ Ningún esquema incluye un campo "nota": la nota la calcula el backend de forma 
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class NivelDesempeno(BaseModel):
@@ -17,7 +17,12 @@ class NivelDesempeno(BaseModel):
 
 
 class Criterio(BaseModel):
-    """Criterio de evaluación con su ponderación y niveles."""
+    """Criterio de evaluación con su ponderación y niveles.
+
+    Acepta cualquier cantidad de niveles (incluso ninguno) y no exige puntajes ni nombres
+    distintos: esas inconsistencias las detecta y reporta el validador del backend
+    (RF-03 CA2), para que el docente pueda corregirlas en lugar de perder la extracción.
+    """
 
     id: str = Field(min_length=1)
     competencia: str
@@ -25,25 +30,12 @@ class Criterio(BaseModel):
     ponderacion: float = Field(ge=0, le=100)
     niveles: list[NivelDesempeno]
 
-    @model_validator(mode="after")
-    def _validar_niveles(self) -> "Criterio":
-        """Exige al menos 2 niveles con puntajes y nombres distintos."""
-        if len(self.niveles) < 2:
-            raise ValueError(f"El criterio '{self.id}' debe tener al menos 2 niveles.")
-        puntajes = [n.puntaje for n in self.niveles]
-        if len(set(puntajes)) != len(puntajes):
-            raise ValueError(f"El criterio '{self.id}' tiene niveles con puntajes repetidos.")
-        nombres = [n.nombre.strip().lower() for n in self.niveles]
-        if len(set(nombres)) != len(nombres):
-            raise ValueError(f"El criterio '{self.id}' tiene niveles con nombres repetidos.")
-        return self
-
 
 class RubricaSchema(BaseModel):
     """Rúbrica completa de un laboratorio.
 
-    La suma de ponderaciones != 100 no se rechaza aquí: es una inconsistencia que se
-    reporta al docente (RF-03 CA2).
+    La suma de ponderaciones != 100, los criterios sin niveles y los puntajes repetidos no
+    se rechazan aquí: son inconsistencias que se reportan al docente (RF-03 CA2).
     """
 
     titulo: str

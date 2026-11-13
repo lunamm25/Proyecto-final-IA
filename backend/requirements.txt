@@ -6,6 +6,8 @@ sqlalchemy
 pytest
 httpx
 ruff
-google-genai
-openai
-python-dotenv
+google-genai==3.3.0
+openai==3.50.0
+python-dotenv==1.2.4
+python-docx==1.2.0
+pypdf==7.1.0
