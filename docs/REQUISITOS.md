@@ -49,7 +49,7 @@ Principios: evaluaciones **consistentes, explicables, trazables y validadas por 
 | Frontend | Next.js 14+ (App Router) + TypeScript + Tailwind CSS + shadcn/ui; React Flow (mapa mental); Recharts (gráficas) | Vercel |
 | Backend | Python 3.11 + FastAPI + **Pydantic v2** + SQLAlchemy 2 | Render (web service) |
 | Datos | Supabase: Postgres + Auth + Storage (bucket privado) | Supabase cloud (free) |
-| IA | Capa `LLMProvider` con: **Gemini** (modelo Flash vigente, p. ej. `gemini-2.5-flash`; free tier, multimodal) y **OpenAI-compatible** (Ollama local, Groq, OpenRouter) | Configurable por variables de entorno y panel docente |
+| IA | Capa `LLMProvider` con: **Gemini** (modelo Flash vigente, p. ej. `gemini-3.5-flash-lite`; free tier, multimodal) y **OpenAI-compatible** (Ollama local, Groq, OpenRouter) | Configurable por variables de entorno y panel docente |
 | Verificación de código | `ast` + `ruff` + `radon` (estático, nunca ejecuta) · `pytest` en sandbox | Backend |
 
 Justificación breve (para la documentación): Pydantic es obligatorio → Python en backend; Supabase da login, BD y archivos sin montar servidores; Gemini tiene capa gratuita y lee PDF e imágenes; Ollama permite modelo local sin costo; Vercel/Render despliegan desde GitHub.
@@ -182,7 +182,7 @@ class EvaluacionLLMSchema(BaseModel):
     # ⚠️ NO hay campo "nota": la calcula el backend.
 ```
 
-Validaciones adicionales en backend (no confiar en el LLM): todos los `criterio_id` existen y no faltan; `nivel_elegido` pertenece a los niveles del criterio; evidencias verificadas contra el material.
+Validaciones adicionales en backend (no confiar en el LLM): todos los `criterio_id` existen y no faltan; `nivel_elegido` pertenece a los niveles del criterio; los niveles de un mismo criterio no pueden tener el mismo nombre; evidencias verificadas contra el material.
 
 Otros esquemas: `InformeNarrativoSchema` (competencias_desarrolladas, brechas, plan_fortalecimiento[{accion, recurso, prioridad, competencia}], conclusion) y `MapeoTematicasSchema` ([{criterio_id, tematicas[], conceptos[]}]).
 

@@ -17,3 +17,4 @@
 
 ## Bitácora de sesiones
 <!-- Formato: fecha · integrante · qué se hizo · siguiente paso -->
+- 2026-11-13 · Laura (Rol 1) · base del motor IA: schemas, providers, tests · siguiente paso: prueba real con Gemini y prompts versionados

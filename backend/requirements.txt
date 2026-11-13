@@ -6,3 +6,6 @@ sqlalchemy
 pytest
 httpx
 ruff
+google-genai
+openai
+python-dotenv
