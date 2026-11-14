@@ -23,41 +23,28 @@ export const perfilesMock: Record<Rol, Perfil> = {
   estudiante: {
     id: "est-1",
     nombre: "Ana Estudiante",
-    email: "estudiante@demo.edu.co",
     rol: "estudiante",
     foto_url: null,
-    creado_en: FECHA,
   },
   docente: {
     id: "doc-1",
     nombre: "Carlos Docente",
-    email: "docente@demo.edu.co",
     rol: "docente",
     foto_url: null,
-    creado_en: FECHA,
   },
   admin: {
     id: "adm-1",
     nombre: "Admin Demo",
-    email: "admin@demo.edu.co",
     rol: "admin",
     foto_url: null,
-    creado_en: FECHA,
   },
 };
 
 export const usuariosMock: Usuario[] = [
-  perfilesMock.estudiante,
-  perfilesMock.docente,
-  perfilesMock.admin,
-  {
-    id: "est-2",
-    nombre: "Juan Pérez",
-    email: "juan.perez@demo.edu.co",
-    rol: "estudiante",
-    foto_url: null,
-    creado_en: FECHA,
-  },
+  { id: "est-1", nombre: "Ana Estudiante", correo: "estudiante@demo.edu.co", rol: "estudiante" },
+  { id: "doc-1", nombre: "Carlos Docente", correo: "docente@demo.edu.co", rol: "docente" },
+  { id: "adm-1", nombre: "Admin Demo", correo: "admin@demo.edu.co", rol: "admin" },
+  { id: "est-2", nombre: "Juan Pérez", correo: "juan.perez@demo.edu.co", rol: "estudiante" },
 ];
 
 export const cohortesMock: Cohorte[] = [

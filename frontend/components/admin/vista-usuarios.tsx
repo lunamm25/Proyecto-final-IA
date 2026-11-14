@@ -10,11 +10,13 @@ import {
   filtrarUsuarios,
   type FiltroRol,
 } from "@/components/admin/reglas-usuarios";
-import { formatearFecha } from "@/components/portafolio/estado-entrega";
 import { useSesion } from "@/components/proveedor-sesion";
 import { listarUsuarios } from "@/lib/api";
+import { nombreVisible } from "@/lib/perfil";
 import type { Perfil, Usuario } from "@/lib/tipos";
 import { useCarga } from "@/lib/use-carga";
+
+const SIN_CORREO = "Sin correo registrado";
 
 interface FiltrosProps {
   busqueda: string;
@@ -59,16 +61,14 @@ function TablaUsuarios({ usuarios, actual, alActualizar }: ListaProps) {
           <tr>
             <th scope="col" className="px-4 py-3">Nombre</th>
             <th scope="col" className="px-4 py-3">Correo</th>
-            <th scope="col" className="px-4 py-3">Creado</th>
             <th scope="col" className="px-4 py-3">Rol</th>
           </tr>
         </thead>
         <tbody>
           {usuarios.map((usuario) => (
             <tr key={usuario.id} className="border-t align-top">
-              <td className="px-4 py-3 font-medium">{usuario.nombre}</td>
-              <td className="px-4 py-3 break-all">{usuario.email}</td>
-              <td className="px-4 py-3 whitespace-nowrap">{formatearFecha(usuario.creado_en)}</td>
+              <td className="px-4 py-3 font-medium">{nombreVisible(usuario.nombre)}</td>
+              <td className="px-4 py-3 break-all">{usuario.correo ?? SIN_CORREO}</td>
               <td className="px-4 py-3">
                 <CambioRol usuario={usuario} actual={actual} idBase="tabla" alActualizar={alActualizar} />
               </td>
@@ -85,9 +85,8 @@ function TarjetasUsuarios({ usuarios, actual, alActualizar }: ListaProps) {
     <ul className="space-y-3 md:hidden">
       {usuarios.map((usuario) => (
         <li key={usuario.id} className="rounded-xl border bg-card p-4">
-          <p className="font-semibold">{usuario.nombre}</p>
-          <p className="text-sm break-all">{usuario.email}</p>
-          <p className="mb-3 text-xs text-muted-foreground">Creado el {formatearFecha(usuario.creado_en)}</p>
+          <p className="font-semibold">{nombreVisible(usuario.nombre)}</p>
+          <p className="mb-3 text-sm break-all">{usuario.correo ?? SIN_CORREO}</p>
           <CambioRol usuario={usuario} actual={actual} idBase="tarjeta" alActualizar={alActualizar} />
         </li>
       ))}

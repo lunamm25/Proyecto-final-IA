@@ -78,7 +78,7 @@ export function PanelDocente() {
   const visibles = TARJETAS.filter((tarjeta) => tarjeta.roles.includes(perfil.rol));
   return (
     <>
-      <h1 className="text-3xl font-bold tracking-tight">Hola, {perfil.nombre}</h1>
+      <h1 className="text-3xl font-bold tracking-tight">{perfil.nombre?.trim() ? `Hola, ${perfil.nombre.trim()}` : "Hola"}</h1>
       <p className="mt-2 text-muted-foreground">
         Desde aquí gestionas laboratorios, rúbricas, evaluaciones y la configuración de IA.
       </p>

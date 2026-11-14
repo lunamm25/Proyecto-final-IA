@@ -20,7 +20,7 @@ export interface FilaBandeja {
 async function nombresDeEstudiantes(): Promise<Map<string, string>> {
   try {
     const usuarios: Usuario[] = await listarUsuarios();
-    return new Map(usuarios.map((u) => [u.id, u.nombre]));
+    return new Map(usuarios.flatMap((u) => (u.nombre ? [[u.id, u.nombre] as const] : [])));
   } catch {
     return new Map();
   }

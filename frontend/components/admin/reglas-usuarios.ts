@@ -28,7 +28,7 @@ export function filtrarUsuarios(usuarios: Usuario[], busqueda: string, filtro: F
   return usuarios.filter((usuario) => {
     if (filtro !== "todos" && usuario.rol !== filtro) return false;
     if (termino === "") return true;
-    return normalizar(usuario.nombre).includes(termino) || normalizar(usuario.email).includes(termino);
+    return normalizar(usuario.nombre ?? "").includes(termino) || normalizar(usuario.correo ?? "").includes(termino);
   });
 }
 

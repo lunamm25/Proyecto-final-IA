@@ -4,7 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { GraduationCap, LogOut, Menu, X } from "lucide-react";
+import { AvatarPerfil } from "@/components/avatar-perfil";
 import { useSesion } from "@/components/proveedor-sesion";
+import { nombreVisible } from "@/lib/perfil";
 import { cn } from "@/lib/utils";
 import type { Rol } from "@/lib/tipos";
 
@@ -84,12 +86,19 @@ export function Navegacion() {
               </Link>
             </li>
           ))}
+          {perfil && (
+            <li className="ml-2 flex items-center gap-2" title={`${nombreVisible(perfil.nombre, "Usuario")} (${perfil.rol})`}>
+              <AvatarPerfil perfil={perfil} />
+              <span className="sr-only">
+                Sesión de {nombreVisible(perfil.nombre, "usuario sin nombre")}, rol {perfil.rol}
+              </span>
+            </li>
+          )}
           {conSesion && (
             <li>
               <button
                 type="button"
                 onClick={salir}
-                title={perfil ? `${perfil.nombre} (${perfil.rol})` : undefined}
                 className="ml-2 inline-flex items-center gap-1 rounded-md border px-3 py-2 text-sm hover:bg-muted"
               >
                 <LogOut className="size-4" aria-hidden="true" />
@@ -113,6 +122,15 @@ export function Navegacion() {
 
       {abierto && (
         <ul id="menu-movil" className="border-t px-4 py-2 md:hidden">
+          {perfil && (
+            <li className="flex items-center gap-3 px-3 py-2">
+              <AvatarPerfil perfil={perfil} />
+              <span className="text-sm">
+                <span className="font-medium">{nombreVisible(perfil.nombre, "Usuario")}</span>
+                <span className="text-muted-foreground"> · {perfil.rol}</span>
+              </span>
+            </li>
+          )}
           {enlaces.map((enlace) => (
             <li key={enlace.href}>
               <Link

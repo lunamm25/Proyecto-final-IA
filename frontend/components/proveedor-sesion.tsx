@@ -1,7 +1,14 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { ErrorApi, mensajeDeError, obtenerYo } from "@/lib/api";
+import { useRouter } from "next/navigation";
+import {
+  ErrorApi,
+  MOTIVO_SESION_EXPIRADA,
+  mensajeDeError,
+  obtenerYo,
+  registrarManejadorSesionExpirada,
+} from "@/lib/api";
 import { borrarSesionMock, leerSesionMock } from "@/lib/sesion-mock";
 import { obtenerSupabaseNavegador } from "@/lib/supabase/cliente";
 import type { Perfil } from "@/lib/tipos";
@@ -25,6 +32,26 @@ async function haySesionActiva(): Promise<boolean> {
     return data.session !== null;
   }
   return leerSesionMock() !== null;
+}
+
+/** Ante un 401 del backend: cierra la sesión y lleva a /login conservando la página actual. */
+function useSesionExpirada(cerrarSesion: () => Promise<void>): void {
+  const router = useRouter();
+  useEffect(() => {
+    let cerrando = false;
+    registrarManejadorSesionExpirada(() => {
+      if (cerrando) return;
+      cerrando = true;
+      void cerrarSesion().finally(() => {
+        cerrando = false;
+        const { pathname, search } = window.location;
+        if (pathname === "/login") return;
+        const siguiente = encodeURIComponent(`${pathname}${search}`);
+        router.replace(`/login?siguiente=${siguiente}&motivo=${MOTIVO_SESION_EXPIRADA}`);
+      });
+    });
+    return () => registrarManejadorSesionExpirada(null);
+  }, [cerrarSesion, router]);
 }
 
 export function ProveedorSesion({ children }: { children: React.ReactNode }) {
@@ -64,6 +91,8 @@ export function ProveedorSesion({ children }: { children: React.ReactNode }) {
     setError(null);
     setEstado("anonimo");
   }, []);
+
+  useSesionExpirada(cerrarSesion);
 
   useEffect(() => {
     let activo = true;

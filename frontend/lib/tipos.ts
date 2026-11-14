@@ -18,22 +18,28 @@ export interface ErrorRespuesta {
 
 // ---------- Usuarios (RF-01) ----------
 
-/** GET /api/yo */
+/** GET /api/yo (PerfilRespuesta del backend). El backend no envía el correo. */
 export interface Perfil {
   id: string;
-  nombre: string;
-  email: string;
+  nombre: string | null;
   rol: Rol;
   foto_url: string | null;
-  creado_en: string;
+  /** Solo en modo mock (el rol simulado sale del correo); la API real no lo envía. */
+  email?: string;
 }
 
-/** GET /api/usuarios */
-export type Usuario = Perfil;
+/** GET /api/usuarios (UsuarioRespuesta del backend). */
+export interface Usuario {
+  id: string;
+  nombre: string | null;
+  correo: string | null;
+  rol: Rol;
+}
 
-/** PATCH /api/usuarios/{id}/rol */
+/** PATCH /api/usuarios/{id}/rol (CambioRolEntrada del backend). */
 export interface CambioRol {
   rol: Rol;
+  motivo?: string;
 }
 
 // ---------- Cohortes y laboratorios (RF-02) ----------

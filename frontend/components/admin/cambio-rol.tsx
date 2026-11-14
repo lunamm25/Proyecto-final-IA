@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ROLES, TEXTO_ROL, esRol, motivoBloqueo, puedeAsignar } from "@/components/admin/reglas-usuarios";
 import { cambiarRol, mensajeDeError } from "@/lib/api";
+import { nombreVisible } from "@/lib/perfil";
 import type { Perfil, Rol, Usuario } from "@/lib/tipos";
 
 interface CambioRolProps {
@@ -44,7 +45,7 @@ function Confirmacion({ id, pregunta, enviando, alConfirmar, alCancelar }: Confi
 
 function textoPregunta(usuario: Usuario, nuevo: Rol): string {
   const anterior = TEXTO_ROL[usuario.rol].toLowerCase();
-  return `¿Cambiar el rol de ${usuario.nombre} de ${anterior} a ${TEXTO_ROL[nuevo].toLowerCase()}?`;
+  return `¿Cambiar el rol de ${nombreVisible(usuario.nombre, "este usuario")} de ${anterior} a ${TEXTO_ROL[nuevo].toLowerCase()}?`;
 }
 
 /** Selector de rol con confirmación; PATCH /usuarios/{id}/rol y actualiza la fila con la respuesta del backend. */
@@ -76,7 +77,7 @@ export function CambioRol({ usuario, actual, idBase, alActualizar }: CambioRolPr
 
   return (
     <div className="min-w-48">
-      <label htmlFor={idSelector} className="sr-only">Rol de {usuario.nombre}</label>
+      <label htmlFor={idSelector} className="sr-only">Rol de {nombreVisible(usuario.nombre, "este usuario")}</label>
       <div className="flex items-center gap-2">
         <select id={idSelector} value={pendiente ?? usuario.rol} disabled={bloqueo !== null || enviando}
           aria-describedby={bloqueo ? `${idSelector}-bloqueo` : undefined}

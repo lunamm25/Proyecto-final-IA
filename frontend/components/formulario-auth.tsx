@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Info, Loader2 } from "lucide-react";
 import { useSesion } from "@/components/proveedor-sesion";
 import { Button } from "@/components/ui/button";
-import { MODO_MOCK, mensajeDeError, obtenerYo } from "@/lib/api";
+import { MODO_MOCK, MOTIVO_SESION_EXPIRADA, mensajeDeError, obtenerYo } from "@/lib/api";
 import {
   destinoSeguro,
   rutaInicioPorRol,
@@ -154,6 +154,12 @@ export function FormularioAuth({ modo }: { modo: Modo }) {
         <div role="alert" className="mt-6 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
           {MENSAJE_SUPABASE_NO_CONFIGURADO}
         </div>
+      )}
+
+      {!esRegistro && parametros.get("motivo") === MOTIVO_SESION_EXPIRADA && (
+        <p role="status" className="mt-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          Tu sesión expiró o ya no es válida. Vuelve a iniciar sesión para continuar.
+        </p>
       )}
 
       {sesionSimulada && (

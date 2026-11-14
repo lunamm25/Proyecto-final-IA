@@ -20,6 +20,7 @@ import { formatearFechaHora } from "@/components/evaluaciones/estado-evaluacion"
 import { useAvisoSalida } from "@/components/rubricas/use-aviso-salida";
 import { useSesion } from "@/components/proveedor-sesion";
 import { guardarConfigIA, listarUsuarios, mensajeDeError, obtenerConfigIA } from "@/lib/api";
+import { nombreVisible } from "@/lib/perfil";
 import type { ConfigIA } from "@/lib/tipos";
 import { useCarga } from "@/lib/use-carga";
 
@@ -33,7 +34,7 @@ interface DatosConfig {
 async function cargarNombres(): Promise<Record<string, string>> {
   try {
     const usuarios = await listarUsuarios();
-    return Object.fromEntries(usuarios.map((usuario) => [usuario.id, usuario.nombre]));
+    return Object.fromEntries(usuarios.map((usuario) => [usuario.id, nombreVisible(usuario.nombre)]));
   } catch {
     return {};
   }
@@ -91,7 +92,7 @@ function useNombreActualizador(datos: DatosConfig | null): string {
   const { perfil } = useSesion();
   const id = datos?.config.actualizado_por ?? null;
   if (!id) return "Sin registro";
-  if (perfil?.id === id) return `${perfil.nombre} (tú)`;
+  if (perfil?.id === id) return `${nombreVisible(perfil.nombre, "Tú")}${perfil.nombre?.trim() ? " (tú)" : ""}`;
   return datos?.nombres[id] ?? "Usuario no identificado";
 }
 

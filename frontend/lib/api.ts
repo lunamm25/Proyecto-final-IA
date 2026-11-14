@@ -20,6 +20,7 @@ import {
   usuariosMock,
 } from "@/lib/mocks";
 import { calcularInconsistencias } from "@/lib/inconsistencias-rubrica";
+import { nombreVisible } from "@/lib/perfil";
 import { leerSesionMock } from "@/lib/sesion-mock";
 import { obtenerSupabaseNavegador } from "@/lib/supabase/cliente";
 import type {
@@ -83,10 +84,18 @@ function esErrorRespuesta(valor: unknown): valor is ErrorRespuesta {
   return typeof valor === "object" && valor !== null && "detail" in valor;
 }
 
+/** 403: siempre empieza con "No tienes permiso…" y, si el backend da más contexto, lo añade. */
+function mensajeSinPermiso(detalle: string): string {
+  const base = MENSAJES_POR_ESTADO[403];
+  if (detalle === "" || detalle.toLowerCase().startsWith("no tienes permiso")) return base;
+  return `${base} ${detalle}`;
+}
+
 function mensajePorEstado(status: number, cuerpo: unknown): string {
   if (status >= 500) return "El servidor tuvo un problema. Intenta de nuevo en unos minutos.";
   const base = MENSAJES_POR_ESTADO[status] ?? `Error inesperado del servidor (código ${status}).`;
   if (!esErrorRespuesta(cuerpo)) return base;
+  if (status === 403) return mensajeSinPermiso(typeof cuerpo.detail === "string" ? cuerpo.detail.trim() : "");
   if (typeof cuerpo.detail === "string" && cuerpo.detail.trim() !== "") return cuerpo.detail;
   if (Array.isArray(cuerpo.detail) && cuerpo.detail.length > 0) {
     return `${base} ${cuerpo.detail.map((d) => d.msg).join("; ")}`;
@@ -125,9 +134,25 @@ async function enviar(metodo: Metodo, ruta: string, cuerpo?: unknown): Promise<R
 
   if (!respuesta.ok) {
     const datos: unknown = await respuesta.json().catch(() => null);
+    if (respuesta.status === 401) cerrarSesionExpirada();
     throw new ErrorApi(respuesta.status, mensajePorEstado(respuesta.status, datos));
   }
   return respuesta;
+}
+
+/** Parámetro de /login que indica que se llegó ahí porque la sesión expiró o el token no es válido. */
+export const MOTIVO_SESION_EXPIRADA = "sesion-expirada";
+
+let manejadorSesionExpirada: (() => void) | null = null;
+
+/** El proveedor de sesión registra aquí qué hacer ante un 401 (cerrar sesión e ir a /login). */
+export function registrarManejadorSesionExpirada(manejador: (() => void) | null): void {
+  manejadorSesionExpirada = manejador;
+}
+
+/** 401 del backend (sin token o token inválido): delega en el manejador registrado. */
+function cerrarSesionExpirada(): void {
+  manejadorSesionExpirada?.();
 }
 
 async function peticion<T>(metodo: Metodo, ruta: string, cuerpo?: unknown): Promise<T> {
@@ -359,7 +384,7 @@ function registrarAuditoriaMock(evaluacion: Evaluacion, perfil: Perfil, cambio: 
   trazaDeEvaluacionMock(evaluacion).auditoria.push({
     id: `aud-${Date.now()}`,
     usuario_id: perfil.id,
-    usuario_nombre: perfil.nombre,
+    usuario_nombre: nombreVisible(perfil.nombre),
     creado_en: new Date().toISOString(),
     ...cambio,
   });
