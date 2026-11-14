@@ -18,8 +18,8 @@ Principios: evaluaciones **consistentes, explicables, trazables y validadas por 
 | Rol | Puede |
 |---|---|
 | **Estudiante** | Subir entregas a su portafolio, lanzar la evaluación preliminar, ver evaluaciones **publicadas**, ver su informe y su mapa mental, descargar ambos. |
-| **Docente** | Gestionar cohortes, laboratorios y rúbricas (cargar, corregir, aprobar versión); ver todas las entregas; revisar, ajustar (con justificación obligatoria), aprobar y publicar evaluaciones; configurar el proveedor de IA. |
-| **Admin** | Lo del docente + gestionar usuarios y roles. (Puede ser el mismo docente en la demo.) |
+| **Docente** | Gestionar cohortes, laboratorios y rúbricas (cargar, corregir, aprobar versión); ver todas las entregas; revisar, ajustar (con justificación obligatoria), aprobar y publicar evaluaciones. |
+| **Admin** | Lo del docente + gestionar usuarios y roles + configurar el proveedor de IA. (Puede ser el mismo docente en la demo.) |
 
 ## 3. Alcance
 
@@ -49,7 +49,7 @@ Principios: evaluaciones **consistentes, explicables, trazables y validadas por 
 | Frontend | Next.js 14+ (App Router) + TypeScript + Tailwind CSS + shadcn/ui; React Flow (mapa mental); Recharts (gráficas) | Vercel |
 | Backend | Python 3.11 + FastAPI + **Pydantic v2** + SQLAlchemy 2 | Render (web service) |
 | Datos | Supabase: Postgres + Auth + Storage (bucket privado) | Supabase cloud (free) |
-| IA | Capa `LLMProvider` con: **Gemini** (modelo Flash vigente, p. ej. `gemini-3.5-flash-lite`; free tier, multimodal) y **OpenAI-compatible** (Ollama local, Groq, OpenRouter) | Configurable por variables de entorno y panel docente |
+| IA | Capa `LLMProvider` con: **Gemini** (modelo Flash vigente, p. ej. `gemini-3.5-flash-lite`; free tier, multimodal) y **OpenAI-compatible** (Ollama local, Groq, OpenRouter) | Configurable por variables de entorno y panel de administración |
 | Verificación de código | `ast` + `ruff` + `radon` (estático, nunca ejecuta) · `pytest` en sandbox | Backend |
 
 Justificación breve (para la documentación): Pydantic es obligatorio → Python en backend; Supabase da login, BD y archivos sin montar servidores; Gemini tiene capa gratuita y lee PDF e imágenes; Ollama permite modelo local sin costo; Vercel/Render despliegan desde GitHub.
@@ -61,7 +61,7 @@ Cada RF tiene criterios de aceptación (CA). Un RF está **terminado** solo si t
 ### RF-01 Autenticación y usuarios
 - CA1: registro e inicio de sesión con email/contraseña (Supabase Auth).
 - CA2: tabla `perfiles` con nombre y rol (`estudiante` por defecto).
-- CA3: el admin/docente puede cambiar el rol de un usuario.
+- CA3: el admin puede cambiar el rol de un usuario (decisión del equipo, 14 nov 2026: solo admin, no docente).
 - CA4: el backend valida el JWT de Supabase en cada petición y aplica permisos por rol (401/403).
 
 ### RF-02 Cohortes y laboratorios (Entrada de información)
@@ -117,7 +117,7 @@ Cada RF tiene criterios de aceptación (CA). Un RF está **terminado** solo si t
 - CA5: descarga como PNG y JSON.
 
 ### RF-10 Configuración de IA
-- CA1: el docente elige proveedor (Gemini / OpenAI-compatible) y modelo desde un panel; la URL base y la clave salen de variables de entorno (nunca se muestran en la interfaz).
+- CA1: el administrador elige proveedor (Gemini / OpenAI-compatible) y modelo desde un panel (decisión del equipo, 14 nov 2026: solo admin, no docente); la URL base y la clave salen de variables de entorno (nunca se muestran en la interfaz).
 - CA2: botón "Probar conexión".
 - CA3: cada evaluación guarda proveedor, modelo, temperatura y versión del prompt.
 
@@ -219,13 +219,21 @@ rubricas(id, laboratorio_id FK UNIQUE)
 rubrica_versiones(id, rubrica_id FK, version int, contenido jsonb, estado[borrador|aprobada], creada_por, creada_en)
 entregas(id, estudiante_id FK, laboratorio_id FK, rubrica_version_id FK, pdf_path, codigo_zip_path, github_url, extras jsonb, creada_en)
 evaluaciones(id, entrega_id FK, estado, nota numeric(2,1), proveedor, modelo, prompt_version, temperatura,
-             respuesta_cruda jsonb, resultado jsonb, error text, creada_en, aprobada_por, aprobada_en, publicada_en)
+             respuesta_cruda jsonb, resultado jsonb, retroalimentacion_docente jsonb, error text, creada_en, aprobada_por,
+             aprobada_en, publicada_en)
 evaluacion_criterios(id, evaluacion_id FK, criterio_id, nivel_ia, nivel_final, puntaje_normalizado, evidencias jsonb,
-                     evidencias_verificadas jsonb, justificacion, ajuste_docente text)
+                     evidencias_verificadas jsonb, justificacion, ajuste_docente text, retroalimentacion_docente jsonb)
+-- retroalimentacion_docente: solo los textos editados por el docente; lo generado por la IA
+-- (resultado, justificacion) nunca se modifica, para conservar la traza (migración 0004).
 verificaciones_codigo(id, evaluacion_id FK, sintaxis jsonb, ruff jsonb, complejidad jsonb, tests jsonb, metricas jsonb, sandbox text)
 auditoria(id, usuario_id, entidad, entidad_id, accion, antes jsonb, despues jsonb, motivo, creado_en)
 tematicas(id, nombre, padre_id NULL, descripcion)            -- taxonomía del mapa mental
 config_ia(id=1, proveedor, modelo, temperatura, actualizado_por, actualizado_en)
+cache_ia(id, tipo[informe_narrativo|mapeo_tematicas], clave, huella, prompt_version, proveedor, modelo,
+         contenido jsonb, generado_en)                    -- UNIQUE(tipo, clave); migración 0005
+-- cache_ia: salida ya validada de la IA para no llamar al LLM en cada GET. informe_narrativo → clave = id del
+-- estudiante; mapeo_tematicas → clave = id de la versión de rúbrica. Se regenera si cambia la huella (SHA-256
+-- de los datos enviados) o la versión del prompt. Los números del informe NO se guardan: se recalculan siempre.
 ```
 
 ## 11. Contrato de API (para trabajar en paralelo frontend/backend)
@@ -236,7 +244,7 @@ Prefijo `/api`. Autenticación: `Authorization: Bearer <JWT de Supabase>`. Error
 |---|---|---|---|
 | GET | /api/salud | público | Estado del servicio |
 | GET | /api/yo | todos | Perfil del usuario actual |
-| GET/PATCH | /api/usuarios, /api/usuarios/{id}/rol | admin/docente | Gestión de usuarios |
+| GET/PATCH | /api/usuarios, /api/usuarios/{id}/rol | admin | Gestión de usuarios (lista con id, nombre, correo, rol; cambio de rol `{rol, motivo?}` con auditoría; 409 si un admin se quita su propio rol o se dejaría el sistema sin admin) |
 | GET | /api/cohortes | todos | Cohortes con laboratorios |
 | POST/PUT/DELETE | /api/laboratorios[/{id}] | docente | CRUD laboratorios |
 | POST | /api/laboratorios/{id}/rubrica/extraer | docente | Sube archivo → `RubricaSchema` + inconsistencias |
@@ -245,14 +253,18 @@ Prefijo `/api`. Autenticación: `Authorization: Bearer <JWT de Supabase>`. Error
 | GET | /api/laboratorios/{id}/rubrica | todos | Versión vigente |
 | POST | /api/entregas | estudiante | multipart: laboratorio_id, pdf, zip? , github_url?, extras? |
 | GET | /api/entregas?estudiante_id= | est(propias)/docente | Portafolio |
-| POST | /api/entregas/{id}/evaluar | estudiante/docente | Lanza evaluación (202 + evaluacion_id) |
-| GET | /api/evaluaciones/{id} | según estado/rol | Detalle (estudiante solo si `publicada`) |
-| PATCH | /api/evaluaciones/{id}/criterios/{criterio_id} | docente | Ajuste {nivel_final, motivo} → recalcula nota |
-| POST | /api/evaluaciones/{id}/aprobar · /publicar | docente | Cambios de estado |
-| GET | /api/evaluaciones/{id}/traza | docente | Trazabilidad completa |
-| GET | /api/estudiantes/{id}/informe | est(propio)/docente | Informe integral (JSON) |
-| GET | /api/estudiantes/{id}/mapa | est(propio)/docente | Grafo {nodos, aristas} |
-| GET/PUT | /api/config-ia · POST /api/config-ia/probar | docente | Configuración IA |
+| POST | /api/entregas/{id}/evaluar | estudiante (solo sus entregas)/docente | Lanza evaluación en segundo plano: 202 `{evaluacion_id, estado: "procesando"}` · 404 si la entrega no existe o es ajena (estudiante) · 409 si ya hay una evaluación `procesando` o la rúbrica de la entrega tiene inconsistencias. Al terminar queda `borrador` (nota calculada por el backend) o `error` (mensaje genérico; detalle solo en auditoría) |
+| GET | /api/evaluaciones?laboratorio_id=&estado=&estudiante_id=&limit=&offset= | docente | Listado paginado `{items, total, limit, offset}` (limit 1–100, por defecto 20), orden por fecha descendente; cada item con estudiante {id, nombre}, laboratorio {id, codigo, titulo}, estado, nota y fechas. Nunca respuestas crudas |
+| GET | /api/evaluaciones/{id} | según estado/rol | Detalle: estado, nota, criterios, citas (`similitud` de 0 a 100, `verificada`), versión de rúbrica. Docente/admin: todo (nunca respuestas crudas). Estudiante: solo sus evaluaciones `publicada`, sin datos internos del modelo; propia no publicada → 403 "La evaluación está pendiente de revisión docente."; ajena o inexistente → 404 |
+| POST | /api/evaluaciones/{id}/revisar | docente | `borrador → en_revision` (otra transición → 409 indicando el estado actual) |
+| PATCH | /api/evaluaciones/{id}/criterios/{criterio_id} | docente | Ajuste {nivel_final, motivo} (motivo obligatorio) → recalcula nota en el backend; solo en borrador/en_revision (409 si no); nivel inexistente → 422; mismo nivel → 200 sin cambios ni auditoría |
+| PATCH | /api/evaluaciones/{id}/retroalimentacion | docente | Edita la retroalimentación general y la de cada criterio (se conserva el original de la IA); campo omitido = sin cambio, `null` = volver al texto de la IA, `""` → 422; motivo opcional; solo en borrador/en_revision |
+| POST | /api/evaluaciones/{id}/aprobar · /publicar | docente | `en_revision → aprobada` (409 si falta un nivel final o la rúbrica ya no es válida) · `aprobada → publicada`. Después de aprobada no se ajusta ni se edita |
+| GET | /api/evaluaciones/{id}/traza | docente | Trazabilidad completa: eventos en orden cronológico (fecha UTC), usuario, acción, antes/después y motivo; proveedor, modelo, temperatura, versión de prompt y de rúbrica; respuestas crudas. Se filtran claves que parezcan secretos |
+| GET | /api/estudiantes?limit=&offset= | docente | Listado paginado `{items, total, limit, offset}` de estudiantes con id, nombre, correo y `laboratorios_evaluados` (laboratorios distintos con evaluación publicada), ordenado por nombre |
+| GET | /api/estudiantes/{id}/informe | est(propio)/docente | Informe integral (JSON). Solo evaluaciones `publicada` (por laboratorio, la más reciente). Números calculados por el backend (notas por laboratorio en orden C1-01…C2-02, promedios por cohorte, general, por competencia y por temática, evolución; ROUND_HALF_UP; `promedio_general` null sin datos). `narrativa` de la IA en campo aparte con `estado`: `generada` · `sin_datos` · `no_disponible` · `error` (mensaje genérico). Incluye `avisos`. Otro estudiante → 404 |
+| GET | /api/estudiantes/{id}/mapa | est(propio)/docente | Grafo `{nodos, aristas, avisos}`: temática → subtema → concepto → laboratorio; cada nodo con dominio (0–5), nivel (bajo <3,0 · medio 3,0–3,9 · alto ≥4,0), evidencias verificadas y aspectos por profundizar. Si el mapeo de la IA no está disponible, se agrupa por competencia y se informa en `avisos`. Sin datos → `{nodos: [], aristas: []}` |
+| GET/PUT | /api/config-ia · POST /api/config-ia/probar | admin | Configuración IA. GET: proveedor, modelo y temperatura vigentes con `origen` (`base_de_datos` o `entorno` si no hay fila en `config_ia`), `modelo_permitido`, `actualizado_por` {id, nombre} y `actualizado_en`, `temperatura_maxima`, `claves` (solo booleanos `*_configurada`; nunca se devuelven claves ni la URL base), `proveedores_permitidos` [{proveedor, etiqueta, modelos, modelos_probados}] (`gemini`: lista fija del backend, `gemini-3.5-flash-lite` (predeterminado y probado) y `gemini-3.6-flash` (permitido, sin probar); `openai_compat`: variable `OPENAI_COMPAT_MODELOS`; `modelos_probados` es el subconjunto de `modelos` ya probado con nuestros prompts) y `versiones_prompt` (solo lectura). PUT `{proveedor, modelo, temperatura}` (los tres obligatorios; cualquier otro campo → 422) responde lo mismo que el GET: proveedor o modelo no permitido → 422; temperatura fuera de 0–0,2 → 422 (no se recorta); mismo valor → 200 sin cambios ni auditoría; cada cambio queda en `auditoria` en la misma transacción. POST `/probar` (solo admin, sin body): prueba la configuración guardada (o la del entorno si no hay fila) con un límite total de 10 s y responde siempre 200 `{ok, proveedor, modelo, latencia_ms, mensaje}` con mensaje genérico en español (`latencia_ms` null si falta la clave; igual al límite si se agotó el tiempo); nunca muestra claves, URL ni el error crudo. Cada prueba queda en `auditoria` (`probar_config_ia`) con el resultado (`ok`, `fallo`, `tiempo_agotado`, `sin_clave`) y el detalle del error tachado |
 
 ## 12. Casos de uso principales
 

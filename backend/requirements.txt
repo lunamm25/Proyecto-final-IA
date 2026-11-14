@@ -2,7 +2,9 @@ fastapi
 uvicorn
 pydantic
 pydantic-settings
-sqlalchemy
+sqlalchemy>=2.0
+psycopg[binary]>=3.2
+PyJWT[crypto]>=2.10
 pytest
 httpx
 ruff
