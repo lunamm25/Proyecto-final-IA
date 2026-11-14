@@ -3,7 +3,7 @@
 | RF | Descripción | Responsable | Estado | Verificado por / fecha |
 |---|---|---|---|---|
 | RF-01 | Autenticación y usuarios | Rol 2 + Rol 3 | Pendiente | |
-| RF-02 | Cohortes y laboratorios | Rol 2 | Pendiente | |
+| RF-02 | Cohortes y laboratorios | Rol 2 | En progreso | |
 | RF-03 | Gestión de rúbricas | Rol 1 + 2 + 3 | Pendiente | |
 | RF-04 | Portafolio académico | Rol 2 + 3 | Pendiente | |
 | RF-05 | Evaluación inteligente | Rol 1 + 2 + 3 | Pendiente | |
@@ -17,3 +17,6 @@
 
 ## Bitácora de sesiones
 <!-- Formato: fecha · integrante · qué se hizo · siguiente paso -->
+- 2026-11-13 · Mariana (Rol 2) · Se cargaron en el seed los 4 laboratorios de demo (C1-01 Parcial 1 Fundamentos de IA, C1-02 Manizales Resiliente, C2-01 Laboratorio 01 Automatización de archivos, C2-02 Laboratorio 03 Agente con Ollama) con sus rúbricas de `backend/rubricas_demo/` como versión 1 aprobada (validadas con `validar_rubrica` y `calcular_nota`); se borraron de Supabase los 6 laboratorios `[PROVISIONAL]` (sin entregas) · Siguiente paso: correr `python seed.py` contra Supabase y revisar `GET /api/cohortes` y la rúbrica vigente de cada laboratorio en `/docs`.
+
+> **Nota:** Las ponderaciones de LAB03 y los niveles de desempeño de LAB01 y Manizales Resiliente son propuestas del equipo, pendientes de aprobación docente.

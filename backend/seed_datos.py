@@ -1,9 +1,9 @@
-"""Datos semilla editables: cohortes, laboratorios, temáticas y configuración de IA.
+"""Datos semilla editables: cohortes, laboratorios de demo, temáticas y configuración de IA.
 
-IMPORTANTE: los laboratorios marcados como PROVISIONAL son de ejemplo.
-Reemplázalos por los laboratorios reales del curso (los reúne Rol 1) editando
-solo esta lista; luego corre `python seed.py`. El seed no sobrescribe
-laboratorios que ya existan con el mismo código.
+Los laboratorios de demo usan el código para indicar el orden dentro de la cohorte
+(C1-01, C1-02, ...). Cada uno indica el archivo de su rúbrica en `rubricas_demo/`;
+el seed la carga como versión 1 aprobada solo si el laboratorio aún no tiene versiones.
+El seed no sobrescribe laboratorios ni rúbricas que ya existan.
 """
 
 COHORTES: list[dict] = [
@@ -14,45 +14,65 @@ COHORTES: list[dict] = [
 LABORATORIOS: list[dict] = [
     {
         "cohorte": 1,
-        "codigo": "C1-L1",
-        "titulo": "[PROVISIONAL] Laboratorio 1 de la cohorte 1",
-        "descripcion": "Descripción provisional. Reemplazar por la del laboratorio real.",
-        "objetivos": "Objetivos provisionales. Reemplazar por los del laboratorio real.",
+        "codigo": "C1-01",
+        "titulo": "Parcial 1 - Fundamentos de IA para el Desarrollo de Software Aumentado",
+        "descripcion": (
+            "Introduce el uso práctico de modelos de IA desde la perspectiva del "
+            "ingeniero de sistemas."
+        ),
+        "objetivos": (
+            "- Relacionar los conceptos de IA, ML y modelos generativos.\n"
+            "- Distinguir tipos de modelo (LLM, SLM, VLM, embeddings).\n"
+            "- Ejecutar modelos locales con Ollama y LM Studio.\n"
+            "- Aplicar Vibe Coding con supervisión humana.\n"
+            "- Construir una aplicación que consuma una API de serie temporal."
+        ),
+        "rubrica_archivo": "rubrica_fundamentos_ia.json",
     },
     {
         "cohorte": 1,
-        "codigo": "C1-L2",
-        "titulo": "[PROVISIONAL] Laboratorio 2 de la cohorte 1",
-        "descripcion": "Descripción provisional. Reemplazar por la del laboratorio real.",
-        "objetivos": "Objetivos provisionales. Reemplazar por los del laboratorio real.",
-    },
-    {
-        "cohorte": 1,
-        "codigo": "C1-L3",
-        "titulo": "[PROVISIONAL] Laboratorio 3 de la cohorte 1",
-        "descripcion": "Descripción provisional. Reemplazar por la del laboratorio real.",
-        "objetivos": "Objetivos provisionales. Reemplazar por los del laboratorio real.",
-    },
-    {
-        "cohorte": 2,
-        "codigo": "C2-L1",
-        "titulo": "[PROVISIONAL] Laboratorio 1 de la cohorte 2",
-        "descripcion": "Descripción provisional. Reemplazar por la del laboratorio real.",
-        "objetivos": "Objetivos provisionales. Reemplazar por los del laboratorio real.",
+        "codigo": "C1-02",
+        "titulo": "LAB 01 - Manizales Resiliente",
+        "descripcion": (
+            "Diseño de una aplicación inteligente y resiliente para la gestión "
+            "post-terremoto, sin implementar los modelos."
+        ),
+        "objetivos": (
+            "- Formular el problema.\n"
+            "- Distinguir software convencional de ML e IA.\n"
+            "- Seleccionar tecnologías con argumentos.\n"
+            "- Diseñar una arquitectura conceptual con resiliencia y Human-in-the-Loop.\n"
+            "- Usar la IA de forma responsable con un Banco de Prompts."
+        ),
+        "rubrica_archivo": "rubrica_manizales.json",
     },
     {
         "cohorte": 2,
-        "codigo": "C2-L2",
-        "titulo": "[PROVISIONAL] Laboratorio 2 de la cohorte 2",
-        "descripcion": "Descripción provisional. Reemplazar por la del laboratorio real.",
-        "objetivos": "Objetivos provisionales. Reemplazar por los del laboratorio real.",
+        "codigo": "C2-01",
+        "titulo": "Laboratorio 01 - Automatización de archivos con Python tradicional",
+        "descripcion": (
+            "Ejecutar, auditar y ampliar un programa que organiza archivos, sin usar LLM."
+        ),
+        "objetivos": (
+            "- Ejecutar y verificar una automatización por reglas.\n"
+            "- Demostrar integridad e idempotencia.\n"
+            "- Implementar una ampliación (soporte .rtf) con una prueba automatizada."
+        ),
+        "rubrica_archivo": "rubrica_lab01.json",
     },
     {
         "cohorte": 2,
-        "codigo": "C2-L3",
-        "titulo": "[PROVISIONAL] Laboratorio 3 de la cohorte 2",
-        "descripcion": "Descripción provisional. Reemplazar por la del laboratorio real.",
-        "objetivos": "Objetivos provisionales. Reemplazar por los del laboratorio real.",
+        "codigo": "C2-02",
+        "titulo": "Laboratorio 03 - Agente Python con modelo local (Ollama)",
+        "descripcion": (
+            "Ejecutar el mismo agente del Laboratorio 02 con un LLM local (Ollama), sin "
+            "enviar solicitudes a DeepSeek Cloud; los archivos los procesan funciones "
+            "Python con aprobación humana para los cambios."
+        ),
+        "objetivos": (
+            "- Comparar decisiones y resultados entre nube y local en condiciones equivalentes."
+        ),
+        "rubrica_archivo": "rubrica_lab03.json",
     },
 ]
 

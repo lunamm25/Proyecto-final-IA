@@ -1,0 +1,120 @@
+{
+  "titulo": "PARCIAL 1 - LABORATORIO - Fundamentos de IA para el Desarrollo de Software Aumentado",
+  "criterios": [
+    {
+      "id": "c1",
+      "competencia": "Mapa mental",
+      "nombre": "Mapa mental",
+      "ponderacion": 15.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 4.75,
+          "descriptor": "Rango 4.5-5.0. Relacional, claro, con conceptos, ejemplos y conexiones correctas."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.95,
+          "descriptor": "Rango 3.5-4.4. Incluye conceptos principales pero con relaciones o ejemplos limitados."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 1.7,
+          "descriptor": "Rango 0.0-3.4. Lista superficial, incompleta o con errores conceptuales."
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "competencia": "Cartografía de modelos",
+      "nombre": "Cartografía de modelos",
+      "ponderacion": 20.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 4.75,
+          "descriptor": "Rango 4.5-5.0. Matriz completa, fuentes verificables y selección argumentada por tarea/restricción."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.95,
+          "descriptor": "Rango 3.5-4.4. Comparación válida pero parcial o con poca justificación."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 1.7,
+          "descriptor": "Rango 0.0-3.4. Información no verificable, desactualizada o comparación subjetiva."
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "competencia": "Ollama + LM Studio",
+      "nombre": "Ollama + LM Studio",
+      "ponderacion": 20.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 4.75,
+          "descriptor": "Rango 4.5-5.0. Ambos entornos funcionan; modelos ejecutados; API local integrada y recursos documentados."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.95,
+          "descriptor": "Rango 3.5-4.4. Ejecución parcial o API incompleta."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 1.7,
+          "descriptor": "Rango 0.0-3.4. No logra ejecutar modelos localmente o no presenta evidencia."
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "competencia": "Vibe Coding",
+      "nombre": "Vibe Coding",
+      "ponderacion": 20.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 4.75,
+          "descriptor": "Rango 4.5-5.0. Tres enfoques comparados con la misma tarea, evidencia, ejecución y análisis técnico."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.95,
+          "descriptor": "Rango 3.5-4.4. Comparación incompleta o con poca evidencia."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 1.7,
+          "descriptor": "Rango 0.0-3.4. Conclusiones subjetivas o soluciones no ejecutables."
+        }
+      ]
+    },
+    {
+      "id": "c5",
+      "competencia": "Reto integrador",
+      "nombre": "Reto integrador",
+      "ponderacion": 25.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 4.75,
+          "descriptor": "Rango 4.5-5.0. API real, serie temporal correcta, baseline/modelo, métricas, gráficas y proceso reproducible."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.95,
+          "descriptor": "Rango 3.5-4.4. Solución funcional con elementos o evidencias incompletos."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 1.7,
+          "descriptor": "Rango 0.0-3.4. No integra datos reales, predicción o métricas de forma válida."
+        }
+      ]
+    }
+  ]
+}
