@@ -8,13 +8,13 @@ import {
   formatearNota,
   type EstadoLaboratorio,
 } from "@/components/portafolio/estado-entrega";
-import type { Entrega, Laboratorio } from "@/lib/tipos";
+import type { Entrega, IdNumerico, Laboratorio } from "@/lib/tipos";
 
 interface TarjetaLaboratorioProps {
   laboratorio: Laboratorio;
   entrega: Entrega | undefined;
   evaluando: boolean;
-  alEvaluar: (entregaId: string) => void;
+  alEvaluar: (entregaId: IdNumerico) => void;
 }
 
 const CLASE_ENLACE_BOTON =
@@ -25,11 +25,11 @@ interface AccionesProps {
   laboratorio: Laboratorio;
   entrega: Entrega | undefined;
   evaluando: boolean;
-  alEvaluar: (entregaId: string) => void;
+  alEvaluar: (entregaId: IdNumerico) => void;
 }
 
 function Acciones({ estado, laboratorio, entrega, evaluando, alEvaluar }: AccionesProps) {
-  const rutaEntregar = `/portafolio/${encodeURIComponent(laboratorio.id)}/entregar`;
+  const rutaEntregar = `/portafolio/${laboratorio.id}/entregar`;
 
   if (estado === "sin_entregar" || !entrega) {
     return (
@@ -56,7 +56,7 @@ function Acciones({ estado, laboratorio, entrega, evaluando, alEvaluar }: Accion
   if (estado === "publicada" && entrega.evaluacion) {
     return (
       <Link
-        href={`/evaluaciones/${encodeURIComponent(entrega.evaluacion.id)}`}
+        href={`/evaluaciones/${entrega.evaluacion.id}`}
         className={`${CLASE_ENLACE_BOTON} border hover:bg-muted`}
       >
         Ver evaluación
@@ -69,7 +69,7 @@ function Acciones({ estado, laboratorio, entrega, evaluando, alEvaluar }: Accion
       <p className="text-xs text-muted-foreground">El docente revisará la evaluación antes de publicarla.</p>
       {entrega.evaluacion && (
         <Link
-          href={`/evaluaciones/${encodeURIComponent(entrega.evaluacion.id)}`}
+          href={`/evaluaciones/${entrega.evaluacion.id}`}
           className={`${CLASE_ENLACE_BOTON} border hover:bg-muted`}
         >
           Ver progreso

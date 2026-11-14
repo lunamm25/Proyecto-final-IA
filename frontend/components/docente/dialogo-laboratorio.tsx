@@ -9,12 +9,14 @@ import {
   LABORATORIO_VACIO,
   MAX_CODIGO,
   MAX_TITULO,
-  limpiarLaboratorio,
+  aEntradaLaboratorio,
+  formularioDesde,
   validarLaboratorio,
   type CampoLaboratorio,
+  type FormularioLaboratorio,
 } from "@/components/docente/validacion-laboratorio";
 import { actualizarLaboratorio, crearLaboratorio, mensajeDeError } from "@/lib/api";
-import type { Cohorte, Laboratorio, LaboratorioEntrada } from "@/lib/tipos";
+import type { Cohorte, Laboratorio } from "@/lib/tipos";
 
 interface DialogoLaboratorioProps {
   /** null = crear un laboratorio nuevo. */
@@ -24,21 +26,15 @@ interface DialogoLaboratorioProps {
   alGuardar: (laboratorio: Laboratorio) => void;
 }
 
-function datosIniciales(laboratorio: Laboratorio | null, cohortes: Cohorte[]): LaboratorioEntrada {
-  if (!laboratorio) return { ...LABORATORIO_VACIO, cohorte_id: cohortes.length === 1 ? cohortes[0].id : "" };
-  return {
-    cohorte_id: laboratorio.cohorte_id,
-    codigo: laboratorio.codigo,
-    titulo: laboratorio.titulo,
-    descripcion: laboratorio.descripcion,
-    objetivos: laboratorio.objetivos,
-  };
+function datosIniciales(laboratorio: Laboratorio | null, cohortes: Cohorte[]): FormularioLaboratorio {
+  if (laboratorio) return formularioDesde(laboratorio);
+  return { ...LABORATORIO_VACIO, cohorte_id: cohortes.length === 1 ? String(cohortes[0].id) : "" };
 }
 
 /** Diálogo modal nativo (<dialog>): atrapa el foco y se cierra con Escape. */
 export function DialogoLaboratorio({ laboratorio, cohortes, alCerrar, alGuardar }: DialogoLaboratorioProps) {
   const refDialogo = useRef<HTMLDialogElement>(null);
-  const [datos, setDatos] = useState<LaboratorioEntrada>(() => datosIniciales(laboratorio, cohortes));
+  const [datos, setDatos] = useState<FormularioLaboratorio>(() => datosIniciales(laboratorio, cohortes));
   const [intentado, setIntentado] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [errorServidor, setErrorServidor] = useState<string | null>(null);
@@ -60,7 +56,7 @@ export function DialogoLaboratorio({ laboratorio, cohortes, alCerrar, alGuardar 
     if (Object.keys(validarLaboratorio(datos, cohortes, laboratorio?.id ?? null)).length > 0) return;
     setGuardando(true);
     try {
-      const limpio = limpiarLaboratorio(datos);
+      const limpio = aEntradaLaboratorio(datos);
       alGuardar(laboratorio ? await actualizarLaboratorio(laboratorio.id, limpio) : await crearLaboratorio(limpio));
     } catch (causa) {
       setErrorServidor(mensajeDeError(causa));
@@ -102,7 +98,7 @@ export function DialogoLaboratorio({ laboratorio, cohortes, alCerrar, alGuardar 
 }
 
 interface CamposLaboratorioProps {
-  datos: LaboratorioEntrada;
+  datos: FormularioLaboratorio;
   errores: Partial<Record<CampoLaboratorio, string>>;
   cohortes: Cohorte[];
   deshabilitado: boolean;

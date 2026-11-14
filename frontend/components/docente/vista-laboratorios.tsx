@@ -7,33 +7,16 @@ import { Button } from "@/components/ui/button";
 import { EstadoVacio, MensajeError } from "@/components/estados";
 import { Aviso, type DatosAviso } from "@/components/docente/aviso";
 import { DialogoLaboratorio } from "@/components/docente/dialogo-laboratorio";
-import { listarCohortes, obtenerRubricaVigenteONula } from "@/lib/api";
-import type { Cohorte, Laboratorio, RubricaVersion } from "@/lib/tipos";
+import { listarCohortes } from "@/lib/api";
+import type { Cohorte, Laboratorio, LaboratorioEnCohorte } from "@/lib/tipos";
 import { useCarga } from "@/lib/use-carga";
-
-/** "error" = no se pudo consultar la rúbrica de ese laboratorio (no bloquea la lista). */
-type EstadoRubrica = RubricaVersion | null | "error";
-
-interface DatosLaboratorios {
-  cohortes: Cohorte[];
-  rubricas: Map<string, EstadoRubrica>;
-}
 
 /** null = diálogo cerrado; laboratorio null = crear uno nuevo. */
 type Edicion = { laboratorio: Laboratorio | null } | null;
 
-async function rubricaDe(labId: string): Promise<[string, EstadoRubrica]> {
-  try {
-    return [labId, await obtenerRubricaVigenteONula(labId)];
-  } catch {
-    return [labId, "error"];
-  }
-}
-
-async function cargarLaboratorios(): Promise<DatosLaboratorios> {
-  const cohortes = [...(await listarCohortes())].sort((a, b) => a.numero - b.numero);
-  const ids = cohortes.flatMap((c) => c.laboratorios.map((l) => l.id));
-  return { cohortes, rubricas: new Map(await Promise.all(ids.map(rubricaDe))) };
+/** GET /cohortes ya trae `version_rubrica_vigente` de cada laboratorio: una sola petición. */
+async function cargarLaboratorios(): Promise<Cohorte[]> {
+  return [...(await listarCohortes())].sort((a, b) => a.numero - b.numero);
 }
 
 function EsqueletoLaboratorios() {
@@ -47,36 +30,36 @@ function EsqueletoLaboratorios() {
   );
 }
 
-function EtiquetaRubrica({ estado }: { estado: EstadoRubrica | undefined }) {
-  if (estado === "error") return <span className="text-xs text-destructive">No se pudo consultar la rúbrica</span>;
-  if (!estado) {
+function EtiquetaRubrica({ version }: { version: number | null }) {
+  if (version === null) {
     return (
       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">Sin rúbrica vigente</span>
     );
   }
   return (
     <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-900">
-      Rúbrica vigente: versión {estado.version}
+      Rúbrica vigente: versión {version}
     </span>
   );
 }
 
 interface FilaLaboratorioProps {
-  laboratorio: Laboratorio;
-  rubrica: EstadoRubrica | undefined;
+  laboratorio: LaboratorioEnCohorte;
   alEditar: () => void;
 }
 
-function FilaLaboratorio({ laboratorio, rubrica, alEditar }: FilaLaboratorioProps) {
+function FilaLaboratorio({ laboratorio, alEditar }: FilaLaboratorioProps) {
   return (
     <li className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center">
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-mono text-xs text-muted-foreground">{laboratorio.codigo}</span>
-          <EtiquetaRubrica estado={rubrica} />
+          <EtiquetaRubrica version={laboratorio.version_rubrica_vigente} />
         </div>
         <h3 className="font-semibold">{laboratorio.titulo}</h3>
-        <p className="line-clamp-2 text-sm text-muted-foreground">{laboratorio.descripcion}</p>
+        {laboratorio.descripcion && (
+          <p className="line-clamp-2 text-sm text-muted-foreground">{laboratorio.descripcion}</p>
+        )}
       </div>
       <div className="flex shrink-0 gap-2">
         <Button variant="outline" size="sm" onClick={alEditar} aria-label={`Editar ${laboratorio.codigo}`}>
@@ -84,7 +67,7 @@ function FilaLaboratorio({ laboratorio, rubrica, alEditar }: FilaLaboratorioProp
           Editar
         </Button>
         <Button variant="secondary" size="sm" asChild>
-          <Link href={`/docente/rubricas/${encodeURIComponent(laboratorio.id)}`} aria-label={`Rúbrica de ${laboratorio.codigo}`}>
+          <Link href={`/docente/rubricas/${laboratorio.id}`} aria-label={`Rúbrica de ${laboratorio.codigo}`}>
             <ClipboardList aria-hidden="true" />
             Rúbrica
           </Link>
@@ -96,11 +79,10 @@ function FilaLaboratorio({ laboratorio, rubrica, alEditar }: FilaLaboratorioProp
 
 interface SeccionCohorteProps {
   cohorte: Cohorte;
-  rubricas: Map<string, EstadoRubrica>;
   alEditar: (laboratorio: Laboratorio) => void;
 }
 
-function SeccionCohorte({ cohorte, rubricas, alEditar }: SeccionCohorteProps) {
+function SeccionCohorte({ cohorte, alEditar }: SeccionCohorteProps) {
   return (
     <section aria-labelledby={`cohorte-${cohorte.id}`} className="space-y-3">
       <h2 id={`cohorte-${cohorte.id}`} className="text-xl font-semibold">
@@ -113,7 +95,7 @@ function SeccionCohorte({ cohorte, rubricas, alEditar }: SeccionCohorteProps) {
       ) : (
         <ul className="space-y-3">
           {cohorte.laboratorios.map((lab) => (
-            <FilaLaboratorio key={lab.id} laboratorio={lab} rubrica={rubricas.get(lab.id)} alEditar={() => alEditar(lab)} />
+            <FilaLaboratorio key={lab.id} laboratorio={lab} alEditar={() => alEditar(lab)} />
           ))}
         </ul>
       )}
@@ -132,7 +114,7 @@ export function VistaLaboratorios() {
     return <MensajeError titulo="No se pudieron cargar los laboratorios" mensaje={estado.mensaje} alReintentar={recargar} />;
   }
 
-  const { cohortes, rubricas } = estado.datos;
+  const cohortes = estado.datos;
 
   function alGuardar(laboratorio: Laboratorio) {
     const accion = edicion?.laboratorio ? "actualizó" : "creó";
@@ -154,8 +136,7 @@ export function VistaLaboratorios() {
         <EstadoVacio titulo="No hay cohortes registradas" mensaje="Cuando el backend cargue las cohortes 1 y 2, aparecerán aquí." />
       ) : (
         cohortes.map((cohorte) => (
-          <SeccionCohorte key={cohorte.id} cohorte={cohorte} rubricas={rubricas}
-            alEditar={(laboratorio) => setEdicion({ laboratorio })} />
+          <SeccionCohorte key={cohorte.id} cohorte={cohorte} alEditar={(laboratorio) => setEdicion({ laboratorio })} />
         ))
       )}
       {edicion && (

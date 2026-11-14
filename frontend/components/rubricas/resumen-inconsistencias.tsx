@@ -1,10 +1,17 @@
 import { AlertTriangle, CheckCircle2, Server } from "lucide-react";
 import type { Inconsistencia } from "@/lib/tipos";
 
+/** Inconsistencias que devolvió el backend (textos): al extraer, al validar o en el 422 al guardar. */
 export interface ResultadoServidor {
-  origen: "extraccion" | "validacion";
-  inconsistencias: Inconsistencia[];
+  origen: "extraccion" | "validacion" | "guardado";
+  inconsistencias: string[];
 }
+
+const TITULO_SERVIDOR: Record<ResultadoServidor["origen"], string> = {
+  extraccion: "Inconsistencias reportadas al extraer",
+  validacion: "Resultado del servidor",
+  guardado: "El servidor rechazó la versión por estas inconsistencias",
+};
 
 interface ResumenInconsistenciasProps {
   inconsistencias: Inconsistencia[];
@@ -23,18 +30,21 @@ function ListaMensajes({ mensajes }: { mensajes: string[] }) {
 }
 
 function BloqueServidor({ servidor }: { servidor: ResultadoServidor }) {
-  const titulo = servidor.origen === "extraccion" ? "Inconsistencias reportadas al extraer" : "Resultado del servidor";
   const vacio = servidor.inconsistencias.length === 0;
+  const rechazo = servidor.origen === "guardado";
   return (
-    <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+    <div
+      role={rechazo ? "alert" : undefined}
+      className={rechazo ? "rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" : "rounded-lg border bg-muted/40 p-3 text-sm"}
+    >
       <p className="flex items-center gap-1 font-medium">
         <Server className="size-4" aria-hidden="true" />
-        {titulo}
+        {TITULO_SERVIDOR[servidor.origen]}
       </p>
       {vacio ? (
         <p className="mt-1 text-emerald-700">El servidor no encontró inconsistencias.</p>
       ) : (
-        <ListaMensajes mensajes={servidor.inconsistencias.map((i) => i.mensaje)} />
+        <ListaMensajes mensajes={servidor.inconsistencias} />
       )}
     </div>
   );

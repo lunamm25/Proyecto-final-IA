@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { listarCohortes, mensajeDeError, obtenerRubricaVigenteONula } from "@/lib/api";
-import type { Cohorte, Laboratorio, RubricaVersion } from "@/lib/tipos";
+import type { Cohorte, IdNumerico, Laboratorio, RubricaVersion } from "@/lib/tipos";
 
 export interface ContextoEvaluacion {
   cargado: boolean;
@@ -13,10 +13,10 @@ export interface ContextoEvaluacion {
 }
 
 interface Resultado extends Omit<ContextoEvaluacion, "cargado"> {
-  clave: string;
+  clave: IdNumerico;
 }
 
-export function buscarLaboratorio(cohortes: Cohorte[], id: string): Laboratorio | null {
+export function buscarLaboratorio(cohortes: Cohorte[], id: IdNumerico): Laboratorio | null {
   for (const cohorte of cohortes) {
     const laboratorio = cohorte.laboratorios.find((l) => l.id === id);
     if (laboratorio) return laboratorio;
@@ -24,7 +24,7 @@ export function buscarLaboratorio(cohortes: Cohorte[], id: string): Laboratorio 
   return null;
 }
 
-async function cargarContexto(laboratorioId: string): Promise<Resultado> {
+async function cargarContexto(laboratorioId: IdNumerico): Promise<Resultado> {
   const [cohortes, rubrica] = await Promise.allSettled([
     listarCohortes(),
     obtenerRubricaVigenteONula(laboratorioId),
@@ -38,11 +38,11 @@ async function cargarContexto(laboratorioId: string): Promise<Resultado> {
 }
 
 /** Datos complementarios (título del laboratorio y rúbrica). Si fallan, la evaluación se muestra igual. */
-export function useContextoEvaluacion(laboratorioId: string | null): ContextoEvaluacion {
+export function useContextoEvaluacion(laboratorioId: IdNumerico | null): ContextoEvaluacion {
   const [resultado, setResultado] = useState<Resultado | null>(null);
 
   useEffect(() => {
-    if (!laboratorioId) return;
+    if (laboratorioId === null) return;
     let activo = true;
     void cargarContexto(laboratorioId).then((datos) => {
       if (activo) setResultado(datos);

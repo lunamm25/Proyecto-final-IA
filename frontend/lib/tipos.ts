@@ -44,24 +44,44 @@ export interface CambioRol {
 
 // ---------- Cohortes y laboratorios (RF-02) ----------
 
-export interface Laboratorio {
-  id: string;
-  cohorte_id: string;
-  codigo: string;
-  titulo: string;
-  descripcion: string;
-  objetivos: string;
+/**
+ * Ids numéricos del backend (cohortes, laboratorios, entregas, evaluaciones, versiones de rúbrica).
+ * Los de usuarios son UUID (string). Los ids que llegan por la URL se convierten con `idDesdeUrl`.
+ */
+export type IdNumerico = number;
+
+/** Convierte un id que llega por la URL ("3") en número; null si no es un entero positivo válido. */
+export function idDesdeUrl(valor: string): IdNumerico | null {
+  if (!/^\d{1,15}$/.test(valor)) return null;
+  const id = Number(valor);
+  return id > 0 ? id : null;
 }
 
-/** Cuerpo de POST/PUT /api/laboratorios */
+/** LaboratorioRespuesta del backend. */
+export interface Laboratorio {
+  id: IdNumerico;
+  cohorte_id: IdNumerico;
+  codigo: string;
+  titulo: string;
+  descripcion: string | null;
+  objetivos: string | null;
+}
+
+/** LaboratorioEnCohorte: dentro de GET /api/cohortes trae la versión vigente de su rúbrica. */
+export interface LaboratorioEnCohorte extends Laboratorio {
+  /** null = sin rúbrica aprobada. */
+  version_rubrica_vigente: number | null;
+}
+
+/** Cuerpo de POST/PUT /api/laboratorios (LaboratorioEntrada del backend). */
 export type LaboratorioEntrada = Omit<Laboratorio, "id">;
 
-/** GET /api/cohortes */
+/** GET /api/cohortes (CohorteRespuesta) */
 export interface Cohorte {
-  id: string;
+  id: IdNumerico;
   nombre: string;
   numero: number;
-  laboratorios: Laboratorio[];
+  laboratorios: LaboratorioEnCohorte[];
 }
 
 // ---------- Rúbricas (RF-03, RubricaSchema §7) ----------
@@ -103,49 +123,53 @@ export interface Inconsistencia {
   criterio_id: string | null;
 }
 
-/** POST /api/rubricas/validar */
+/**
+ * POST /api/rubricas/validar (ValidacionRubricaRespuesta): el backend devuelve las inconsistencias
+ * como textos. Los objetos `Inconsistencia` son solo de la validación en vivo del cliente.
+ */
 export interface ResultadoValidacion {
   valida: boolean;
-  inconsistencias: Inconsistencia[];
+  inconsistencias: string[];
 }
 
-/** POST /api/laboratorios/{id}/rubrica/extraer */
+/** POST /api/laboratorios/{id}/rubrica/extraer (aún no existe en el backend; misma convención de textos). */
 export interface ResultadoExtraccion {
   rubrica: Rubrica;
-  inconsistencias: Inconsistencia[];
+  inconsistencias: string[];
 }
 
 export type EstadoVersionRubrica = "borrador" | "aprobada";
 
-/** GET /api/laboratorios/{id}/rubrica y POST /api/laboratorios/{id}/rubrica/versiones */
+/** GET /api/laboratorios/{id}/rubrica y POST .../rubrica/versiones (RubricaVersionRespuesta). */
 export interface RubricaVersion {
-  id: string;
-  rubrica_id: string;
-  laboratorio_id: string;
+  id: IdNumerico;
   version: number;
-  contenido: Rubrica;
   estado: EstadoVersionRubrica;
+  contenido: Rubrica;
+  /** UUID de quien la creó. */
   creada_por: string | null;
   creada_en: string;
 }
 
 // ---------- Entregas (RF-04) ----------
 
-export type EstadoEvaluacion = "borrador" | "en_revision" | "aprobada" | "publicada" | "error";
+/** EstadoEvaluacion del backend: "procesando" mientras corre el pipeline en segundo plano. */
+export type EstadoEvaluacion = "procesando" | "borrador" | "en_revision" | "aprobada" | "publicada" | "error";
 
 export interface ResumenEvaluacion {
-  id: string;
+  id: IdNumerico;
   estado: EstadoEvaluacion;
   /** Calculada por el backend; null mientras no exista o no sea visible para el usuario. */
   nota: number | null;
 }
 
-/** GET /api/entregas */
+/** GET /api/entregas (aún no existe en el backend; ids con la misma convención). */
 export interface Entrega {
-  id: string;
+  id: IdNumerico;
+  /** UUID del estudiante. */
   estudiante_id: string;
-  laboratorio_id: string;
-  rubrica_version_id: string;
+  laboratorio_id: IdNumerico;
+  rubrica_version_id: IdNumerico;
   pdf_path: string;
   codigo_zip_path: string | null;
   github_url: string | null;
@@ -157,16 +181,16 @@ export interface Entrega {
 
 /** Datos del formulario para POST /api/entregas (se envían como multipart/form-data). */
 export interface NuevaEntrega {
-  laboratorio_id: string;
+  laboratorio_id: IdNumerico;
   pdf: File;
   zip?: File;
   github_url?: string;
   extras?: File[];
 }
 
-/** POST /api/entregas/{id}/evaluar → 202 */
+/** POST /api/entregas/{id}/evaluar → 202 (EvaluacionLanzadaRespuesta; estado "procesando"). */
 export interface RespuestaEvaluar {
-  evaluacion_id: string;
+  evaluacion_id: IdNumerico;
   estado: EstadoEvaluacion;
 }
 
@@ -244,10 +268,12 @@ export interface VerificacionCodigo {
 
 /** GET /api/evaluaciones/{id} */
 export interface Evaluacion {
-  id: string;
-  entrega_id: string;
+  id: IdNumerico;
+  entrega_id: IdNumerico;
+  /** UUID. Pendiente en el backend (hoy EvaluacionRespuesta no lo trae). */
   estudiante_id: string;
-  laboratorio_id: string;
+  /** Pendiente en el backend (hoy EvaluacionRespuesta no lo trae). */
+  laboratorio_id: IdNumerico;
   estado: EstadoEvaluacion;
   /** Calculada por el backend (0,0–5,0). El frontend nunca la calcula. */
   nota: number | null;
@@ -287,7 +313,7 @@ export interface RegistroAuditoria {
 
 /** GET /api/evaluaciones/{id}/traza */
 export interface Traza {
-  evaluacion_id: string;
+  evaluacion_id: IdNumerico;
   proveedor: string;
   modelo: string;
   prompt_version: string;
@@ -305,11 +331,11 @@ export type NivelDominio = "sin_evidencia" | "bajo" | "medio" | "alto";
 export type Prioridad = "alta" | "media" | "baja";
 
 export interface NotaLaboratorio {
-  laboratorio_id: string;
+  laboratorio_id: IdNumerico;
   codigo: string;
   titulo: string;
   cohorte: number;
-  evaluacion_id: string;
+  evaluacion_id: IdNumerico;
   nota: number;
 }
 

@@ -32,6 +32,7 @@ import type {
   ErrorRespuesta,
   Evaluacion,
   EstadoEvaluacion,
+  IdNumerico,
   Informe,
   JsonValor,
   Laboratorio,
@@ -56,12 +57,22 @@ export const MODO_MOCK = process.env.NEXT_PUBLIC_USAR_MOCKS === "true" || API_UR
 
 export class ErrorApi extends Error {
   readonly status: number;
+  /** Lista de inconsistencias que el backend envía en el 422 de rúbricas (ErrorRubricaRespuesta). */
+  readonly inconsistencias: string[];
 
-  constructor(status: number, mensaje: string) {
+  constructor(status: number, mensaje: string, inconsistencias: string[] = []) {
     super(mensaje);
     this.name = "ErrorApi";
     this.status = status;
+    this.inconsistencias = inconsistencias;
   }
+}
+
+/** Extrae `inconsistencias: string[]` del cuerpo de error, si viene. */
+function inconsistenciasDe(cuerpo: unknown): string[] {
+  if (typeof cuerpo !== "object" || cuerpo === null || !("inconsistencias" in cuerpo)) return [];
+  const lista: unknown = cuerpo.inconsistencias;
+  return Array.isArray(lista) ? lista.filter((item): item is string => typeof item === "string") : [];
 }
 
 /** Convierte cualquier error en un mensaje en español para mostrar al usuario. */
@@ -135,7 +146,7 @@ async function enviar(metodo: Metodo, ruta: string, cuerpo?: unknown): Promise<R
   if (!respuesta.ok) {
     const datos: unknown = await respuesta.json().catch(() => null);
     if (respuesta.status === 401) cerrarSesionExpirada();
-    throw new ErrorApi(respuesta.status, mensajePorEstado(respuesta.status, datos));
+    throw new ErrorApi(respuesta.status, mensajePorEstado(respuesta.status, datos), inconsistenciasDe(datos));
   }
   return respuesta;
 }
@@ -191,6 +202,13 @@ async function emailDeSesion(): Promise<string | null> {
   return leerSesionMock();
 }
 
+/** Ids numéricos nuevos del mock (como los autoincrementales de Postgres). */
+let siguienteIdMock = 1000;
+function nuevoIdMock(): IdNumerico {
+  siguienteIdMock += 1;
+  return siguienteIdMock;
+}
+
 const estadoMock = {
   cohortes: structuredClone(cohortesMock),
   entregas: structuredClone(entregasMock),
@@ -201,26 +219,37 @@ const estadoMock = {
 };
 
 /** Versión vigente por laboratorio (en memoria); los de `laboratoriosSinRubricaMock` empiezan sin rúbrica. */
-function rubricasInicialesMock(): Record<string, RubricaVersion> {
-  const vigentes: Record<string, RubricaVersion> = {};
+function rubricasInicialesMock(): Record<IdNumerico, RubricaVersion> {
+  const vigentes: Record<IdNumerico, RubricaVersion> = {};
   cohortesMock
     .flatMap((cohorte) => cohorte.laboratorios)
     .filter((lab) => !laboratoriosSinRubricaMock.includes(lab.id))
     .forEach((lab) => {
-      vigentes[lab.id] = { ...structuredClone(rubricaVersionMock), laboratorio_id: lab.id };
+      vigentes[lab.id] = { ...structuredClone(rubricaVersionMock), id: 100 + lab.id };
     });
   return vigentes;
+}
+
+/** GET /cohortes del mock: añade `version_rubrica_vigente` como hace el backend. */
+function cohortesConVersionMock(): Cohorte[] {
+  return estadoMock.cohortes.map((cohorte) => ({
+    ...cohorte,
+    laboratorios: cohorte.laboratorios.map((lab) => ({
+      ...lab,
+      version_rubrica_vigente: estadoMock.rubricas[lab.id]?.version ?? null,
+    })),
+  }));
 }
 
 function noEncontrado(): ErrorApi {
   return new ErrorApi(404, MENSAJES_POR_ESTADO[404]);
 }
 
-function existeLaboratorioMock(id: string): boolean {
+function existeLaboratorioMock(id: IdNumerico): boolean {
   return estadoMock.cohortes.some((cohorte) => cohorte.laboratorios.some((l) => l.id === id));
 }
 
-function rubricaVigenteMock(laboratorioId: string): RubricaVersion {
+function rubricaVigenteMock(laboratorioId: IdNumerico): RubricaVersion {
   const vigente = estadoMock.rubricas[laboratorioId];
   if (!existeLaboratorioMock(laboratorioId) || !vigente) {
     throw new ErrorApi(404, "Este laboratorio aún no tiene una rúbrica vigente.");
@@ -228,16 +257,15 @@ function rubricaVigenteMock(laboratorioId: string): RubricaVersion {
   return vigente;
 }
 
-function guardarVersionMock(laboratorioId: string, rubrica: Rubrica): RubricaVersion {
+function guardarVersionMock(laboratorioId: IdNumerico, rubrica: Rubrica): RubricaVersion {
   if (!existeLaboratorioMock(laboratorioId)) throw noEncontrado();
-  if (!validarRubricaMock(rubrica).valida) {
-    throw new ErrorApi(422, "La rúbrica tiene inconsistencias y no se puede aprobar.");
+  const { inconsistencias } = validarRubricaMock(rubrica);
+  if (inconsistencias.length > 0) {
+    throw new ErrorApi(422, "La rúbrica tiene inconsistencias y no se puede aprobar.", inconsistencias);
   }
   const anterior = estadoMock.rubricas[laboratorioId];
   const nueva: RubricaVersion = {
-    id: `rv-${Date.now()}`,
-    rubrica_id: anterior?.rubrica_id ?? `rub-${laboratorioId}`,
-    laboratorio_id: laboratorioId,
+    id: nuevoIdMock(),
     version: (anterior?.version ?? 0) + 1,
     contenido: structuredClone(rubrica),
     estado: "aprobada",
@@ -248,7 +276,7 @@ function guardarVersionMock(laboratorioId: string, rubrica: Rubrica): RubricaVer
   return nueva;
 }
 
-function validarCodigoUnicoMock(datos: LaboratorioEntrada, idActual: string | null): void {
+function validarCodigoUnicoMock(datos: LaboratorioEntrada, idActual: IdNumerico | null): void {
   const cohorte = estadoMock.cohortes.find((c) => c.id === datos.cohorte_id);
   if (!cohorte) throw noEncontrado();
   const codigo = datos.codigo.trim().toLowerCase();
@@ -268,22 +296,22 @@ function validarEntregaMock(datos: NuevaEntrega): void {
 }
 
 // ---------- Evaluaciones en modo mock ----------
-// Simula el pipeline (RNF-04): tras evaluarEntrega la evaluación queda "procesando" (borrador sin criterios)
-// durante DURACION_PROCESO_MOCK_MS y luego se completa con `resultadoSimuladoMock`.
+// Simula el pipeline (RNF-04): tras evaluarEntrega la evaluación queda en estado "procesando"
+// durante DURACION_PROCESO_MOCK_MS y luego pasa a "borrador" con `resultadoSimuladoMock`.
 // La nota NUNCA se calcula aquí: es un valor fijo del mock y no cambia con los ajustes (la recalcula el backend).
 
 const DURACION_PROCESO_MOCK_MS = 9000;
 
 /** Momento (ms) en que termina el procesamiento simulado de cada evaluación en curso. */
-const finProcesoMock: Record<string, number> = {};
+const finProcesoMock: Record<IdNumerico, number> = {};
 
-const trazasMock: Record<string, Traza> = { [trazaMock.evaluacion_id]: structuredClone(trazaMock) };
+const trazasMock: Record<IdNumerico, Traza> ={ [trazaMock.evaluacion_id]: structuredClone(trazaMock) };
 
 async function perfilMockActual(): Promise<Perfil> {
   return perfilesMock[rolSimuladoPorEmail((await emailDeSesion()) ?? "")];
 }
 
-function buscarEvaluacionMock(id: string): Evaluacion {
+function buscarEvaluacionMock(id: IdNumerico): Evaluacion {
   const evaluacion = estadoMock.evaluaciones.find((e) => e.id === id);
   if (!evaluacion) throw noEncontrado();
   avanzarProcesoMock(evaluacion);
@@ -299,7 +327,7 @@ function sincronizarResumenMock(evaluacion: Evaluacion): void {
 function avanzarProcesoMock(evaluacion: Evaluacion): void {
   const fin = finProcesoMock[evaluacion.id];
   if (fin === undefined || Date.now() < fin) return;
-  Object.assign(evaluacion, structuredClone(resultadoSimuladoMock));
+  Object.assign(evaluacion, structuredClone(resultadoSimuladoMock), { estado: "borrador" });
   delete finProcesoMock[evaluacion.id];
   delete trazasMock[evaluacion.id];
   sincronizarResumenMock(evaluacion);
@@ -308,11 +336,11 @@ function avanzarProcesoMock(evaluacion: Evaluacion): void {
 function crearEvaluacionEnProcesoMock(entrega: Entrega): Evaluacion {
   const { config } = estadoMock;
   const evaluacion: Evaluacion = {
-    id: `eva-${Date.now()}`,
+    id: nuevoIdMock(),
     entrega_id: entrega.id,
     estudiante_id: entrega.estudiante_id,
     laboratorio_id: entrega.laboratorio_id,
-    estado: "borrador",
+    estado: "procesando",
     nota: null,
     proveedor: config.proveedor,
     modelo: config.modelo,
@@ -395,7 +423,7 @@ function exigirNoEnProcesoMock(evaluacion: Evaluacion): void {
 }
 
 /** Ajuste del modo mock: actualiza el nivel y la auditoría. La nota queda igual (el recálculo es del backend). */
-function ajustarCriterioMock(id: string, criterioId: string, ajuste: AjusteCriterio, perfil: Perfil): Evaluacion {
+function ajustarCriterioMock(id: IdNumerico, criterioId: string, ajuste: AjusteCriterio, perfil: Perfil): Evaluacion {
   if (ajuste.motivo.trim() === "") throw new ErrorApi(422, "El motivo del ajuste es obligatorio.");
   const evaluacion = buscarEvaluacionMock(id);
   exigirNoEnProcesoMock(evaluacion);
@@ -428,7 +456,7 @@ const ORIGENES_PERMITIDOS: Record<"aprobada" | "publicada", EstadoEvaluacion[]> 
   publicada: ["aprobada"],
 };
 
-function cambiarEstadoMock(id: string, estado: "aprobada" | "publicada", perfil: Perfil): Evaluacion {
+function cambiarEstadoMock(id: IdNumerico, estado: "aprobada" | "publicada", perfil: Perfil): Evaluacion {
   const evaluacion = buscarEvaluacionMock(id);
   exigirNoEnProcesoMock(evaluacion);
   if (!ORIGENES_PERMITIDOS[estado].includes(evaluacion.estado)) {
@@ -511,9 +539,12 @@ function probarConfigMock(): ResultadoPruebaIA {
   return { ok: true, mensaje: `Conexión correcta con ${destino} usando el modelo "${modelo}" (modo mock).` };
 }
 
-/** Validación del modo mock con la misma lógica del editor; la validación oficial la hace el backend. */
+/**
+ * Validación del modo mock con la misma lógica del editor; la validación oficial la hace el backend.
+ * Devuelve textos, como ValidacionRubricaRespuesta del backend.
+ */
 function validarRubricaMock(rubrica: Rubrica): ResultadoValidacion {
-  const inconsistencias = calcularInconsistencias(rubrica);
+  const inconsistencias = calcularInconsistencias(rubrica).map((inconsistencia) => inconsistencia.mensaje);
   return { valida: inconsistencias.length === 0, inconsistencias };
 }
 
@@ -547,7 +578,7 @@ export async function cambiarRol(usuarioId: string, rol: Rol): Promise<Usuario> 
 // ---------- Cohortes y laboratorios ----------
 
 export async function listarCohortes(): Promise<Cohorte[]> {
-  if (MODO_MOCK) return simulado(() => estadoMock.cohortes);
+  if (MODO_MOCK) return simulado(cohortesConVersionMock);
   return peticion<Cohorte[]>("GET", "/cohortes");
 }
 
@@ -555,7 +586,7 @@ export async function crearLaboratorio(datos: LaboratorioEntrada): Promise<Labor
   if (MODO_MOCK) {
     return simulado(() => {
       validarCodigoUnicoMock(datos, null);
-      const laboratorio: Laboratorio = { ...datos, id: `lab-${Date.now()}` };
+      const laboratorio: Laboratorio = { ...datos, id: nuevoIdMock() };
       estadoMock.cohortes.find((c) => c.id === datos.cohorte_id)?.laboratorios.push(laboratorio);
       return laboratorio;
     });
@@ -564,7 +595,7 @@ export async function crearLaboratorio(datos: LaboratorioEntrada): Promise<Labor
 }
 
 /** En modo mock, si cambia la cohorte el laboratorio se mueve a la nueva cohorte. */
-function actualizarLaboratorioMock(id: string, datos: LaboratorioEntrada): Laboratorio {
+function actualizarLaboratorioMock(id: IdNumerico, datos: LaboratorioEntrada): Laboratorio {
   if (!existeLaboratorioMock(id)) throw noEncontrado();
   validarCodigoUnicoMock(datos, id);
   const laboratorio: Laboratorio = { ...datos, id };
@@ -577,12 +608,12 @@ function actualizarLaboratorioMock(id: string, datos: LaboratorioEntrada): Labor
   return laboratorio;
 }
 
-export async function actualizarLaboratorio(id: string, datos: LaboratorioEntrada): Promise<Laboratorio> {
+export async function actualizarLaboratorio(id: IdNumerico, datos: LaboratorioEntrada): Promise<Laboratorio> {
   if (MODO_MOCK) return simulado(() => actualizarLaboratorioMock(id, datos));
   return peticion<Laboratorio>("PUT", `/laboratorios/${encodeURIComponent(id)}`, datos);
 }
 
-export async function eliminarLaboratorio(id: string): Promise<void> {
+export async function eliminarLaboratorio(id: IdNumerico): Promise<void> {
   if (MODO_MOCK) {
     await simulado(() => {
       estadoMock.cohortes.forEach((cohorte) => {
@@ -597,13 +628,13 @@ export async function eliminarLaboratorio(id: string): Promise<void> {
 
 // ---------- Rúbricas ----------
 
-export async function obtenerRubricaVigente(laboratorioId: string): Promise<RubricaVersion> {
+export async function obtenerRubricaVigente(laboratorioId: IdNumerico): Promise<RubricaVersion> {
   if (MODO_MOCK) return simulado(() => rubricaVigenteMock(laboratorioId));
   return peticion<RubricaVersion>("GET", `/laboratorios/${encodeURIComponent(laboratorioId)}/rubrica`);
 }
 
 /** Igual que obtenerRubricaVigente, pero devuelve null si el laboratorio no tiene versión vigente (404). */
-export async function obtenerRubricaVigenteONula(laboratorioId: string): Promise<RubricaVersion | null> {
+export async function obtenerRubricaVigenteONula(laboratorioId: IdNumerico): Promise<RubricaVersion | null> {
   try {
     const rubrica = await obtenerRubricaVigente(laboratorioId);
     return rubrica.estado === "aprobada" ? rubrica : null;
@@ -613,7 +644,7 @@ export async function obtenerRubricaVigenteONula(laboratorioId: string): Promise
   }
 }
 
-export async function extraerRubrica(laboratorioId: string, archivo: File): Promise<ResultadoExtraccion> {
+export async function extraerRubrica(laboratorioId: IdNumerico, archivo: File): Promise<ResultadoExtraccion> {
   if (MODO_MOCK) {
     await esperar(1200);
     return simulado(() => {
@@ -636,7 +667,7 @@ export async function validarRubrica(rubrica: Rubrica): Promise<ResultadoValidac
   return peticion<ResultadoValidacion>("POST", "/rubricas/validar", rubrica);
 }
 
-export async function guardarVersionRubrica(laboratorioId: string, rubrica: Rubrica): Promise<RubricaVersion> {
+export async function guardarVersionRubrica(laboratorioId: IdNumerico, rubrica: Rubrica): Promise<RubricaVersion> {
   if (MODO_MOCK) return simulado(() => guardarVersionMock(laboratorioId, rubrica));
   return peticion<RubricaVersion>(
     "POST",
@@ -662,7 +693,7 @@ export async function crearEntrega(datos: NuevaEntrega): Promise<Entrega> {
     return simulado(() => {
       validarEntregaMock(datos);
       const entrega: Entrega = {
-        id: `ent-${Date.now()}`,
+        id: nuevoIdMock(),
         estudiante_id: perfilesMock.estudiante.id,
         laboratorio_id: datos.laboratorio_id,
         rubrica_version_id: rubricaVigenteMock(datos.laboratorio_id).id,
@@ -678,7 +709,7 @@ export async function crearEntrega(datos: NuevaEntrega): Promise<Entrega> {
     });
   }
   const formulario = new FormData();
-  formulario.append("laboratorio_id", datos.laboratorio_id);
+  formulario.append("laboratorio_id", String(datos.laboratorio_id));
   formulario.append("pdf", datos.pdf);
   if (datos.zip) formulario.append("zip", datos.zip);
   if (datos.github_url) formulario.append("github_url", datos.github_url);
@@ -686,7 +717,7 @@ export async function crearEntrega(datos: NuevaEntrega): Promise<Entrega> {
   return peticion<Entrega>("POST", "/entregas", formulario);
 }
 
-export async function evaluarEntrega(entregaId: string): Promise<RespuestaEvaluar> {
+export async function evaluarEntrega(entregaId: IdNumerico): Promise<RespuestaEvaluar> {
   if (MODO_MOCK) {
     return simulado(() => {
       const entrega = estadoMock.entregas.find((e) => e.id === entregaId);
@@ -705,7 +736,7 @@ export async function evaluarEntrega(entregaId: string): Promise<RespuestaEvalua
 
 // ---------- Evaluaciones ----------
 
-export async function obtenerEvaluacion(id: string): Promise<Evaluacion> {
+export async function obtenerEvaluacion(id: IdNumerico): Promise<Evaluacion> {
   if (MODO_MOCK) {
     const perfil = await perfilMockActual();
     return simulado(() => {
@@ -718,7 +749,7 @@ export async function obtenerEvaluacion(id: string): Promise<Evaluacion> {
 }
 
 export async function ajustarCriterio(
-  evaluacionId: string,
+  evaluacionId: IdNumerico,
   criterioId: string,
   ajuste: AjusteCriterio,
 ): Promise<Evaluacion> {
@@ -733,7 +764,7 @@ export async function ajustarCriterio(
   );
 }
 
-export async function aprobarEvaluacion(id: string): Promise<Evaluacion> {
+export async function aprobarEvaluacion(id: IdNumerico): Promise<Evaluacion> {
   if (MODO_MOCK) {
     const perfil = await perfilMockActual();
     return simulado(() => cambiarEstadoMock(id, "aprobada", perfil));
@@ -741,7 +772,7 @@ export async function aprobarEvaluacion(id: string): Promise<Evaluacion> {
   return peticion<Evaluacion>("POST", `/evaluaciones/${encodeURIComponent(id)}/aprobar`);
 }
 
-export async function publicarEvaluacion(id: string): Promise<Evaluacion> {
+export async function publicarEvaluacion(id: IdNumerico): Promise<Evaluacion> {
   if (MODO_MOCK) {
     const perfil = await perfilMockActual();
     return simulado(() => cambiarEstadoMock(id, "publicada", perfil));
@@ -749,7 +780,7 @@ export async function publicarEvaluacion(id: string): Promise<Evaluacion> {
   return peticion<Evaluacion>("POST", `/evaluaciones/${encodeURIComponent(id)}/publicar`);
 }
 
-export async function obtenerTraza(id: string): Promise<Traza> {
+export async function obtenerTraza(id: IdNumerico): Promise<Traza> {
   if (MODO_MOCK) return simulado(() => trazaDeEvaluacionMock(buscarEvaluacionMock(id)));
   return peticion<Traza>("GET", `/evaluaciones/${encodeURIComponent(id)}/traza`);
 }

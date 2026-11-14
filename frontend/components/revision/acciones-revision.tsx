@@ -5,11 +5,11 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { estaProcesando, formatearFechaHora } from "@/components/evaluaciones/estado-evaluacion";
 import { aprobarEvaluacion, mensajeDeError, publicarEvaluacion } from "@/lib/api";
-import type { Evaluacion } from "@/lib/tipos";
+import type { Evaluacion, IdNumerico } from "@/lib/tipos";
 
 type Accion = "aprobar" | "publicar";
 
-const CONFIG_ACCION: Record<Accion, { boton: string; pregunta: string; ejecutar: (id: string) => Promise<Evaluacion> }> = {
+const CONFIG_ACCION: Record<Accion, { boton: string; pregunta: string; ejecutar: (id: IdNumerico) => Promise<Evaluacion> }> = {
   aprobar: {
     boton: "Aprobar",
     pregunta: "¿Aprobar esta evaluación? Después ya no podrás ajustar los niveles.",

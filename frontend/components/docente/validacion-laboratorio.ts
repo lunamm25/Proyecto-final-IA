@@ -1,14 +1,23 @@
 // Validación en el cliente del formulario de laboratorio (RF-02 CA1). El backend hace la validación oficial.
-import type { Cohorte, LaboratorioEntrada } from "@/lib/tipos";
+import { idDesdeUrl, type Cohorte, type IdNumerico, type Laboratorio, type LaboratorioEntrada } from "@/lib/tipos";
 
 export const MAX_CODIGO = 20;
 export const MAX_TITULO = 150;
 
-export type CampoLaboratorio = keyof LaboratorioEntrada;
+/** Valores del formulario como texto (el <select> de cohorte guarda el id como texto). */
+export interface FormularioLaboratorio {
+  cohorte_id: string;
+  codigo: string;
+  titulo: string;
+  descripcion: string;
+  objetivos: string;
+}
+
+export type CampoLaboratorio = keyof FormularioLaboratorio;
 
 export type ErroresLaboratorio = Partial<Record<CampoLaboratorio, string>>;
 
-export const LABORATORIO_VACIO: LaboratorioEntrada = {
+export const LABORATORIO_VACIO: FormularioLaboratorio = {
   cohorte_id: "",
   codigo: "",
   titulo: "",
@@ -16,13 +25,25 @@ export const LABORATORIO_VACIO: LaboratorioEntrada = {
   objetivos: "",
 };
 
-function codigoRepetido(datos: LaboratorioEntrada, cohortes: Cohorte[], idActual: string | null): boolean {
-  const cohorte = cohortes.find((c) => c.id === datos.cohorte_id);
+/** Formulario a partir de un laboratorio existente (descripción y objetivos pueden venir en null). */
+export function formularioDesde(laboratorio: Laboratorio): FormularioLaboratorio {
+  return {
+    cohorte_id: String(laboratorio.cohorte_id),
+    codigo: laboratorio.codigo,
+    titulo: laboratorio.titulo,
+    descripcion: laboratorio.descripcion ?? "",
+    objetivos: laboratorio.objetivos ?? "",
+  };
+}
+
+function codigoRepetido(datos: FormularioLaboratorio, cohortes: Cohorte[], idActual: IdNumerico | null): boolean {
+  const cohorteId = idDesdeUrl(datos.cohorte_id);
+  const cohorte = cohortes.find((c) => c.id === cohorteId);
   const codigo = datos.codigo.trim().toLowerCase();
   return Boolean(cohorte?.laboratorios.some((l) => l.id !== idActual && l.codigo.trim().toLowerCase() === codigo));
 }
 
-function errorCodigo(datos: LaboratorioEntrada, cohortes: Cohorte[], idActual: string | null): string | undefined {
+function errorCodigo(datos: FormularioLaboratorio, cohortes: Cohorte[], idActual: IdNumerico | null): string | undefined {
   const codigo = datos.codigo.trim();
   if (codigo === "") return "El código es obligatorio.";
   if (codigo.length > MAX_CODIGO) return `El código no puede tener más de ${MAX_CODIGO} caracteres.`;
@@ -34,12 +55,12 @@ function errorCodigo(datos: LaboratorioEntrada, cohortes: Cohorte[], idActual: s
 
 /** Devuelve un mensaje por cada campo con error (objeto vacío = formulario válido). */
 export function validarLaboratorio(
-  datos: LaboratorioEntrada,
+  datos: FormularioLaboratorio,
   cohortes: Cohorte[],
-  idActual: string | null,
+  idActual: IdNumerico | null,
 ): ErroresLaboratorio {
   const errores: ErroresLaboratorio = {};
-  if (datos.cohorte_id === "") errores.cohorte_id = "Elige una cohorte.";
+  if (idDesdeUrl(datos.cohorte_id) === null) errores.cohorte_id = "Elige una cohorte.";
   const codigo = errorCodigo(datos, cohortes, idActual);
   if (codigo) errores.codigo = codigo;
   if (datos.titulo.trim() === "") errores.titulo = "El título es obligatorio.";
@@ -49,10 +70,10 @@ export function validarLaboratorio(
   return errores;
 }
 
-/** Quita espacios sobrantes antes de enviar al backend. */
-export function limpiarLaboratorio(datos: LaboratorioEntrada): LaboratorioEntrada {
+/** Convierte el formulario (ya validado) en el cuerpo de POST/PUT, con `cohorte_id` numérico. */
+export function aEntradaLaboratorio(datos: FormularioLaboratorio): LaboratorioEntrada {
   return {
-    cohorte_id: datos.cohorte_id,
+    cohorte_id: Number(datos.cohorte_id),
     codigo: datos.codigo.trim(),
     titulo: datos.titulo.trim(),
     descripcion: datos.descripcion.trim(),

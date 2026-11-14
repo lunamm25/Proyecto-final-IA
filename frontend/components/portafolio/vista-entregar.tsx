@@ -14,7 +14,7 @@ import {
   ultimaEntregaPorLaboratorio,
 } from "@/components/portafolio/estado-entrega";
 import { listarCohortes, listarEntregas, obtenerRubricaVigenteONula } from "@/lib/api";
-import type { Cohorte, Entrega, Laboratorio, RubricaVersion } from "@/lib/tipos";
+import { idDesdeUrl, type Cohorte, type Entrega, type IdNumerico, type Laboratorio, type RubricaVersion } from "@/lib/tipos";
 import { useCarga } from "@/lib/use-carga";
 
 interface DatosEntregar {
@@ -24,7 +24,7 @@ interface DatosEntregar {
   entregaPrevia: Entrega | undefined;
 }
 
-function buscarLaboratorio(cohortes: Cohorte[], labId: string): { laboratorio: Laboratorio; cohorte: Cohorte } | null {
+function buscarLaboratorio(cohortes: Cohorte[], labId: IdNumerico): { laboratorio: Laboratorio; cohorte: Cohorte } | null {
   for (const cohorte of cohortes) {
     const laboratorio = cohorte.laboratorios.find((l) => l.id === labId);
     if (laboratorio) return { laboratorio, cohorte };
@@ -55,11 +55,15 @@ function FichaLaboratorio({ laboratorio, cohorte }: { laboratorio: Laboratorio; 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-xl border p-4">
           <h2 className="text-sm font-semibold">Descripción</h2>
-          <p className="mt-1 text-sm whitespace-pre-line text-muted-foreground">{laboratorio.descripcion}</p>
+          <p className="mt-1 text-sm whitespace-pre-line text-muted-foreground">
+            {laboratorio.descripcion || "El docente aún no ha escrito la descripción."}
+          </p>
         </div>
         <div className="rounded-xl border p-4">
           <h2 className="text-sm font-semibold">Objetivos</h2>
-          <p className="mt-1 text-sm whitespace-pre-line text-muted-foreground">{laboratorio.objetivos}</p>
+          <p className="mt-1 text-sm whitespace-pre-line text-muted-foreground">
+            {laboratorio.objetivos || "El docente aún no ha escrito los objetivos."}
+          </p>
         </div>
       </div>
     </section>
@@ -90,7 +94,22 @@ function SinRubrica() {
   );
 }
 
+function LaboratorioNoEncontrado() {
+  return (
+    <div className="space-y-4">
+      <EnlaceVolver />
+      <EstadoVacio titulo="Laboratorio no encontrado" mensaje="El laboratorio que buscas no existe o fue eliminado." />
+    </div>
+  );
+}
+
 export function VistaEntregar({ labId }: { labId: string }) {
+  const id = idDesdeUrl(labId);
+  if (id === null) return <LaboratorioNoEncontrado />;
+  return <VistaEntregarValida labId={id} />;
+}
+
+function VistaEntregarValida({ labId }: { labId: IdNumerico }) {
   const { perfil } = useSesion();
   const estudianteId = perfil?.id;
 
@@ -108,14 +127,7 @@ export function VistaEntregar({ labId }: { labId: string }) {
   if (estado.tipo === "error") {
     return <MensajeError titulo="No se pudo cargar el laboratorio" mensaje={estado.mensaje} alReintentar={recargar} />;
   }
-  if (!estado.datos) {
-    return (
-      <div className="space-y-4">
-        <EnlaceVolver />
-        <EstadoVacio titulo="Laboratorio no encontrado" mensaje="El laboratorio que buscas no existe o fue eliminado." />
-      </div>
-    );
-  }
+  if (!estado.datos) return <LaboratorioNoEncontrado />;
 
   const { laboratorio, cohorte, rubrica, entregaPrevia } = estado.datos;
   return (

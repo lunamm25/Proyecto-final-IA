@@ -8,15 +8,15 @@ import { useSesion } from "@/components/proveedor-sesion";
 import { TarjetaLaboratorio } from "@/components/portafolio/tarjeta-laboratorio";
 import { ultimaEntregaPorLaboratorio } from "@/components/portafolio/estado-entrega";
 import { evaluarEntrega, listarCohortes, listarEntregas, mensajeDeError } from "@/lib/api";
-import type { Cohorte, Entrega } from "@/lib/tipos";
+import type { Cohorte, Entrega, IdNumerico } from "@/lib/tipos";
 import { useCarga } from "@/lib/use-carga";
 
 interface DatosPortafolio {
   cohortes: Cohorte[];
-  entregas: Map<string, Entrega>;
+  entregas: Map<IdNumerico, Entrega>;
 }
 
-type Aviso = { tipo: "exito" | "error"; mensaje: string; evaluacionId?: string };
+type Aviso = { tipo: "exito" | "error"; mensaje: string; evaluacionId?: IdNumerico };
 
 function EsqueletoPortafolio() {
   return (
@@ -46,11 +46,11 @@ function AvisoAccion({ aviso }: { aviso: Aviso }) {
       {exito && <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" />}
       <p>
         {aviso.mensaje}
-        {aviso.evaluacionId && (
+        {aviso.evaluacionId !== undefined && (
           <>
             {" "}
             <Link
-              href={`/evaluaciones/${encodeURIComponent(aviso.evaluacionId)}`}
+              href={`/evaluaciones/${aviso.evaluacionId}`}
               className="font-medium underline underline-offset-4"
             >
               Ver progreso
@@ -64,9 +64,9 @@ function AvisoAccion({ aviso }: { aviso: Aviso }) {
 
 interface SeccionCohorteProps {
   cohorte: Cohorte;
-  entregas: Map<string, Entrega>;
-  evaluandoId: string | null;
-  alEvaluar: (entregaId: string) => void;
+  entregas: Map<IdNumerico, Entrega>;
+  evaluandoId: IdNumerico | null;
+  alEvaluar: (entregaId: IdNumerico) => void;
 }
 
 function SeccionCohorte({ cohorte, entregas, evaluandoId, alEvaluar }: SeccionCohorteProps) {
@@ -102,7 +102,7 @@ function SeccionCohorte({ cohorte, entregas, evaluandoId, alEvaluar }: SeccionCo
 export function VistaPortafolio() {
   const { perfil } = useSesion();
   const estudianteId = perfil?.id;
-  const [evaluandoId, setEvaluandoId] = useState<string | null>(null);
+  const [evaluandoId, setEvaluandoId] = useState<IdNumerico | null>(null);
   const [aviso, setAviso] = useState<Aviso | null>(null);
 
   const cargar = useCallback(async (): Promise<DatosPortafolio> => {
@@ -114,7 +114,7 @@ export function VistaPortafolio() {
   const { estado, recargar, refrescar } = useCarga(cargar);
 
   const alEvaluar = useCallback(
-    async (entregaId: string) => {
+    async (entregaId: IdNumerico) => {
       setEvaluandoId(entregaId);
       setAviso(null);
       try {

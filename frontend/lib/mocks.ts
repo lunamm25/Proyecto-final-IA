@@ -6,6 +6,7 @@ import type {
   Entrega,
   Evaluacion,
   Informe,
+  Laboratorio,
   Mapa,
   NodoMapa,
   Perfil,
@@ -47,23 +48,29 @@ export const usuariosMock: Usuario[] = [
   { id: "est-2", nombre: "Juan Pérez", correo: "juan.perez@demo.edu.co", rol: "estudiante" },
 ];
 
-export const cohortesMock: Cohorte[] = [
+/**
+ * Cohortes base del mock: sin `version_rubrica_vigente`, que el mock de GET /cohortes calcula a partir de
+ * las rúbricas en memoria (igual que hace el backend con sus versiones aprobadas).
+ */
+export type CohorteMock = Omit<Cohorte, "laboratorios"> & { laboratorios: Laboratorio[] };
+
+export const cohortesMock: CohorteMock[] = [
   {
-    id: "coh-1",
+    id: 1,
     nombre: "Cohorte 1",
     numero: 1,
     laboratorios: [
       {
-        id: "lab-1",
-        cohorte_id: "coh-1",
+        id: 1,
+        cohorte_id: 1,
         codigo: "C1-L1",
         titulo: "Fundamentos de IA y Python",
         descripcion: "Primer acercamiento a la IA con cuadernos de Python.",
         objetivos: "Comprender conceptos básicos de IA y escribir scripts simples en Python.",
       },
       {
-        id: "lab-2",
-        cohorte_id: "coh-1",
+        id: 2,
+        cohorte_id: 1,
         codigo: "C1-L2",
         titulo: "Aprendizaje automático supervisado",
         descripcion: "Entrenar y evaluar un clasificador con scikit-learn.",
@@ -72,45 +79,45 @@ export const cohortesMock: Cohorte[] = [
     ],
   },
   {
-    id: "coh-2",
+    id: 2,
     nombre: "Cohorte 2",
     numero: 2,
     laboratorios: [
       {
-        id: "lab-3",
-        cohorte_id: "coh-2",
+        id: 3,
+        cohorte_id: 2,
         codigo: "C2-L1",
         titulo: "Ingeniería de prompts con LLMs",
         descripcion: "Diseño de prompts y salidas estructuradas con un LLM.",
         objetivos: "Diseñar prompts reproducibles y validar las salidas con esquemas.",
       },
       {
-        id: "lab-4",
-        cohorte_id: "coh-2",
+        id: 4,
+        cohorte_id: 2,
         codigo: "C2-L2",
         titulo: "RAG con modelos locales",
         descripcion: "Recuperación aumentada con Ollama y una base vectorial.",
         objetivos: "Construir un flujo RAG y evaluar la calidad de las respuestas.",
       },
       {
-        id: "lab-5",
-        cohorte_id: "coh-2",
+        id: 5,
+        cohorte_id: 2,
         codigo: "C2-L3",
         titulo: "Agentes de IA",
         descripcion: "Agente con herramientas para resolver tareas de varios pasos.",
         objetivos: "Implementar un agente con herramientas y documentar sus límites.",
       },
       {
-        id: "lab-6",
-        cohorte_id: "coh-2",
+        id: 6,
+        cohorte_id: 2,
         codigo: "C2-L4",
         titulo: "Evaluación de modelos de lenguaje",
         descripcion: "Comparar dos LLMs con un conjunto de pruebas propio.",
         objetivos: "Definir métricas, ejecutar pruebas reproducibles y reportar hallazgos.",
       },
       {
-        id: "lab-7",
-        cohorte_id: "coh-2",
+        id: 7,
+        cohorte_id: 2,
         codigo: "C2-L5",
         titulo: "Proyecto integrador",
         descripcion: "Aplicación completa que integra los temas del curso.",
@@ -121,12 +128,10 @@ export const cohortesMock: Cohorte[] = [
 ];
 
 /** Laboratorios sin rúbrica vigente en el modo mock (para probar RF-02 CA2). */
-export const laboratoriosSinRubricaMock: string[] = ["lab-7"];
+export const laboratoriosSinRubricaMock: number[] = [7];
 
 export const rubricaVersionMock: RubricaVersion = {
-  id: "rv-1",
-  rubrica_id: "rub-1",
-  laboratorio_id: "lab-3",
+  id: 1,
   version: 1,
   estado: "aprobada",
   creada_por: "doc-1",
@@ -217,58 +222,58 @@ export const rubricaExtraidaMock: Rubrica = {
 
 export const entregasMock: Entrega[] = [
   {
-    id: "ent-1",
+    id: 1,
     estudiante_id: "est-1",
-    laboratorio_id: "lab-1",
-    rubrica_version_id: "rv-0",
+    laboratorio_id: 1,
+    rubrica_version_id: 10,
     pdf_path: "entregas/est-1/lab-1/informe.pdf",
     codigo_zip_path: "entregas/est-1/lab-1/codigo.zip",
     github_url: null,
     extras: [],
     creada_en: "2026-09-02T14:00:00Z",
-    evaluacion: { id: "eva-0", estado: "publicada", nota: 3.6 },
+    evaluacion: { id: 6, estado: "publicada", nota: 3.6 },
   },
   {
-    id: "ent-2",
+    id: 2,
     estudiante_id: "est-1",
-    laboratorio_id: "lab-2",
-    rubrica_version_id: "rv-0b",
+    laboratorio_id: 2,
+    rubrica_version_id: 11,
     pdf_path: "entregas/est-1/lab-2/informe.pdf",
     codigo_zip_path: null,
     github_url: "https://github.com/ana-estudiante/lab2-ml",
     extras: [],
     creada_en: "2026-09-20T14:00:00Z",
-    evaluacion: { id: "eva-3", estado: "en_revision", nota: 3.1 },
+    evaluacion: { id: 3, estado: "en_revision", nota: 3.1 },
   },
   {
-    id: "ent-3",
+    id: 3,
     estudiante_id: "est-1",
-    laboratorio_id: "lab-3",
-    rubrica_version_id: "rv-1",
+    laboratorio_id: 3,
+    rubrica_version_id: 1,
     pdf_path: "entregas/est-1/lab-3/informe.pdf",
     codigo_zip_path: "entregas/est-1/lab-3/codigo.zip",
     github_url: null,
     extras: ["entregas/est-1/lab-3/captura.png"],
     creada_en: "2026-10-15T14:00:00Z",
-    evaluacion: { id: "eva-1", estado: "publicada", nota: 4.2 },
+    evaluacion: { id: 1, estado: "publicada", nota: 4.2 },
   },
   {
-    id: "ent-4",
+    id: 4,
     estudiante_id: "est-1",
-    laboratorio_id: "lab-4",
-    rubrica_version_id: "rv-2",
+    laboratorio_id: 4,
+    rubrica_version_id: 2,
     pdf_path: "entregas/est-1/lab-4/informe.pdf",
     codigo_zip_path: null,
     github_url: "https://github.com/ana-estudiante/rag-local",
     extras: [],
     creada_en: "2026-11-05T14:00:00Z",
-    evaluacion: { id: "eva-2", estado: "borrador", nota: 3.8 },
+    evaluacion: { id: 2, estado: "borrador", nota: 3.8 },
   },
   {
-    id: "ent-5",
+    id: 5,
     estudiante_id: "est-1",
-    laboratorio_id: "lab-5",
-    rubrica_version_id: "rv-3",
+    laboratorio_id: 5,
+    rubrica_version_id: 3,
     pdf_path: "entregas/est-1/lab-5/informe.pdf",
     codigo_zip_path: null,
     github_url: null,
@@ -277,28 +282,28 @@ export const entregasMock: Entrega[] = [
     evaluacion: null,
   },
   {
-    id: "ent-6",
+    id: 6,
     estudiante_id: "est-1",
-    laboratorio_id: "lab-6",
-    rubrica_version_id: "rv-4",
+    laboratorio_id: 6,
+    rubrica_version_id: 4,
     pdf_path: "entregas/est-1/lab-6/informe.pdf",
     codigo_zip_path: "entregas/est-1/lab-6/codigo.zip",
     github_url: null,
     extras: [],
     creada_en: "2026-11-11T14:00:00Z",
-    evaluacion: { id: "eva-4", estado: "error", nota: null },
+    evaluacion: { id: 4, estado: "error", nota: null },
   },
   {
-    id: "ent-7",
+    id: 7,
     estudiante_id: "est-2",
-    laboratorio_id: "lab-3",
-    rubrica_version_id: "rv-1",
+    laboratorio_id: 3,
+    rubrica_version_id: 1,
     pdf_path: "entregas/est-2/lab-3/informe.pdf",
     codigo_zip_path: "entregas/est-2/lab-3/codigo.zip",
     github_url: null,
     extras: [],
     creada_en: "2026-11-09T14:00:00Z",
-    evaluacion: { id: "eva-5", estado: "aprobada", nota: 4.6 },
+    evaluacion: { id: 5, estado: "aprobada", nota: 4.6 },
   },
 ];
 
@@ -323,10 +328,10 @@ const verificacionMock: VerificacionCodigo = {
 };
 
 export const evaluacionPublicadaMock: Evaluacion = {
-  id: "eva-1",
-  entrega_id: "ent-3",
+  id: 1,
+  entrega_id: 3,
   estudiante_id: "est-1",
-  laboratorio_id: "lab-3",
+  laboratorio_id: 3,
   estado: "publicada",
   nota: 4.2,
   proveedor: "gemini",
@@ -424,9 +429,9 @@ export const evaluacionPublicadaMock: Evaluacion = {
 
 export const evaluacionBorradorMock: Evaluacion = {
   ...evaluacionPublicadaMock,
-  id: "eva-2",
-  entrega_id: "ent-4",
-  laboratorio_id: "lab-4",
+  id: 2,
+  entrega_id: 4,
+  laboratorio_id: 4,
   estado: "borrador",
   nota: 3.8,
   criterios: evaluacionPublicadaMock.criterios.map((criterio) => ({
@@ -441,9 +446,9 @@ export const evaluacionBorradorMock: Evaluacion = {
 
 const evaluacionEnRevisionMock: Evaluacion = {
   ...evaluacionBorradorMock,
-  id: "eva-3",
-  entrega_id: "ent-2",
-  laboratorio_id: "lab-2",
+  id: 3,
+  entrega_id: 2,
+  laboratorio_id: 2,
   estado: "en_revision",
   nota: 3.1,
   creada_en: "2026-09-20T15:00:00Z",
@@ -451,9 +456,9 @@ const evaluacionEnRevisionMock: Evaluacion = {
 
 const evaluacionErrorMock: Evaluacion = {
   ...evaluacionBorradorMock,
-  id: "eva-4",
-  entrega_id: "ent-6",
-  laboratorio_id: "lab-6",
+  id: 4,
+  entrega_id: 6,
+  laboratorio_id: 6,
   estado: "error",
   nota: null,
   criterios: [],
@@ -468,10 +473,10 @@ const evaluacionErrorMock: Evaluacion = {
 
 const evaluacionAprobadaMock: Evaluacion = {
   ...evaluacionBorradorMock,
-  id: "eva-5",
-  entrega_id: "ent-7",
+  id: 5,
+  entrega_id: 7,
   estudiante_id: "est-2",
-  laboratorio_id: "lab-3",
+  laboratorio_id: 3,
   estado: "aprobada",
   nota: 4.6,
   aprobada_en: "2026-11-10T09:00:00Z",
@@ -507,7 +512,7 @@ export const resultadoSimuladoMock: Pick<
 };
 
 export const trazaMock: Traza = {
-  evaluacion_id: "eva-1",
+  evaluacion_id: 1,
   proveedor: "gemini",
   modelo: "gemini-2.0-flash",
   prompt_version: "evaluacion-v1",
@@ -543,10 +548,10 @@ export const informeMock: Informe = {
   estudiante_id: "est-1",
   estudiante_nombre: "Ana Estudiante",
   notas_laboratorio: [
-    { laboratorio_id: "lab-1", codigo: "C1-L1", titulo: "Fundamentos de IA y Python", cohorte: 1, evaluacion_id: "eva-0", nota: 3.6 },
-    { laboratorio_id: "lab-2", codigo: "C1-L2", titulo: "Aprendizaje automático supervisado", cohorte: 1, evaluacion_id: "eva-2", nota: 3.2 },
-    { laboratorio_id: "lab-3", codigo: "C2-L1", titulo: "Ingeniería de prompts con LLMs", cohorte: 2, evaluacion_id: "eva-1", nota: 4.2 },
-    { laboratorio_id: "lab-4", codigo: "C2-L2", titulo: "RAG con modelos locales", cohorte: 2, evaluacion_id: "eva-3", nota: 3.8 },
+    { laboratorio_id: 1, codigo: "C1-L1", titulo: "Fundamentos de IA y Python", cohorte: 1, evaluacion_id: 6, nota: 3.6 },
+    { laboratorio_id: 2, codigo: "C1-L2", titulo: "Aprendizaje automático supervisado", cohorte: 1, evaluacion_id: 2, nota: 3.2 },
+    { laboratorio_id: 3, codigo: "C2-L1", titulo: "Ingeniería de prompts con LLMs", cohorte: 2, evaluacion_id: 1, nota: 4.2 },
+    { laboratorio_id: 4, codigo: "C2-L2", titulo: "RAG con modelos locales", cohorte: 2, evaluacion_id: 3, nota: 3.8 },
   ],
   promedios_cohorte: [
     { cohorte: 1, promedio: 3.4 },

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ErrorApi, mensajeDeError, obtenerEvaluacion } from "@/lib/api";
-import type { Evaluacion } from "@/lib/tipos";
+import type { Evaluacion, IdNumerico } from "@/lib/tipos";
 import {
   INTERVALO_SONDEO_MS,
   MAX_FALLOS_SONDEO,
@@ -31,7 +31,7 @@ function esTransitorio(status: number | null): boolean {
  * Carga la evaluación y, mientras se esté procesando, la vuelve a consultar cada INTERVALO_SONDEO_MS.
  * Se detiene al llegar a un estado final, al desmontar o tras MAX_FALLOS_SONDEO fallos seguidos.
  */
-export function useSondeoEvaluacion(id: string): ResultadoSondeo {
+export function useSondeoEvaluacion(id: IdNumerico): ResultadoSondeo {
   const [estado, setEstado] = useState<EstadoSondeo>({ tipo: "cargando" });
   const [intento, setIntento] = useState(0);
 

@@ -15,8 +15,8 @@ import {
 } from "@/components/revision/datos-bandeja";
 import { useCarga } from "@/lib/use-carga";
 
-function rutaRevision(id: string): string {
-  return `/docente/revision/${encodeURIComponent(id)}`;
+function rutaRevision(id: number): string {
+  return `/docente/revision/${id}`;
 }
 
 function textoNota(nota: number | null): string {

@@ -1,4 +1,4 @@
-import type { Entrega } from "@/lib/tipos";
+import type { Entrega, IdNumerico } from "@/lib/tipos";
 
 /** Estado del laboratorio tal como lo ve el estudiante (RF-04 CA4 y RF-05 CA6). */
 export type EstadoLaboratorio = "sin_entregar" | "sin_evaluar" | "pendiente" | "publicada" | "error";
@@ -34,8 +34,8 @@ export function formatearNota(nota: number): string {
 }
 
 /** Devuelve la entrega más reciente de cada laboratorio. */
-export function ultimaEntregaPorLaboratorio(entregas: Entrega[]): Map<string, Entrega> {
-  const mapa = new Map<string, Entrega>();
+export function ultimaEntregaPorLaboratorio(entregas: Entrega[]): Map<IdNumerico, Entrega> {
+  const mapa = new Map<IdNumerico, Entrega>();
   for (const entrega of entregas) {
     const actual = mapa.get(entrega.laboratorio_id);
     if (!actual || entrega.creada_en > actual.creada_en) mapa.set(entrega.laboratorio_id, entrega);

@@ -1,13 +1,13 @@
 import { buscarLaboratorio } from "@/components/evaluaciones/use-contexto-evaluacion";
 import { listarCohortes, listarEntregas, listarUsuarios } from "@/lib/api";
-import type { EstadoEvaluacion, Usuario } from "@/lib/tipos";
+import type { EstadoEvaluacion, IdNumerico, Usuario } from "@/lib/tipos";
 
 export type FiltroEstado = EstadoEvaluacion | "todas";
 
 export const FILTRO_POR_DEFECTO: FiltroEstado = "borrador";
 
 export interface FilaBandeja {
-  evaluacionId: string;
+  evaluacionId: IdNumerico;
   estado: EstadoEvaluacion;
   /** Nota que envía el backend en el resumen de la entrega. */
   nota: number | null;
@@ -41,7 +41,7 @@ export async function cargarBandeja(): Promise<FilaBandeja[]> {
           evaluacionId: entrega.evaluacion.id,
           estado: entrega.evaluacion.estado,
           nota: entrega.evaluacion.nota,
-          laboratorio: laboratorio ? `${laboratorio.codigo} · ${laboratorio.titulo}` : entrega.laboratorio_id,
+          laboratorio: laboratorio ? `${laboratorio.codigo} · ${laboratorio.titulo}` : `Laboratorio ${entrega.laboratorio_id}`,
           estudiante: nombres.get(entrega.estudiante_id) ?? `Estudiante ${entrega.estudiante_id}`,
           fecha: entrega.creada_en,
         },

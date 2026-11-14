@@ -5,13 +5,13 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatearNota } from "@/components/portafolio/estado-entrega";
 import { ajustarCriterio, mensajeDeError } from "@/lib/api";
-import type { EvaluacionCriterio, Evaluacion, NivelDesempeno } from "@/lib/tipos";
+import type { EvaluacionCriterio, Evaluacion, IdNumerico, NivelDesempeno } from "@/lib/tipos";
 
 /** Longitud mínima del motivo de un ajuste (RF-07 CA2: la justificación es obligatoria). */
 export const MIN_CARACTERES_MOTIVO = 10;
 
 interface FormularioAjusteProps {
-  evaluacionId: string;
+  evaluacionId: IdNumerico;
   criterio: EvaluacionCriterio;
   /** Niveles del criterio según la rúbrica; null si no se pudieron cargar. */
   niveles: NivelDesempeno[] | null;

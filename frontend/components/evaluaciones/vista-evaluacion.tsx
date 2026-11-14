@@ -11,13 +11,13 @@ import { ResumenResultado } from "@/components/evaluaciones/resumen-resultado";
 import { buscarCriterioRubrica, estaProcesando, formatearFechaHora } from "@/components/evaluaciones/estado-evaluacion";
 import { useContextoEvaluacion, type ContextoEvaluacion } from "@/components/evaluaciones/use-contexto-evaluacion";
 import { useSondeoEvaluacion } from "@/components/evaluaciones/use-sondeo-evaluacion";
-import type { Evaluacion } from "@/lib/tipos";
+import { idDesdeUrl, type Evaluacion, type IdNumerico } from "@/lib/tipos";
 
 const CLASE_ENLACE_BOTON =
   "inline-flex h-8 items-center justify-center rounded-lg border px-3 text-sm font-medium hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 outline-none";
 
-function rutaRevision(id: string): string {
-  return `/docente/revision/${encodeURIComponent(id)}`;
+function rutaRevision(id: IdNumerico): string {
+  return `/docente/revision/${id}`;
 }
 
 interface DetalleProps {
@@ -98,6 +98,14 @@ function ContenidoListo({ evaluacion, esEstudiante, fallos }: { evaluacion: Eval
 
 /** /evaluaciones/[id]: progreso, resultado publicado (estudiante) o resultado completo (docente/admin). */
 export function VistaEvaluacion({ id }: { id: string }) {
+  const idNumerico = idDesdeUrl(id);
+  if (idNumerico === null) {
+    return <MensajeError titulo="Evaluación no encontrada" mensaje="La dirección no corresponde a ninguna evaluación." />;
+  }
+  return <VistaEvaluacionValida id={idNumerico} />;
+}
+
+function VistaEvaluacionValida({ id }: { id: IdNumerico }) {
   const { perfil } = useSesion();
   const esEstudiante = perfil?.rol === "estudiante";
   const { estado, reintentar } = useSondeoEvaluacion(id);

@@ -23,7 +23,7 @@ import { PanelTraza } from "@/components/revision/panel-traza";
 import { PanelVerificacion } from "@/components/revision/panel-verificacion";
 import { useNombreEstudiante } from "@/components/revision/use-nombre-estudiante";
 import { obtenerTraza } from "@/lib/api";
-import type { Evaluacion } from "@/lib/tipos";
+import { idDesdeUrl, type Evaluacion, type IdNumerico } from "@/lib/tipos";
 import { useCarga } from "@/lib/use-carga";
 
 const ENLACE_BANDEJA = (
@@ -58,7 +58,6 @@ interface CabeceraProps {
 
 function Cabecera({ evaluacion, contexto, alCambiar }: CabeceraProps) {
   const nombre = useNombreEstudiante(evaluacion.estudiante_id);
-  const procesando = estaProcesando(evaluacion);
   return (
     <header className="space-y-4 rounded-xl border bg-card p-4 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -70,7 +69,7 @@ function Cabecera({ evaluacion, contexto, alCambiar }: CabeceraProps) {
           <EnlacesEstudiante estudianteId={evaluacion.estudiante_id} />
         </div>
         <div className="flex flex-col items-start gap-2 sm:items-end">
-          <EtiquetaEstadoEvaluacion estado={evaluacion.estado} procesando={procesando} />
+          <EtiquetaEstadoEvaluacion estado={evaluacion.estado} />
           <NotaBackend nota={evaluacion.nota} />
         </div>
       </div>
@@ -189,6 +188,18 @@ function ContenidoRevision({ evaluacion, fallos, alCambiar }: { evaluacion: Eval
 
 /** /docente/revision/[id]: revisión Human-in-the-Loop de una evaluación (RF-07). */
 export function VistaRevision({ id }: { id: string }) {
+  const idNumerico = idDesdeUrl(id);
+  if (idNumerico === null) {
+    return (
+      <MensajeError titulo="Evaluación no encontrada" mensaje="La dirección no corresponde a ninguna evaluación.">
+        <div className="mt-4">{ENLACE_BANDEJA}</div>
+      </MensajeError>
+    );
+  }
+  return <VistaRevisionValida id={idNumerico} />;
+}
+
+function VistaRevisionValida({ id }: { id: IdNumerico }) {
   const { estado, reintentar, reemplazar } = useSondeoEvaluacion(id);
 
   if (estado.tipo === "cargando") return <Cargando texto="Cargando la evaluación…" />;

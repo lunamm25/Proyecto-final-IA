@@ -12,7 +12,7 @@ import { SumaPonderaciones } from "@/components/rubricas/suma-ponderaciones";
 import { TarjetaCriterio } from "@/components/rubricas/tarjeta-criterio";
 import { useAvisoSalida } from "@/components/rubricas/use-aviso-salida";
 import { useEditorRubrica } from "@/components/rubricas/use-editor-rubrica";
-import { guardarVersionRubrica, mensajeDeError, validarRubrica } from "@/lib/api";
+import { ErrorApi, guardarVersionRubrica, mensajeDeError, validarRubrica } from "@/lib/api";
 import { agruparInconsistencias, camposObligatoriosVacios, sumaPonderaciones } from "@/lib/inconsistencias-rubrica";
 import type { Laboratorio, RubricaVersion } from "@/lib/tipos";
 
@@ -73,6 +73,9 @@ export function EditorRubrica({ laboratorio, vigente, alGuardar }: EditorRubrica
       alGuardar(nueva);
       setAviso({ tipo: "exito", mensaje: `Rúbrica guardada y aprobada como versión ${nueva.version}.` });
     } catch (causa) {
+      if (causa instanceof ErrorApi && causa.inconsistencias.length > 0) {
+        editor.setServidor({ origen: "guardado", inconsistencias: causa.inconsistencias });
+      }
       setAviso({ tipo: "error", mensaje: mensajeDeError(causa) });
     } finally {
       setOcupado(null);

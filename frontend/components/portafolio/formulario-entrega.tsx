@@ -23,18 +23,18 @@ import {
   type ModoCodigo,
 } from "@/components/portafolio/validacion-entrega";
 import { crearEntrega, mensajeDeError } from "@/lib/api";
-import type { NuevaEntrega } from "@/lib/tipos";
+import type { IdNumerico, NuevaEntrega } from "@/lib/tipos";
 
 const ESPERA_REDIRECCION_MS = 3000;
 
 interface FormularioEntregaProps {
-  laboratorioId: string;
+  laboratorioId: IdNumerico;
   versionRubrica: number;
 }
 
 const DATOS_INICIALES: DatosFormulario = { pdf: null, modoCodigo: "zip", zip: null, githubUrl: "", imagenes: [] };
 
-function construirEntrega(laboratorioId: string, datos: DatosFormulario): NuevaEntrega | null {
+function construirEntrega(laboratorioId: IdNumerico, datos: DatosFormulario): NuevaEntrega | null {
   if (!datos.pdf) return null;
   const entrega: NuevaEntrega = { laboratorio_id: laboratorioId, pdf: datos.pdf };
   if (datos.modoCodigo === "zip" && datos.zip) entrega.zip = datos.zip;

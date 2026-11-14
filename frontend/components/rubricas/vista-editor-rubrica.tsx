@@ -6,7 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import { Cargando, MensajeError } from "@/components/estados";
 import { EditorRubrica } from "@/components/rubricas/editor-rubrica";
 import { listarCohortes, obtenerRubricaVigenteONula } from "@/lib/api";
-import type { Cohorte, Laboratorio, RubricaVersion } from "@/lib/tipos";
+import { idDesdeUrl, type Cohorte, type IdNumerico, type Laboratorio, type RubricaVersion } from "@/lib/tipos";
 import { useCarga } from "@/lib/use-carga";
 
 interface DatosRubrica {
@@ -15,7 +15,7 @@ interface DatosRubrica {
   vigente: RubricaVersion | null;
 }
 
-async function cargarDatos(labId: string): Promise<DatosRubrica | null> {
+async function cargarDatos(labId: IdNumerico): Promise<DatosRubrica | null> {
   const [cohortes, vigente] = await Promise.all([listarCohortes(), obtenerRubricaVigenteONula(labId)]);
   for (const cohorte of cohortes) {
     const laboratorio = cohorte.laboratorios.find((l) => l.id === labId);
@@ -57,8 +57,24 @@ function Cabecera({ laboratorio, cohorte, vigente }: DatosRubrica) {
   );
 }
 
+function LaboratorioNoEncontrado() {
+  return (
+    <MensajeError titulo="Laboratorio no encontrado" mensaje="El laboratorio que buscas no existe o fue eliminado.">
+      <div className="mt-4">
+        <EnlaceVolver />
+      </div>
+    </MensajeError>
+  );
+}
+
 /** Pantalla /docente/rubricas/[labId]: carga el laboratorio y su versión vigente, y muestra el editor. */
 export function VistaEditorRubrica({ labId }: { labId: string }) {
+  const id = idDesdeUrl(labId);
+  if (id === null) return <LaboratorioNoEncontrado />;
+  return <VistaEditorRubricaValida labId={id} />;
+}
+
+function VistaEditorRubricaValida({ labId }: { labId: IdNumerico }) {
   const { estado, recargar } = useCarga(useCallback(() => cargarDatos(labId), [labId]));
   const [guardada, setGuardada] = useState<RubricaVersion | null>(null);
 
@@ -66,15 +82,7 @@ export function VistaEditorRubrica({ labId }: { labId: string }) {
   if (estado.tipo === "error") {
     return <MensajeError titulo="No se pudo cargar la rúbrica" mensaje={estado.mensaje} alReintentar={recargar} />;
   }
-  if (!estado.datos) {
-    return (
-      <MensajeError titulo="Laboratorio no encontrado" mensaje="El laboratorio que buscas no existe o fue eliminado.">
-        <div className="mt-4">
-          <EnlaceVolver />
-        </div>
-      </MensajeError>
-    );
-  }
+  if (!estado.datos) return <LaboratorioNoEncontrado />;
 
   const datos = { ...estado.datos, vigente: guardada ?? estado.datos.vigente };
   return (

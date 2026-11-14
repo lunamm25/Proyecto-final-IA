@@ -23,7 +23,7 @@ export function validarArchivoRubrica(archivo: File): string | undefined {
 }
 
 interface SubirRubricaProps {
-  labId: string;
+  labId: number;
   hayContenido: boolean;
   deshabilitado: boolean;
   alCambiarOcupado: (ocupado: boolean) => void;
