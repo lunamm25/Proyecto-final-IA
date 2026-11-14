@@ -24,7 +24,7 @@ from app.ia.comun import (
 )
 from app.ia.providers import LLMProvider
 from app.ia.rubricas import cargar_prompt
-from app.ia.schemas import EvaluacionLLMSchema, RubricaSchema
+from app.ia.schemas import Criterio, EvaluacionLLMSchema, RubricaSchema
 
 # Límites de contexto en caracteres (~4 caracteres por token). 30 000 caracteres de informe
 # son unas 7 500 palabras (≈ 15 páginas): cubre un informe normal y deja margen en modelos
@@ -145,10 +145,16 @@ def construir_prompt_evaluacion(
     return _MARCADORES.sub(lambda m: valores[m.group(1)], _PLANTILLA_EVALUAR)
 
 
+def _es_nivel_minimo(criterio: Criterio, nombre: str) -> bool:
+    """Indica si el nivel tiene el menor puntaje del criterio (cualquiera si hay empate)."""
+    minimo = min(n.puntaje for n in criterio.niveles)
+    return any(n.nombre == nombre and n.puntaje == minimo for n in criterio.niveles)
+
+
 def validar_coherencia(
     evaluacion: EvaluacionLLMSchema, rubrica: RubricaSchema
 ) -> tuple[EvaluacionLLMSchema, list[str]]:
-    """Comprueba criterios completos, sin extras ni repetidos, y niveles válidos."""
+    """Comprueba criterios completos, sin extras ni repetidos, niveles válidos y evidencias."""
     errores: list[str] = []
     por_id = {c.id: c for c in rubrica.criterios}
     recibidos = [c.criterio_id for c in evaluacion.criterios]
@@ -173,6 +179,12 @@ def validar_coherencia(
             errores.append(
                 f"El nivel '{item.nivel_elegido}' no existe en el criterio {criterio.id} "
                 f"(niveles válidos: {validos})."
+            )
+        elif not item.evidencias and not _es_nivel_minimo(criterio, nombre):
+            errores.append(
+                f"El criterio {criterio.id} no tiene evidencias pero eligió '{nombre}': sin "
+                "evidencias solo se admite el nivel de menor puntaje; agrega al menos una cita "
+                "literal o elige ese nivel."
             )
         corregidos.append(item.model_copy(update={"nivel_elegido": nombre or item.nivel_elegido}))
     return evaluacion.model_copy(update={"criterios": corregidos}), errores

@@ -167,7 +167,7 @@ class Evidencia(BaseModel):
 class EvaluacionCriterio(BaseModel):
     criterio_id: str
     nivel_elegido: str          # DEBE ser uno de los nombres de nivel del criterio
-    evidencias: list[Evidencia] # mínimo 1
+    evidencias: list[Evidencia] # mínimo 1, salvo en el nivel de menor puntaje (vacía = sin evidencia)
     justificacion: str
     fortalezas: list[str]
     debilidades: list[str]
@@ -182,7 +182,7 @@ class EvaluacionLLMSchema(BaseModel):
     # ⚠️ NO hay campo "nota": la calcula el backend.
 ```
 
-Validaciones adicionales en backend (no confiar en el LLM): todos los `criterio_id` existen y no faltan; `nivel_elegido` pertenece a los niveles del criterio; los niveles de un mismo criterio no pueden tener el mismo nombre; evidencias verificadas contra el material.
+Validaciones adicionales en backend (no confiar en el LLM): todos los `criterio_id` existen y no faltan; `nivel_elegido` pertenece a los niveles del criterio; sin evidencias solo se admite el nivel de menor puntaje; los niveles de un mismo criterio no pueden tener el mismo nombre; evidencias verificadas contra el material.
 
 Otros esquemas: `InformeNarrativoSchema` (competencias_desarrolladas, brechas, plan_fortalecimiento[{accion, recurso, prioridad, competencia}], conclusion) y `MapeoTematicasSchema` ([{criterio_id, tematicas[], conceptos[]}]).
 
