@@ -47,7 +47,7 @@
 | 2026-11-13 | Rol 1: el título de la rúbrica de Manizales perdía el subtítulo. | Usamos la rúbrica de demo revisada a mano. Pendiente: corregirlo en el extractor. |
 | 2026-11-13 | Rol 1: los descriptores generados traían adjetivos que no estaban en el documento. | Pasamos a una plantilla fija con aspectos copiados del documento. |
 | 2026-11-13 | Rol 1: una recomendación inicial del asistente sobre los rangos de nivel (usar el extremo superior) habría inflado el nivel "Insuficiente" a 3.4. | Usamos el punto medio y conservamos la fórmula del documento maestro. |
-| 2026-11-13 | Rol 1: Gemini devolvió error 503 por saturación durante una prueba. | Reintentamos una vez. |
+| 2026-11-13 | Rol 1: Gemini devolvió error 503 por saturación durante una prueba. | Reintentamos una vez. El 2026-11-14 agregamos reintento automático ante errores transitorios del proveedor (429/5xx/timeout): hasta 2 repeticiones con pausas de 3 s y 8 s. |
 | 2026-11-13 | Rol 1: la revisión de seguridad de la Tarea 3 encontró 2 problemas de gravedad media: inyección de instrucciones mediante marcadores en el informe del estudiante y citas muy cortas que siempre salían verificadas. | Los corregimos con pruebas. |
 | 2026-11-13 | Rol 1: la revisión de la Tarea 4 encontró que la comprobación de cifras aceptaba una nota inventada pegada a letras ("4.9pts") y rechazaba textos normales ("escala de 0 a 5"); también faltaban topes de tamaño y no se neutralizaban marcadores Unicode. | Lo corregimos con pruebas. |
 | 2026-11-13 | Rol 1: el asistente de chat numeró al revés RF-08 CA3 y RF-09 CA2. | Lo detectó el agente al comprobarlo en REQUISITOS.md. |
