@@ -382,3 +382,46 @@ def test_competencias_vacias_agotan_los_reintentos() -> None:
     mala = {**_respuesta(), "competencias_desarrolladas": ["  "]}
     with pytest.raises(ErrorInforme, match="competencias_desarrolladas"):
         generar_informe_narrativo(_datos(), FakeProvider([mala, mala, mala]))
+
+
+DATOS_SIN_VERSIONES = {
+    "laboratorios": [{"laboratorio": "LAB01", "cohorte": "Cohorte 1", "nota": 3.4}],
+}
+
+
+@pytest.mark.parametrize(
+    "frase",
+    [
+        "Trabajaste con Python 3.12.",
+        "Trabajaste con Python 3,12.",
+        "Usa Python 3.11 o superior.",
+        "Instala la versión 3.12.4.",
+        "Actualiza a v3.12 del intérprete.",
+        "Cualquier 3.12.x sirve.",
+        "Revisa la sección 4.2 de la guía.",
+        "Lee el capítulo 3 de la guía.",
+    ],
+)
+def test_versiones_y_referencias_no_se_marcan(frase: str) -> None:
+    """Las versiones de software y las referencias a partes de un material no son cifras."""
+    informe = InformeNarrativoSchema(
+        competencias_desarrolladas=[], brechas=[], plan_fortalecimiento=[], conclusion=frase
+    )
+    assert cifras_no_respaldadas(informe, preparar_datos(DATOS_SIN_VERSIONES)) == []
+
+
+@pytest.mark.parametrize(
+    ("frase", "esperado"),
+    [
+        ("Revisa las 10 pruebas.", ["10"]),
+        ("Mejora un 20% tus resultados.", ["20"]),
+        ("Ejecutaste 11 movimientos.", ["11"]),
+        ("Con Python 3.12 obtuviste 4.7.", ["4.7"]),
+    ],
+)
+def test_cifras_sin_respaldo_siguen_marcandose(frase: str, esperado: list[str]) -> None:
+    """Quitar las versiones no oculta las cifras inventadas que las acompañan."""
+    informe = InformeNarrativoSchema(
+        competencias_desarrolladas=[], brechas=[], plan_fortalecimiento=[], conclusion=frase
+    )
+    assert cifras_no_respaldadas(informe, preparar_datos(DATOS_SIN_VERSIONES)) == esperado

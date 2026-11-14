@@ -49,7 +49,8 @@ ENTEROS_ESCALA = frozenset({Decimal(0), Decimal(5)})
 # Expresiones que se quitan del texto antes de buscar cifras porque no son resultados:
 # - referencias a partes de un material: "capítulo 4", "sección 2.3", "tema 3", "página 12";
 # - cantidades de tiempo o de trabajo: "30 minutos", "2 horas", "3 ejercicios", "10 páginas";
-# - rangos de enteros: "3-4", "2-3 semanas".
+# - rangos de enteros: "3-4", "2-3 semanas";
+# - versiones de software (ver _VERSION).
 _REFERENCIA = re.compile(
     r"\b(?:cap[ií]tulos?|cap\.|secci[oó]n(?:es)?|apartados?|unidad(?:es)?|m[oó]dulos?|temas?"
     r"|figuras?|tablas?|p[aá]ginas?|pasos?|ejemplos?)\s+\d+(?:\.\d+)*",
@@ -63,6 +64,13 @@ _CANTIDAD = re.compile(
     rf"(?<![\w.,\-−])\d+(?:[.,]\d+)?\s*(?:{_UNIDADES})\b", re.IGNORECASE
 )
 _RANGO = re.compile(r"(?<![\w.,\-−])\d+\s*[-–]\s*\d+(?![.,]?\d)")
+# Versiones de software: "Python 3.12", "Python 3,12", "versión 3.12.4", "v3.12", "3.12.x".
+_SOFTWARE = r"python|pytest|pip|node(?:\.js)?|java|django|fastapi|numpy|pandas|ruff|ollama"
+_VERSION = re.compile(
+    rf"\b(?:(?:{_SOFTWARE}|versi[oó]n(?:es)?)\s+v?|v)\d+(?:[.,]\d+)*(?:\.x)?\b"
+    r"|(?<![\w.,\-−])\d+(?:\.\d+)+\.x\b",
+    re.IGNORECASE,
+)
 # Datos personales que no deben llegar al modelo: correos y secuencias de 7 o más dígitos
 # (documentos, teléfonos), también con puntos de miles ("1.020.304.050").
 _CORREO = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
@@ -289,8 +297,8 @@ def _respaldada(cifra: str, permitidas: set[Decimal], revisar_enteros: bool) -> 
 
 
 def _cifras_texto(texto: str) -> list[str]:
-    """Cifras de un texto tras quitar referencias, cantidades de tiempo/trabajo y rangos."""
-    for patron in (_REFERENCIA, _RANGO, _CANTIDAD):
+    """Cifras de un texto tras quitar referencias, versiones, cantidades y rangos."""
+    for patron in (_REFERENCIA, _VERSION, _RANGO, _CANTIDAD):
         texto = patron.sub(" ", texto)
     return _CIFRA_TEXTO.findall(texto)
 
