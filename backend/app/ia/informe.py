@@ -151,7 +151,7 @@ class EvolucionCohortes(_Datos):
 
 
 class DatosDesempeno(_Datos):
-    """Cifras ya calculadas por el backend que el modelo usa para redactar (sin datos personales)."""
+    """Cifras calculadas por el backend que el modelo usa para redactar (sin datos personales)."""
 
     laboratorios: list[NotaLaboratorio] = Field(default_factory=list, max_length=MAX_ELEMENTOS)
     promedios_cohorte: list[PromedioCohorte] = Field(default_factory=list, max_length=10)
@@ -349,7 +349,7 @@ def nombres_referenciables(datos: DatosDesempeno) -> dict[str, str]:
 def validar_informe(
     informe: InformeNarrativoSchema, datos: DatosDesempeno
 ) -> tuple[InformeNarrativoSchema, list[str]]:
-    """Comprueba listas no vacías, el plan (referencias existentes) y que no haya cifras inventadas."""
+    """Comprueba listas no vacías, el plan (referencias válidas) y que no haya cifras inventadas."""
     errores: list[str] = []
     referenciables = nombres_referenciables(datos)
     if not any(t.strip() for t in informe.competencias_desarrolladas):

@@ -217,7 +217,9 @@ def validar_mapeo(
             criterio_id=criterio_id, tematicas=exactas, conceptos=conceptos
         )
     if desconocidas:
-        errores.append(f"Hay temáticas que no están en la lista del curso: {_listar(desconocidas)}.")
+        errores.append(
+            f"Hay temáticas que no están en la lista del curso: {_listar(desconocidas)}."
+        )
     if sin_tematicas:
         errores.append(f"Criterios sin ninguna temática asociada: {_listar(sin_tematicas)}.")
     if sin_conceptos:
