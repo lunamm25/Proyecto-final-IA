@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { ErrorApi, mensajeDeError, obtenerYo } from "@/lib/api";
 import { borrarSesionMock, leerSesionMock } from "@/lib/sesion-mock";
 import { obtenerSupabaseNavegador } from "@/lib/supabase/cliente";
@@ -89,8 +89,26 @@ export function ProveedorSesion({ children }: { children: React.ReactNode }) {
   return <ContextoSesion.Provider value={valor}>{children}</ContextoSesion.Provider>;
 }
 
+const suscribirseSinCambios = () => () => {};
+
+/** true en el cliente ya hidratado; false en el servidor y durante la hidratación de cada componente. */
+function useHidratado(): boolean {
+  return useSyncExternalStore(
+    suscribirseSinCambios,
+    () => true,
+    () => false,
+  );
+}
+
+/**
+ * Devuelve la sesión. Mientras el componente se hidrata entrega el estado "cargando" (igual que el
+ * HTML del servidor), aunque la sesión ya haya cargado; así se evitan errores de hidratación en
+ * componentes dentro de <Suspense>, que se hidratan después del proveedor.
+ */
 export function useSesion(): ValorSesion {
   const valor = useContext(ContextoSesion);
+  const hidratado = useHidratado();
   if (!valor) throw new Error("useSesion debe usarse dentro de <ProveedorSesion>.");
-  return valor;
+  if (hidratado) return valor;
+  return { ...valor, estado: "cargando", perfil: null, error: null };
 }
