@@ -2,8 +2,9 @@
 
 Reglas bloqueantes acordadas: sin criterios, criterio sin niveles o con menos de 2,
 nombres o puntajes de nivel repetidos, puntaje fuera de 0 a 5, ponderación <= 0,
-suma distinta de 100 e ids de criterio duplicados. Descriptor, competencia, título y
-orden de puntajes NO se validan por decisión del equipo (13 nov 2026).
+suma distinta de 100, ids de criterio duplicados y, desde el 14 nov 2026, criterio
+sin competencia o sin nombre y nivel sin descriptor (los exige RubricaSchema de Rol 1).
+Título y orden de puntajes NO se validan por decisión del equipo.
 """
 
 import copy
@@ -73,6 +74,14 @@ def _etiqueta_nivel(nivel: dict[str, Any], posicion: int) -> str:
     return f'el nivel "{nombre}"' if nombre else f"el nivel en la posición {posicion}"
 
 
+def _errores_textos_criterio(criterio: dict[str, Any]) -> list[str]:
+    """Reglas de textos obligatorios del criterio: competencia y nombre no vacíos."""
+    errores = [] if _texto(criterio.get("competencia")) else ["no tiene competencia."]
+    if not _texto(criterio.get("nombre")):
+        errores.append("no tiene nombre.")
+    return errores
+
+
 def _errores_ponderacion(criterio: dict[str, Any]) -> list[str]:
     """Reglas de ponderación de un criterio: presente, numérica y mayor que 0."""
     if "ponderacion" not in criterio or criterio["ponderacion"] is None:
@@ -90,6 +99,13 @@ def _errores_nivel(nivel: Any, posicion: int) -> tuple[list[str], float | None, 
     if not isinstance(nivel, dict):
         return [f"el nivel en la posición {posicion} debe ser un objeto JSON."], None, ""
     etiqueta = _etiqueta_nivel(nivel, posicion)
+    sin_descriptor = [] if _texto(nivel.get("descriptor")) else [f"{etiqueta} no tiene descriptor."]
+    errores, puntaje, etiqueta = _errores_puntaje(nivel, etiqueta)
+    return sin_descriptor + errores, puntaje, etiqueta
+
+
+def _errores_puntaje(nivel: dict[str, Any], etiqueta: str) -> tuple[list[str], float | None, str]:
+    """Valida el puntaje de un nivel: presente, numérico y dentro de 0 a 5."""
     puntaje = nivel.get("puntaje")
     if puntaje is None:
         return [f"{etiqueta} no tiene puntaje."], None, etiqueta
@@ -180,6 +196,7 @@ def validar_rubrica(rubrica: Any) -> list[str]:
         validos.append(criterio)
         etiqueta = _etiqueta_criterio(criterio, posicion)
         propios = [] if _texto(criterio.get("id")) else ["no tiene id."]
+        propios += _errores_textos_criterio(criterio)
         propios += _errores_ponderacion(criterio) + _errores_niveles(criterio)
         errores.extend(f"{etiqueta}: {e}" for e in propios)
     errores += _errores_ids(validos)

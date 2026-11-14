@@ -37,9 +37,27 @@ def rubrica_valida() -> dict:
     }
 
 
-def con_cambio(indice: int, **campos) -> dict:
-    """Copia de la rúbrica válida con campos cambiados en el criterio `indice`."""
+def con_descriptores(niveles):
+    """Completa con un descriptor de relleno los niveles (dict) que no traen la clave."""
+    if not isinstance(niveles, list):
+        return niveles
+    return [
+        {**n, "descriptor": f"Descriptor {i}"}
+        if isinstance(n, dict) and "descriptor" not in n
+        else n
+        for i, n in enumerate(niveles, start=1)
+    ]
+
+
+def con_cambio(indice: int, completar: bool = True, **campos) -> dict:
+    """Copia de la rúbrica válida con campos cambiados en el criterio `indice`.
+
+    Con `completar=True` los niveles nuevos sin clave `descriptor` reciben uno de
+    relleno, para que cada test pruebe solo su regla.
+    """
     r = copy.deepcopy(rubrica_valida())
+    if completar and "niveles" in campos:
+        campos["niveles"] = con_descriptores(campos["niveles"])
     r["criterios"][indice].update(campos)
     return r
 
@@ -175,11 +193,13 @@ def test_rubrica_sin_campo_criterios():
 
 def test_reporta_todas_las_inconsistencias():
     r = rubrica_valida()
-    r["criterios"][0]["niveles"] = [
-        {"nombre": "A", "puntaje": 7},
-        {"nombre": "B", "puntaje": 2},
-        {"nombre": "C", "puntaje": 2},
-    ]
+    r["criterios"][0]["niveles"] = con_descriptores(
+        [
+            {"nombre": "A", "puntaje": 7},
+            {"nombre": "B", "puntaje": 2},
+            {"nombre": "C", "puntaje": 2},
+        ]
+    )
     r["criterios"][1]["niveles"] = []
     r["criterios"][1]["ponderacion"] = 10
     errores = validar_rubrica(r)
@@ -230,7 +250,10 @@ def test_criterio_sin_id_ni_nombre():
     r = rubrica_valida()
     del r["criterios"][1]["id"]
     del r["criterios"][1]["nombre"]
-    assert validar_rubrica(r) == ["Criterio en la posición 2: no tiene id."]
+    assert validar_rubrica(r) == [
+        "Criterio en la posición 2: no tiene id.",
+        "Criterio en la posición 2: no tiene nombre.",
+    ]
 
 
 def test_ponderacion_ausente():
@@ -356,3 +379,56 @@ def test_mensaje_puntaje_no_numerico_nivel_sin_nombre():
     niveles = [{"puntaje": "x"}, {"nombre": "Bajo", "puntaje": 0}]
     errores = validar_rubrica(con_cambio(1, niveles=niveles))
     assert contiene(errores, "el puntaje del nivel en la posición 1 debe ser un número.")
+
+
+# ---------- Competencia, nombre y descriptor obligatorios (14 nov 2026) ----------
+
+
+@pytest.mark.parametrize("valor", [None, "", "   ", 5])
+def test_criterio_sin_competencia(valor):
+    errores = validar_rubrica(con_cambio(1, competencia=valor))
+    assert errores == ['Criterio "c2" (Uso de Git): no tiene competencia.']
+
+
+def test_criterio_sin_campo_competencia():
+    r = rubrica_valida()
+    del r["criterios"][1]["competencia"]
+    assert validar_rubrica(r) == ['Criterio "c2" (Uso de Git): no tiene competencia.']
+
+
+@pytest.mark.parametrize("valor", [None, "", "   ", 7])
+def test_criterio_sin_nombre(valor):
+    errores = validar_rubrica(con_cambio(1, nombre=valor))
+    assert errores == ['Criterio "c2": no tiene nombre.']
+
+
+def test_criterio_sin_campo_nombre():
+    r = rubrica_valida()
+    del r["criterios"][0]["nombre"]
+    assert validar_rubrica(r) == ['Criterio "c1": no tiene nombre.']
+
+
+@pytest.mark.parametrize("valor", [None, "", "  ", 3])
+def test_nivel_sin_descriptor(valor):
+    niveles = [
+        {"nombre": "Alto", "puntaje": 5, "descriptor": valor},
+        {"nombre": "Bajo", "puntaje": 0, "descriptor": "Sin commits"},
+    ]
+    errores = validar_rubrica(con_cambio(1, niveles=niveles))
+    assert errores == ['Criterio "c2" (Uso de Git): el nivel "Alto" no tiene descriptor.']
+
+
+def test_nivel_sin_campo_descriptor_ni_nombre():
+    niveles = [{"puntaje": 5}, {"nombre": "Bajo", "puntaje": 0, "descriptor": "x"}]
+    errores = validar_rubrica(con_cambio(1, completar=False, niveles=niveles))
+    assert 'Criterio "c2" (Uso de Git): el nivel en la posición 1 no tiene descriptor.' in errores
+
+
+def test_varios_campos_vacios_se_reportan_todos():
+    r = con_cambio(0, competencia="", nombre=None)
+    r["criterios"][1]["niveles"][0]["descriptor"] = ""
+    errores = validar_rubrica(r)
+    assert 'Criterio "c1": no tiene competencia.' in errores
+    assert 'Criterio "c1": no tiene nombre.' in errores
+    assert 'Criterio "c2" (Uso de Git): el nivel "Alto" no tiene descriptor.' in errores
+    assert len(errores) == 3
