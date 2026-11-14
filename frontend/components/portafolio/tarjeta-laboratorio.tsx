@@ -64,7 +64,19 @@ function Acciones({ estado, laboratorio, entrega, evaluando, alEvaluar }: Accion
     );
   }
 
-  return <p className="text-xs text-muted-foreground">El docente revisará la evaluación antes de publicarla.</p>;
+  return (
+    <>
+      <p className="text-xs text-muted-foreground">El docente revisará la evaluación antes de publicarla.</p>
+      {entrega.evaluacion && (
+        <Link
+          href={`/evaluaciones/${encodeURIComponent(entrega.evaluacion.id)}`}
+          className={`${CLASE_ENLACE_BOTON} border hover:bg-muted`}
+        >
+          Ver progreso
+        </Link>
+      )}
+    </>
+  );
 }
 
 export function TarjetaLaboratorio({ laboratorio, entrega, evaluando, alEvaluar }: TarjetaLaboratorioProps) {

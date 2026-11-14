@@ -250,7 +250,7 @@ export const entregasMock: Entrega[] = [
     github_url: "https://github.com/ana-estudiante/lab2-ml",
     extras: [],
     creada_en: "2026-09-20T14:00:00Z",
-    evaluacion: { id: "eva-3", estado: "en_revision", nota: null },
+    evaluacion: { id: "eva-3", estado: "en_revision", nota: 3.1 },
   },
   {
     id: "ent-3",
@@ -287,6 +287,30 @@ export const entregasMock: Entrega[] = [
     extras: [],
     creada_en: "2026-11-12T14:00:00Z",
     evaluacion: null,
+  },
+  {
+    id: "ent-6",
+    estudiante_id: "est-1",
+    laboratorio_id: "lab-6",
+    rubrica_version_id: "rv-4",
+    pdf_path: "entregas/est-1/lab-6/informe.pdf",
+    codigo_zip_path: "entregas/est-1/lab-6/codigo.zip",
+    github_url: null,
+    extras: [],
+    creada_en: "2026-11-11T14:00:00Z",
+    evaluacion: { id: "eva-4", estado: "error", nota: null },
+  },
+  {
+    id: "ent-7",
+    estudiante_id: "est-2",
+    laboratorio_id: "lab-3",
+    rubrica_version_id: "rv-1",
+    pdf_path: "entregas/est-2/lab-3/informe.pdf",
+    codigo_zip_path: "entregas/est-2/lab-3/codigo.zip",
+    github_url: null,
+    extras: [],
+    creada_en: "2026-11-09T14:00:00Z",
+    evaluacion: { id: "eva-5", estado: "aprobada", nota: 4.6 },
   },
 ];
 
@@ -427,7 +451,72 @@ export const evaluacionBorradorMock: Evaluacion = {
   creada_en: "2026-11-05T15:00:00Z",
 };
 
-export const evaluacionesMock: Evaluacion[] = [evaluacionPublicadaMock, evaluacionBorradorMock];
+const evaluacionEnRevisionMock: Evaluacion = {
+  ...evaluacionBorradorMock,
+  id: "eva-3",
+  entrega_id: "ent-2",
+  laboratorio_id: "lab-2",
+  estado: "en_revision",
+  nota: 3.1,
+  creada_en: "2026-09-20T15:00:00Z",
+};
+
+const evaluacionErrorMock: Evaluacion = {
+  ...evaluacionBorradorMock,
+  id: "eva-4",
+  entrega_id: "ent-6",
+  laboratorio_id: "lab-6",
+  estado: "error",
+  nota: null,
+  criterios: [],
+  aprendizajes_identificados: [],
+  como_aplico_conocimientos: "",
+  aspectos_a_fortalecer: [],
+  retroalimentacion_general: "",
+  verificacion: null,
+  error: "La respuesta del modelo no cumplió el esquema después de 2 reintentos: falta el criterio c3.",
+  creada_en: "2026-11-11T15:00:00Z",
+};
+
+const evaluacionAprobadaMock: Evaluacion = {
+  ...evaluacionBorradorMock,
+  id: "eva-5",
+  entrega_id: "ent-7",
+  estudiante_id: "est-2",
+  laboratorio_id: "lab-3",
+  estado: "aprobada",
+  nota: 4.6,
+  aprobada_en: "2026-11-10T09:00:00Z",
+  creada_en: "2026-11-09T15:00:00Z",
+};
+
+export const evaluacionesMock: Evaluacion[] = [
+  evaluacionPublicadaMock,
+  evaluacionBorradorMock,
+  evaluacionEnRevisionMock,
+  evaluacionErrorMock,
+  evaluacionAprobadaMock,
+];
+
+/** Resultado que "devuelve el pipeline" al terminar una evaluación simulada. La nota es un valor fijo de ejemplo. */
+export const resultadoSimuladoMock: Pick<
+  Evaluacion,
+  | "nota"
+  | "criterios"
+  | "aprendizajes_identificados"
+  | "como_aplico_conocimientos"
+  | "aspectos_a_fortalecer"
+  | "retroalimentacion_general"
+  | "verificacion"
+> = {
+  nota: 3.8,
+  criterios: evaluacionBorradorMock.criterios,
+  aprendizajes_identificados: evaluacionBorradorMock.aprendizajes_identificados,
+  como_aplico_conocimientos: evaluacionBorradorMock.como_aplico_conocimientos,
+  aspectos_a_fortalecer: evaluacionBorradorMock.aspectos_a_fortalecer,
+  retroalimentacion_general: evaluacionBorradorMock.retroalimentacion_general,
+  verificacion: verificacionMock,
+};
 
 export const trazaMock: Traza = {
   evaluacion_id: "eva-1",

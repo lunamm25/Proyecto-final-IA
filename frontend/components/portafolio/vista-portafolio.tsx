@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { EstadoVacio, MensajeError } from "@/components/estados";
@@ -15,7 +16,7 @@ interface DatosPortafolio {
   entregas: Map<string, Entrega>;
 }
 
-type Aviso = { tipo: "exito" | "error"; mensaje: string };
+type Aviso = { tipo: "exito" | "error"; mensaje: string; evaluacionId?: string };
 
 function EsqueletoPortafolio() {
   return (
@@ -43,7 +44,20 @@ function AvisoAccion({ aviso }: { aviso: Aviso }) {
       }`}
     >
       {exito && <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" />}
-      <p>{aviso.mensaje}</p>
+      <p>
+        {aviso.mensaje}
+        {aviso.evaluacionId && (
+          <>
+            {" "}
+            <Link
+              href={`/evaluaciones/${encodeURIComponent(aviso.evaluacionId)}`}
+              className="font-medium underline underline-offset-4"
+            >
+              Ver progreso
+            </Link>
+          </>
+        )}
+      </p>
     </div>
   );
 }
@@ -104,10 +118,11 @@ export function VistaPortafolio() {
       setEvaluandoId(entregaId);
       setAviso(null);
       try {
-        await evaluarEntrega(entregaId);
+        const { evaluacion_id: evaluacionId } = await evaluarEntrega(entregaId);
         setAviso({
           tipo: "exito",
           mensaje: "Tu entrega se envió a evaluación. Quedó pendiente de revisión docente: verás la nota cuando se publique.",
+          evaluacionId,
         });
         refrescar();
       } catch (causa) {
