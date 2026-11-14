@@ -18,8 +18,8 @@ Principios: evaluaciones **consistentes, explicables, trazables y validadas por 
 | Rol | Puede |
 |---|---|
 | **Estudiante** | Subir entregas a su portafolio, lanzar la evaluación preliminar, ver evaluaciones **publicadas**, ver su informe y su mapa mental, descargar ambos. |
-| **Docente** | Gestionar cohortes, laboratorios y rúbricas (cargar, corregir, aprobar versión); ver todas las entregas; revisar, ajustar (con justificación obligatoria), aprobar y publicar evaluaciones; configurar el proveedor de IA. |
-| **Admin** | Lo del docente + gestionar usuarios y roles. (Puede ser el mismo docente en la demo.) |
+| **Docente** | Gestionar cohortes, laboratorios y rúbricas (cargar, corregir, aprobar versión); ver todas las entregas; revisar, ajustar (con justificación obligatoria), aprobar y publicar evaluaciones. |
+| **Admin** | Lo del docente + gestionar usuarios y roles + configurar el proveedor de IA. (Puede ser el mismo docente en la demo.) |
 
 ## 3. Alcance
 
@@ -49,7 +49,7 @@ Principios: evaluaciones **consistentes, explicables, trazables y validadas por 
 | Frontend | Next.js 14+ (App Router) + TypeScript + Tailwind CSS + shadcn/ui; React Flow (mapa mental); Recharts (gráficas) | Vercel |
 | Backend | Python 3.11 + FastAPI + **Pydantic v2** + SQLAlchemy 2 | Render (web service) |
 | Datos | Supabase: Postgres + Auth + Storage (bucket privado) | Supabase cloud (free) |
-| IA | Capa `LLMProvider` con: **Gemini** (modelo Flash vigente, p. ej. `gemini-3.5-flash-lite`; free tier, multimodal) y **OpenAI-compatible** (Ollama local, Groq, OpenRouter) | Configurable por variables de entorno y panel docente |
+| IA | Capa `LLMProvider` con: **Gemini** (modelo Flash vigente, p. ej. `gemini-3.5-flash-lite`; free tier, multimodal) y **OpenAI-compatible** (Ollama local, Groq, OpenRouter) | Configurable por variables de entorno y panel de administración |
 | Verificación de código | `ast` + `ruff` + `radon` (estático, nunca ejecuta) · `pytest` en sandbox | Backend |
 
 Justificación breve (para la documentación): Pydantic es obligatorio → Python en backend; Supabase da login, BD y archivos sin montar servidores; Gemini tiene capa gratuita y lee PDF e imágenes; Ollama permite modelo local sin costo; Vercel/Render despliegan desde GitHub.
@@ -117,7 +117,7 @@ Cada RF tiene criterios de aceptación (CA). Un RF está **terminado** solo si t
 - CA5: descarga como PNG y JSON.
 
 ### RF-10 Configuración de IA
-- CA1: el docente elige proveedor (Gemini / OpenAI-compatible) y modelo desde un panel; la URL base y la clave salen de variables de entorno (nunca se muestran en la interfaz).
+- CA1: el administrador elige proveedor (Gemini / OpenAI-compatible) y modelo desde un panel (decisión del equipo, 14 nov 2026: solo admin, no docente); la URL base y la clave salen de variables de entorno (nunca se muestran en la interfaz).
 - CA2: botón "Probar conexión".
 - CA3: cada evaluación guarda proveedor, modelo, temperatura y versión del prompt.
 
@@ -264,7 +264,7 @@ Prefijo `/api`. Autenticación: `Authorization: Bearer <JWT de Supabase>`. Error
 | GET | /api/estudiantes?limit=&offset= | docente | Listado paginado `{items, total, limit, offset}` de estudiantes con id, nombre, correo y `laboratorios_evaluados` (laboratorios distintos con evaluación publicada), ordenado por nombre |
 | GET | /api/estudiantes/{id}/informe | est(propio)/docente | Informe integral (JSON). Solo evaluaciones `publicada` (por laboratorio, la más reciente). Números calculados por el backend (notas por laboratorio en orden C1-01…C2-02, promedios por cohorte, general, por competencia y por temática, evolución; ROUND_HALF_UP; `promedio_general` null sin datos). `narrativa` de la IA en campo aparte con `estado`: `generada` · `sin_datos` · `no_disponible` · `error` (mensaje genérico). Incluye `avisos`. Otro estudiante → 404 |
 | GET | /api/estudiantes/{id}/mapa | est(propio)/docente | Grafo `{nodos, aristas, avisos}`: temática → subtema → concepto → laboratorio; cada nodo con dominio (0–5), nivel (bajo <3,0 · medio 3,0–3,9 · alto ≥4,0), evidencias verificadas y aspectos por profundizar. Si el mapeo de la IA no está disponible, se agrupa por competencia y se informa en `avisos`. Sin datos → `{nodos: [], aristas: []}` |
-| GET/PUT | /api/config-ia · POST /api/config-ia/probar | docente | Configuración IA |
+| GET/PUT | /api/config-ia · POST /api/config-ia/probar | admin | Configuración IA. GET: proveedor, modelo y temperatura vigentes con `origen` (`base_de_datos` o `entorno` si no hay fila en `config_ia`), `modelo_permitido`, `actualizado_por` {id, nombre} y `actualizado_en`, `temperatura_maxima`, `claves` (solo booleanos `*_configurada`; nunca se devuelven claves ni la URL base), `proveedores_permitidos` [{proveedor, etiqueta, modelos}] (`gemini`: lista fija del backend; `openai_compat`: variable `OPENAI_COMPAT_MODELOS`) y `versiones_prompt` (solo lectura). PUT `{proveedor, modelo, temperatura}` (los tres obligatorios; cualquier otro campo → 422) responde lo mismo que el GET: proveedor o modelo no permitido → 422; temperatura fuera de 0–0,2 → 422 (no se recorta); mismo valor → 200 sin cambios ni auditoría; cada cambio queda en `auditoria` en la misma transacción. Probar conexión: pendiente |
 
 ## 12. Casos de uso principales
 

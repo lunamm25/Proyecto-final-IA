@@ -15,10 +15,11 @@ class Settings(BaseSettings):
     supabase_service_key: str = ""
     supabase_jwt_secret: str = ""
     llm_provider: str = "gemini"
-    llm_model: str = "gemini-2.5-flash"
+    llm_model: str = "gemini-3.5-flash-lite"
     llm_temperature: float = 0.1
     openai_compat_base_url: str = ""
     openai_compat_api_key: str = ""
+    openai_compat_modelos: str = ""
     gemini_api_key: str = ""
     frontend_url: str = "http://localhost:3000"
 

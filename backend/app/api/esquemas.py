@@ -451,3 +451,60 @@ class MapaRespuesta(BaseModel):
     nodos: list[NodoMapaRespuesta]
     aristas: list[AristaMapaRespuesta]
     avisos: list[str]
+
+
+class ConfigIAEntrada(BaseModel):
+    """Nueva configuración de IA: solo proveedor, modelo y temperatura (sin claves ni URL)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    proveedor: str = Field(
+        description="Uno de: gemini u openai_compat.",
+        json_schema_extra={"enum": ["gemini", "openai_compat"]},
+        examples=["gemini"],
+    )
+    modelo: str = Field(min_length=1, max_length=100, examples=["gemini-3.5-flash-lite"])
+    temperatura: float = Field(ge=0, le=0.2, strict=True, allow_inf_nan=False, examples=[0.1])
+
+
+class ActorRespuesta(BaseModel):
+    """Usuario que hizo un cambio (id y nombre)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    nombre: str | None
+
+
+class ClavesIARespuesta(BaseModel):
+    """Solo indica si cada secreto está configurado en el servidor; nunca su valor."""
+
+    gemini_api_key_configurada: bool
+    openai_compat_api_key_configurada: bool
+    openai_compat_base_url_configurada: bool
+
+
+class ProveedorPermitido(BaseModel):
+    """Proveedor elegible con sus modelos permitidos (para el selector del panel)."""
+
+    proveedor: str
+    etiqueta: str
+    modelos: list[str]
+
+
+class ConfigIARespuesta(BaseModel):
+    """Configuración de IA vigente, origen, claves configuradas y opciones permitidas."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    proveedor: str
+    modelo: str
+    temperatura: float
+    origen: Literal["base_de_datos", "entorno"]
+    modelo_permitido: bool
+    actualizado_por: ActorRespuesta | None
+    actualizado_en: datetime | None
+    temperatura_maxima: float
+    claves: ClavesIARespuesta
+    proveedores_permitidos: list[ProveedorPermitido]
+    versiones_prompt: dict[str, str | None]

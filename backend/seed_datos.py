@@ -100,4 +100,4 @@ TEMATICAS: list[dict] = [
     {"nombre": "Ética y verificación", "descripcion": "Uso responsable y verificación de la IA."},
 ]
 
-CONFIG_IA: dict = {"proveedor": "gemini", "modelo": "gemini-2.5-flash", "temperatura": 0.1}
+CONFIG_IA: dict = {"proveedor": "gemini", "modelo": "gemini-3.5-flash-lite", "temperatura": 0.1}

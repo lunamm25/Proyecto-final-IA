@@ -38,6 +38,10 @@ MENSAJES_VALIDACION = {
     "less_than_equal": "debe ser menor o igual que {le}",
     "too_long": "tiene demasiados elementos (máximo {max_length})",
     "list_type": "debe ser una lista",
+    "extra_forbidden": "no se permite este campo",
+    "float_parsing": "debe ser un número",
+    "float_type": "debe ser un número",
+    "finite_number": "debe ser un número finito",
 }
 
 

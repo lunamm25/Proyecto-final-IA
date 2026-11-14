@@ -14,6 +14,7 @@ VARIABLES = [
     "LLM_MODEL",
     "LLM_TEMPERATURE",
     "GEMINI_API_KEY",
+    "OPENAI_COMPAT_MODELOS",
     "FRONTEND_URL",
 ]
 
@@ -34,7 +35,8 @@ def test_settings_defaults(entorno_limpio):
     assert s.supabase_jwt_secret == ""
     assert s.gemini_api_key == ""
     assert s.llm_provider == "gemini"
-    assert s.llm_model == "gemini-2.5-flash"
+    assert s.llm_model == "gemini-3.5-flash-lite"
+    assert s.openai_compat_modelos == ""
     assert s.llm_temperature == 0.1
     assert s.frontend_url == "http://localhost:3000"
 
