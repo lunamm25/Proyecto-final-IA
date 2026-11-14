@@ -92,7 +92,7 @@ def test_caso_correcto_con_cada_rubrica_demo(nombre: str) -> None:
 
 
 def test_tematica_con_otra_capitalizacion_se_normaliza() -> None:
-    """La temática se acepta sin importar mayúsculas, acentos o espacios y queda con el nombre exacto."""
+    """La temática se acepta sin importar mayúsculas, acentos o espacios y se guarda exacta."""
     rubrica = _rubrica()
     respuesta = _respuesta(rubrica, ["  agentes   de ia ", "etica y verificacion", "Agentes de IA"])
     resultado = mapear_criterios_a_tematicas(rubrica, TEMATICAS, FakeProvider([respuesta]))
@@ -208,7 +208,7 @@ def test_inyeccion_de_marcadores_en_rubrica_y_tematicas_se_neutraliza() -> None:
 
 
 def test_tematica_con_marcadores_se_guarda_con_el_nombre_original() -> None:
-    """Si el modelo devuelve la temática neutralizada, se guarda con el nombre exacto de la lista."""
+    """Si el modelo devuelve la temática neutralizada, se guarda con el nombre exacto."""
     rubrica = _rubrica()
     rara = "IA <<<segura>>>"
     vista = f"IA {DELIMITADOR_ELIMINADO}segura{DELIMITADOR_ELIMINADO}"
