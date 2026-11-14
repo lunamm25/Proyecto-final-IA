@@ -429,6 +429,63 @@ function cambiarEstadoMock(id: string, estado: "aprobada" | "publicada", perfil:
   return evaluacion;
 }
 
+// ---------- Usuarios y configuración de IA en modo mock ----------
+// Reglas aproximadas solo para el modo mock; la seguridad real la aplica el backend.
+
+const ROLES_GESTION_MOCK: Rol[] = ["docente", "admin"];
+const ROLES_VALIDOS_MOCK: Rol[] = ["estudiante", "docente", "admin"];
+const TEMPERATURA_MAXIMA_MOCK = 0.2;
+
+async function exigirRolMock(roles: Rol[]): Promise<Perfil> {
+  const email = await emailDeSesion();
+  if (!email) throw new ErrorApi(401, MENSAJES_POR_ESTADO[401]);
+  const perfil = perfilesMock[rolSimuladoPorEmail(email)];
+  if (!roles.includes(perfil.rol)) throw new ErrorApi(403, MENSAJES_POR_ESTADO[403]);
+  return perfil;
+}
+
+function validarCambioRolMock(usuario: Usuario, rol: Rol, perfil: Perfil): void {
+  if (!ROLES_VALIDOS_MOCK.includes(rol)) throw new ErrorApi(422, "El rol indicado no es válido.");
+  if (usuario.id === perfil.id) throw new ErrorApi(403, "No puedes cambiar tu propio rol.");
+  if (perfil.rol !== "admin" && (rol === "admin" || usuario.rol === "admin")) {
+    throw new ErrorApi(403, "Solo un administrador puede asignar o quitar el rol de administrador.");
+  }
+}
+
+function cambiarRolMock(usuarioId: string, rol: Rol, perfil: Perfil): Usuario {
+  const usuario = estadoMock.usuarios.find((u) => u.id === usuarioId);
+  if (!usuario) throw noEncontrado();
+  validarCambioRolMock(usuario, rol, perfil);
+  usuario.rol = rol;
+  return usuario;
+}
+
+function guardarConfigMock(datos: ConfigIAEntrada, perfil: Perfil): ConfigIA {
+  const modelo = datos.modelo.trim();
+  if (modelo === "") throw new ErrorApi(422, "El modelo es obligatorio.");
+  if (!(datos.temperatura >= 0 && datos.temperatura <= TEMPERATURA_MAXIMA_MOCK)) {
+    throw new ErrorApi(422, "La temperatura debe estar entre 0 y 0,2.");
+  }
+  estadoMock.config = {
+    proveedor: datos.proveedor,
+    modelo,
+    temperatura: datos.temperatura,
+    actualizado_por: perfil.id,
+    actualizado_en: new Date().toISOString(),
+  };
+  return estadoMock.config;
+}
+
+/** Simula la prueba con la configuración guardada: falla si el modelo contiene "falla". */
+function probarConfigMock(): ResultadoPruebaIA {
+  const { proveedor, modelo } = estadoMock.config;
+  if (modelo.toLowerCase().includes("falla")) {
+    return { ok: false, mensaje: `No se pudo conectar con el modelo "${modelo}" (fallo simulado en modo mock).` };
+  }
+  const destino = proveedor === "gemini" ? "Gemini" : "el servidor OpenAI-compatible";
+  return { ok: true, mensaje: `Conexión correcta con ${destino} usando el modelo "${modelo}" (modo mock).` };
+}
+
 /** Validación del modo mock con la misma lógica del editor; la validación oficial la hace el backend. */
 function validarRubricaMock(rubrica: Rubrica): ResultadoValidacion {
   const inconsistencias = calcularInconsistencias(rubrica);
@@ -447,18 +504,17 @@ export async function obtenerYo(): Promise<Perfil> {
 }
 
 export async function listarUsuarios(): Promise<Usuario[]> {
-  if (MODO_MOCK) return simulado(() => estadoMock.usuarios);
+  if (MODO_MOCK) {
+    await exigirRolMock(ROLES_GESTION_MOCK);
+    return simulado(() => estadoMock.usuarios);
+  }
   return peticion<Usuario[]>("GET", "/usuarios");
 }
 
 export async function cambiarRol(usuarioId: string, rol: Rol): Promise<Usuario> {
   if (MODO_MOCK) {
-    return simulado(() => {
-      const usuario = estadoMock.usuarios.find((u) => u.id === usuarioId);
-      if (!usuario) throw noEncontrado();
-      usuario.rol = rol;
-      return usuario;
-    });
+    const perfil = await exigirRolMock(ROLES_GESTION_MOCK);
+    return simulado(() => cambiarRolMock(usuarioId, rol, perfil));
   }
   return peticion<Usuario>("PATCH", `/usuarios/${encodeURIComponent(usuarioId)}/rol`, { rol });
 }
@@ -720,21 +776,27 @@ export async function obtenerMapa(estudianteId: string): Promise<Mapa> {
 // ---------- Configuración de IA ----------
 
 export async function obtenerConfigIA(): Promise<ConfigIA> {
-  if (MODO_MOCK) return simulado(() => estadoMock.config);
+  if (MODO_MOCK) {
+    await exigirRolMock(ROLES_GESTION_MOCK);
+    return simulado(() => estadoMock.config);
+  }
   return peticion<ConfigIA>("GET", "/config-ia");
 }
 
 export async function guardarConfigIA(datos: ConfigIAEntrada): Promise<ConfigIA> {
   if (MODO_MOCK) {
-    return simulado(() => {
-      estadoMock.config = { ...datos, actualizado_por: perfilesMock.docente.id, actualizado_en: new Date().toISOString() };
-      return estadoMock.config;
-    });
+    const perfil = await exigirRolMock(ROLES_GESTION_MOCK);
+    return simulado(() => guardarConfigMock(datos, perfil));
   }
   return peticion<ConfigIA>("PUT", "/config-ia", datos);
 }
 
+/** El contrato no recibe cuerpo: el backend prueba la configuración guardada. */
 export async function probarConfigIA(): Promise<ResultadoPruebaIA> {
-  if (MODO_MOCK) return simulado(() => ({ ok: true, mensaje: "Conexión simulada correcta (modo mock)." }));
+  if (MODO_MOCK) {
+    await exigirRolMock(ROLES_GESTION_MOCK);
+    await esperar(900);
+    return simulado(probarConfigMock);
+  }
   return peticion<ResultadoPruebaIA>("POST", "/config-ia/probar");
 }

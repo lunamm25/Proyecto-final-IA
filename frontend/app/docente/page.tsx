@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
-import { PaginaProximamente } from "@/components/pagina-proximamente";
+import { GuardaRol } from "@/components/guarda-rol";
+import { PanelDocente } from "@/components/docente/panel-docente";
 
 export const metadata: Metadata = { title: "Panel docente" };
 
 export default function PaginaDocente() {
   return (
-    <PaginaProximamente
-      titulo="Panel docente"
-      descripcion="Gestiona laboratorios, rúbricas, evaluaciones y la configuración de IA."
-      roles={["docente", "admin"]}
-    />
+    <div className="mx-auto w-full max-w-6xl px-4 py-10">
+      <GuardaRol roles={["docente", "admin"]}>
+        <PanelDocente />
+      </GuardaRol>
+    </div>
   );
 }

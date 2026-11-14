@@ -988,7 +988,7 @@ export const mapaVacioMock: Mapa = { nodos: [], aristas: [] };
 
 export const configIAMock: ConfigIA = {
   proveedor: "gemini",
-  modelo: "gemini-2.0-flash",
+  modelo: "gemini-3.5-flash-lite",
   temperatura: 0.1,
   actualizado_por: "doc-1",
   actualizado_en: FECHA,
