@@ -36,11 +36,16 @@ def _limitar_temperatura(temperatura: float) -> float:
     return max(0.0, min(float(temperatura), TEMPERATURA_MAXIMA))
 
 
-def _validar_max_retries(max_retries: int) -> int:
+def validar_max_retries(max_retries: int) -> int:
     """Valida los reintentos: negativo es error y más de MAX_REINTENTOS se recorta."""
     if max_retries < 0:
         raise ErrorConfiguracionLLM("max_retries no puede ser negativo.")
     return min(int(max_retries), MAX_REINTENTOS)
+
+
+def texto_intentos(cantidad: int) -> str:
+    """Devuelve "1 intento" o "N intentos" con el plural correcto."""
+    return f"{cantidad} intento" if cantidad == 1 else f"{cantidad} intentos"
 
 
 class LLMProvider(ABC):
@@ -86,7 +91,7 @@ class LLMProvider(ABC):
                     "Corrige la respuesta y devuelve SOLO el JSON válido, sin texto adicional."
                 )
         raise ErrorRespuestaLLM(
-            f"El modelo no devolvió un JSON válido tras {self.max_retries + 1} intentos. "
+            f"El modelo no devolvió un JSON válido tras {texto_intentos(self.max_retries + 1)}. "
             f"Último error: {ultimo_error}"
         )
 
@@ -106,7 +111,7 @@ class GeminiProvider(LLMProvider):
     ) -> None:
         """Crea el cliente de Gemini con timeout y reintentos (0 a 2)."""
         super().__init__(modelo, temperatura)
-        self.max_retries = _validar_max_retries(max_retries)
+        self.max_retries = validar_max_retries(max_retries)
         if not api_key:
             raise ErrorConfiguracionLLM("Falta GEMINI_API_KEY para usar el proveedor Gemini.")
         try:
@@ -160,7 +165,7 @@ class OpenAICompatProvider(LLMProvider):
     ) -> None:
         """Crea el cliente OpenAI apuntando a la base_url indicada, con reintentos (0 a 2)."""
         super().__init__(modelo, temperatura)
-        self.max_retries = _validar_max_retries(max_retries)
+        self.max_retries = validar_max_retries(max_retries)
         try:
             from openai import OpenAI
         except ImportError as error:
@@ -215,9 +220,11 @@ class FakeProvider(LLMProvider):
         respuestas: list[str | dict | BaseModel],
         modelo: str = "fake-model",
         temperatura: float = 0.0,
+        max_retries: int = MAX_REINTENTOS,
     ) -> None:
-        """Guarda las respuestas predefinidas."""
+        """Guarda las respuestas predefinidas y los reintentos (0 a 2)."""
         super().__init__(modelo, temperatura)
+        self.max_retries = validar_max_retries(max_retries)
         self.respuestas = list(respuestas)
         self.prompts_recibidos: list[str] = []
         self.imagenes_recibidas: list[list[bytes] | None] = []

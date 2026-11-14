@@ -9,10 +9,11 @@ from typing import Generic, TypeVar
 from pydantic import BaseModel, ValidationError
 
 from app.ia.providers import (
-    MAX_REINTENTOS,
     TEMPERATURA_MAXIMA,
     ErrorRespuestaLLM,
     LLMProvider,
+    texto_intentos,
+    validar_max_retries,
 )
 
 T = TypeVar("T", bound=BaseModel)
@@ -186,15 +187,16 @@ def generar_con_reintentos(
     que_se_pide: str,
     patron: re.Pattern[str] = DELIMITADORES_EVALUADOR,
 ) -> ResultadoIntentos[T]:
-    """Llama al modelo, interpreta la respuesta y reintenta hasta 2 veces enviando el error.
+    """Llama al modelo, interpreta la respuesta y reintenta (`proveedor.max_retries`, máx. 2).
 
     `interpretar` recibe el texto crudo y devuelve (valor, "") si es válido o (None, error).
     `que_se_pide` completa el mensaje final, p. ej. "una evaluación válida".
     """
     limitar_temperatura(proveedor)
+    total_intentos = validar_max_retries(proveedor.max_retries) + 1
     prompt, errores, crudo = prompt_base, [], ""
     crudas: list[str] = []
-    for intento in range(1, MAX_REINTENTOS + 2):
+    for intento in range(1, total_intentos + 1):
         try:
             crudo = proveedor.generar_texto(prompt, schema)
         except ErrorRespuestaLLM as error:
@@ -208,7 +210,7 @@ def generar_con_reintentos(
         errores.append(error)
         prompt = prompt_con_error(prompt_base, crudo, error, patron)
     raise error_cls(
-        f"La IA no devolvió {que_se_pide} tras {MAX_REINTENTOS + 1} intentos. "
+        f"La IA no devolvió {que_se_pide} tras {texto_intentos(total_intentos)}. "
         f"Último error: {recortar_texto(errores[-1], LIMITE_CARACTERES_ERROR)}",
         errores,
         crudo,
