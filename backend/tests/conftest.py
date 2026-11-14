@@ -77,3 +77,8 @@ def cliente_api(fabrica_api):
     from tests.test_auth import ajustes, preparar
 
     return preparar(crear_app(ajustes()), fabrica_api, ajustes())
+
+
+# Fixtures de evaluaciones (BD con laboratorio, rúbrica, entregas y evaluador falso) disponibles
+# también para los tests de revisión docente, listado y traza.
+from tests.test_evaluaciones import cliente, datos, evaluador  # noqa: E402, F401

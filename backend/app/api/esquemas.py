@@ -2,9 +2,9 @@
 
 import uuid
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 
 class PerfilRespuesta(BaseModel):
@@ -132,6 +132,15 @@ class CitaRespuesta(BaseModel):
     similitud: float
 
 
+class RetroalimentacionCriterioIA(BaseModel):
+    """Textos de un criterio tal como los propuso la IA."""
+
+    justificacion: str | None = None
+    fortalezas: list[str] = []
+    debilidades: list[str] = []
+    recomendacion: str | None = None
+
+
 class CriterioEvaluacionRespuesta(BaseModel):
     """Resultado de un criterio. `nivel_ia` y `ajuste_docente` solo los ve el docente."""
 
@@ -145,6 +154,9 @@ class CriterioEvaluacionRespuesta(BaseModel):
     debilidades: list[str] = []
     recomendacion: str | None = None
     ajuste_docente: str | None = None
+    original_ia: RetroalimentacionCriterioIA | None = Field(
+        default=None, description="Textos originales de la IA (solo docente/admin)."
+    )
 
 
 class RetroalimentacionRespuesta(BaseModel):
@@ -175,6 +187,117 @@ class EvaluacionRespuesta(BaseModel):
     error: str | None
     criterios: list[CriterioEvaluacionRespuesta]
     retroalimentacion: RetroalimentacionRespuesta | None
+    retroalimentacion_ia: RetroalimentacionRespuesta | None = Field(
+        default=None, description="Retroalimentación original de la IA (solo docente/admin)."
+    )
     creada_en: datetime
     aprobada_en: datetime | None
     publicada_en: datetime | None
+
+
+# ---------- Revisión docente (RF-07) ----------
+
+TextoCorto = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)]
+TextoLargo = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=5000)]
+ListaTextos = Annotated[list[TextoCorto], Field(max_length=30)]
+
+
+class AjusteCriterioEntrada(BaseModel):
+    """Nuevo nivel y motivo obligatorio. La nota NO se envía: la calcula el backend."""
+
+    nivel_final: str = Field(min_length=1, max_length=200, examples=["Bueno"])
+    motivo: TextoCorto = Field(examples=["El código no maneja errores de entrada."])
+
+
+class RetroalimentacionCriterioEntrada(BaseModel):
+    """Textos editados de un criterio. Omitido = sin cambios; null = volver al texto de la IA."""
+
+    criterio_id: str = Field(min_length=1, examples=["C1"])
+    justificacion: TextoLargo | None = None
+    fortalezas: ListaTextos | None = None
+    debilidades: ListaTextos | None = None
+    recomendacion: TextoLargo | None = None
+
+
+class RetroalimentacionEntrada(BaseModel):
+    """Edición de la retroalimentación. Omitido = sin cambios; null = volver al texto de la IA."""
+
+    retroalimentacion_general: TextoLargo | None = Field(default=None, examples=["Buen trabajo."])
+    como_aplico_conocimientos: TextoLargo | None = None
+    aprendizajes_identificados: ListaTextos | None = None
+    aspectos_a_fortalecer: ListaTextos | None = None
+    criterios: list[RetroalimentacionCriterioEntrada] = Field(default=[], max_length=50)
+    motivo: str | None = Field(default=None, max_length=1000, examples=["Tono más cercano"])
+
+
+class EstudianteResumen(BaseModel):
+    """Estudiante en el listado de evaluaciones."""
+
+    id: uuid.UUID
+    nombre: str | None
+
+
+class LaboratorioResumen(BaseModel):
+    """Laboratorio en el listado de evaluaciones."""
+
+    id: int
+    codigo: str
+    titulo: str
+
+
+class EvaluacionResumen(BaseModel):
+    """Fila del listado docente (sin resultados ni respuestas crudas)."""
+
+    id: int
+    entrega_id: int
+    estudiante: EstudianteResumen
+    laboratorio: LaboratorioResumen
+    estado: EstadoEvaluacion
+    nota: float | None
+    creada_en: datetime
+    aprobada_en: datetime | None
+    publicada_en: datetime | None
+
+
+class ListadoEvaluacionesRespuesta(BaseModel):
+    """Página del listado: `total` cuenta todas las que cumplen los filtros."""
+
+    items: list[EvaluacionResumen]
+    total: int
+    limit: int
+    offset: int
+
+
+class UsuarioTraza(BaseModel):
+    """Quién hizo la acción."""
+
+    id: uuid.UUID
+    nombre: str | None
+
+
+class EventoTrazaRespuesta(BaseModel):
+    """Evento de auditoría (fechas en UTC). `usuario` es null si lo hizo el sistema."""
+
+    id: int
+    fecha: datetime
+    usuario: UsuarioTraza | None
+    accion: str
+    antes: Any | None
+    despues: Any | None
+    motivo: str | None
+
+
+class TrazaRespuesta(BaseModel):
+    """Trazabilidad completa de una evaluación (solo docente/admin)."""
+
+    evaluacion_id: int
+    entrega_id: int
+    estado: EstadoEvaluacion
+    nota: float | None
+    proveedor: str | None
+    modelo: str | None
+    temperatura: float | None
+    prompt_version: str | None
+    rubrica_version_id: int | None
+    rubrica_version: int | None
+    eventos: list[EventoTrazaRespuesta]

@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -27,8 +27,10 @@ from app.models import (
     Perfil,
     RubricaVersion,
 )
+from app.models.tipos import ESTADOS_EVALUACION
 from app.services.errores import (
     ConflictoError,
+    DatosInvalidosError,
     DominioError,
     NoEncontradoError,
     ProhibidoError,
@@ -55,6 +57,7 @@ MSG_ERROR_GENERICO = (
     "No se pudo completar la evaluación automática. Intenta de nuevo o contacta al docente."
 )
 MSG_SIN_TEXTO = "La entrega no tiene texto de informe disponible para evaluar."
+MSG_ESTADO_INVALIDO = "El estado '{}' no es válido. Valores permitidos: {}."
 
 
 class PendienteRevisionError(ProhibidoError):
@@ -82,6 +85,24 @@ class DetalleEvaluacion:
     criterios: list[EvaluacionCriterio]
     rubrica_version: RubricaVersion | None
     vista_estudiante: bool
+
+
+@dataclass(frozen=True)
+class FilaListado:
+    """Evaluación del listado docente con su entrega, estudiante y laboratorio."""
+
+    evaluacion: Evaluacion
+    entrega: Entrega
+    estudiante: Perfil
+    laboratorio: Laboratorio
+
+
+@dataclass(frozen=True)
+class PaginaEvaluaciones:
+    """Una página del listado y el total de evaluaciones que cumplen los filtros."""
+
+    filas: list[FilaListado]
+    total: int
 
 
 # ---------- Lanzamiento (petición HTTP) ----------
@@ -131,10 +152,29 @@ def configuracion_ia(db: Session, settings: Settings) -> ConfigEvaluacion:
     return ConfigEvaluacion(proveedor, modelo, temperatura)
 
 
+def _auditar_lanzamiento(db: Session, evaluacion: Evaluacion, perfil: Perfil) -> None:
+    """Registra en auditoría quién lanzó la evaluación y con qué configuración de IA."""
+    db.add(
+        Auditoria(
+            usuario_id=perfil.id,
+            entidad="evaluaciones",
+            entidad_id=str(evaluacion.id),
+            accion="lanzar_evaluacion",
+            despues={
+                "estado": evaluacion.estado,
+                "entrega_id": evaluacion.entrega_id,
+                "proveedor": evaluacion.proveedor,
+                "modelo": evaluacion.modelo,
+                "temperatura": evaluacion.temperatura,
+            },
+        )
+    )
+
+
 def lanzar_evaluacion(
     db: Session, entrega_id: int, perfil: Perfil, settings: Settings
 ) -> Evaluacion:
-    """Valida permisos y rúbrica, y crea la evaluación en `procesando` (commit incluido)."""
+    """Valida permisos y rúbrica, crea la evaluación en `procesando` y lo audita (un commit)."""
     entrega = _entrega_visible(db, entrega_id, perfil)
     _version_evaluable(db, entrega)
     if _hay_evaluacion_en_curso(db, entrega.id):
@@ -149,6 +189,8 @@ def lanzar_evaluacion(
     )
     db.add(evaluacion)
     try:
+        db.flush()
+        _auditar_lanzamiento(db, evaluacion, perfil)
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -378,3 +420,41 @@ def obtener_detalle(db: Session, evaluacion_id: int, perfil: Perfil) -> DetalleE
     version = db.get(RubricaVersion, entrega.rubrica_version_id)
     return DetalleEvaluacion(evaluacion, criterios, version, vista_estudiante=not es_docente)
 
+
+
+def listar_evaluaciones(
+    db: Session,
+    *,
+    laboratorio_id: int | None,
+    estado: str | None,
+    estudiante_id: uuid.UUID | None,
+    limit: int,
+    offset: int,
+) -> PaginaEvaluaciones:
+    """Listado docente con filtros opcionales, de la más reciente a la más antigua."""
+    if estado is not None and estado not in ESTADOS_EVALUACION:
+        raise DatosInvalidosError(MSG_ESTADO_INVALIDO.format(estado, ", ".join(ESTADOS_EVALUACION)))
+    filtros = []
+    if laboratorio_id is not None:
+        filtros.append(Entrega.laboratorio_id == laboratorio_id)
+    if estado is not None:
+        filtros.append(Evaluacion.estado == estado)
+    if estudiante_id is not None:
+        filtros.append(Entrega.estudiante_id == estudiante_id)
+    total = db.scalar(
+        select(func.count(Evaluacion.id))
+        .join(Entrega, Evaluacion.entrega_id == Entrega.id)
+        .where(*filtros)
+    )
+    consulta = (
+        select(Evaluacion, Entrega, Perfil, Laboratorio)
+        .join(Entrega, Evaluacion.entrega_id == Entrega.id)
+        .join(Perfil, Entrega.estudiante_id == Perfil.id)
+        .join(Laboratorio, Entrega.laboratorio_id == Laboratorio.id)
+        .where(*filtros)
+        .order_by(Evaluacion.creada_en.desc(), Evaluacion.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    filas = [FilaListado(*fila) for fila in db.execute(consulta).all()]
+    return PaginaEvaluaciones(filas, total or 0)

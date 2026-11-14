@@ -58,6 +58,8 @@ class Evaluacion(Base):
     temperatura: Mapped[float | None] = mapped_column(Float)
     respuesta_cruda: Mapped[Any | None] = mapped_column(JSONType)
     resultado: Mapped[dict[str, Any] | None] = mapped_column(JSONType)
+    # Textos generales editados por el docente; `resultado` conserva los de la IA (0004).
+    retroalimentacion_docente: Mapped[dict[str, Any] | None] = mapped_column(JSONType)
     error: Mapped[str | None] = mapped_column(Text)
     creada_en: Mapped[datetime] = fecha_creacion()
     aprobada_por: Mapped[uuid.UUID | None] = mapped_column(
@@ -96,6 +98,8 @@ class EvaluacionCriterio(Base):
     evidencias_verificadas: Mapped[Any | None] = mapped_column(JSONType)
     justificacion: Mapped[str | None] = mapped_column(Text)
     ajuste_docente: Mapped[str | None] = mapped_column(Text)
+    # Textos del criterio editados por el docente; `justificacion` es la de la IA (0004).
+    retroalimentacion_docente: Mapped[dict[str, Any] | None] = mapped_column(JSONType)
 
     evaluacion: Mapped[Evaluacion] = relationship(back_populates="criterios")
 

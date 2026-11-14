@@ -32,7 +32,12 @@ MENSAJES_VALIDACION = {
     "dict_type": "debe ser un objeto JSON",
     "uuid_parsing": "debe ser un identificador UUID válido",
     "uuid_type": "debe ser un identificador UUID válido",
-    "string_too_long": "es demasiado largo",
+    "string_too_long": "es demasiado largo (máximo {max_length} caracteres)",
+    "string_too_short": "no puede estar vacío",
+    "greater_than_equal": "debe ser mayor o igual que {ge}",
+    "less_than_equal": "debe ser menor o igual que {le}",
+    "too_long": "tiene demasiados elementos (máximo {max_length})",
+    "list_type": "debe ser una lista",
 }
 
 
@@ -56,7 +61,13 @@ def manejar_error_dominio(_request: Request, error: Exception) -> JSONResponse:
 def _describir(error: dict[str, Any]) -> str:
     """Describe un error de validación de FastAPI en español."""
     ubicacion = ".".join(str(parte) for parte in error.get("loc", ()) if parte != "body")
-    mensaje = MENSAJES_VALIDACION.get(error.get("type", ""), error.get("msg", "no es válido"))
+    plantilla = MENSAJES_VALIDACION.get(error.get("type", ""))
+    if plantilla is None:
+        return f"{ubicacion or 'cuerpo'}: {error.get('msg', 'no es válido')}"
+    try:
+        mensaje = plantilla.format(**error.get("ctx", {}))
+    except (KeyError, IndexError, ValueError):
+        mensaje = plantilla
     return f"{ubicacion or 'cuerpo'}: {mensaje}"
 
 

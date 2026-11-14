@@ -219,9 +219,12 @@ rubricas(id, laboratorio_id FK UNIQUE)
 rubrica_versiones(id, rubrica_id FK, version int, contenido jsonb, estado[borrador|aprobada], creada_por, creada_en)
 entregas(id, estudiante_id FK, laboratorio_id FK, rubrica_version_id FK, pdf_path, codigo_zip_path, github_url, extras jsonb, creada_en)
 evaluaciones(id, entrega_id FK, estado, nota numeric(2,1), proveedor, modelo, prompt_version, temperatura,
-             respuesta_cruda jsonb, resultado jsonb, error text, creada_en, aprobada_por, aprobada_en, publicada_en)
+             respuesta_cruda jsonb, resultado jsonb, retroalimentacion_docente jsonb, error text, creada_en, aprobada_por,
+             aprobada_en, publicada_en)
 evaluacion_criterios(id, evaluacion_id FK, criterio_id, nivel_ia, nivel_final, puntaje_normalizado, evidencias jsonb,
-                     evidencias_verificadas jsonb, justificacion, ajuste_docente text)
+                     evidencias_verificadas jsonb, justificacion, ajuste_docente text, retroalimentacion_docente jsonb)
+-- retroalimentacion_docente: solo los textos editados por el docente; lo generado por la IA
+-- (resultado, justificacion) nunca se modifica, para conservar la traza (migración 0004).
 verificaciones_codigo(id, evaluacion_id FK, sintaxis jsonb, ruff jsonb, complejidad jsonb, tests jsonb, metricas jsonb, sandbox text)
 auditoria(id, usuario_id, entidad, entidad_id, accion, antes jsonb, despues jsonb, motivo, creado_en)
 tematicas(id, nombre, padre_id NULL, descripcion)            -- taxonomía del mapa mental
@@ -246,10 +249,13 @@ Prefijo `/api`. Autenticación: `Authorization: Bearer <JWT de Supabase>`. Error
 | POST | /api/entregas | estudiante | multipart: laboratorio_id, pdf, zip? , github_url?, extras? |
 | GET | /api/entregas?estudiante_id= | est(propias)/docente | Portafolio |
 | POST | /api/entregas/{id}/evaluar | estudiante (solo sus entregas)/docente | Lanza evaluación en segundo plano: 202 `{evaluacion_id, estado: "procesando"}` · 404 si la entrega no existe o es ajena (estudiante) · 409 si ya hay una evaluación `procesando` o la rúbrica de la entrega tiene inconsistencias. Al terminar queda `borrador` (nota calculada por el backend) o `error` (mensaje genérico; detalle solo en auditoría) |
+| GET | /api/evaluaciones?laboratorio_id=&estado=&estudiante_id=&limit=&offset= | docente | Listado paginado `{items, total, limit, offset}` (limit 1–100, por defecto 20), orden por fecha descendente; cada item con estudiante {id, nombre}, laboratorio {id, codigo, titulo}, estado, nota y fechas. Nunca respuestas crudas |
 | GET | /api/evaluaciones/{id} | según estado/rol | Detalle: estado, nota, criterios, citas (`similitud` de 0 a 100, `verificada`), versión de rúbrica. Docente/admin: todo (nunca respuestas crudas). Estudiante: solo sus evaluaciones `publicada`, sin datos internos del modelo; propia no publicada → 403 "La evaluación está pendiente de revisión docente."; ajena o inexistente → 404 |
-| PATCH | /api/evaluaciones/{id}/criterios/{criterio_id} | docente | Ajuste {nivel_final, motivo} → recalcula nota |
-| POST | /api/evaluaciones/{id}/aprobar · /publicar | docente | Cambios de estado |
-| GET | /api/evaluaciones/{id}/traza | docente | Trazabilidad completa |
+| POST | /api/evaluaciones/{id}/revisar | docente | `borrador → en_revision` (otra transición → 409 indicando el estado actual) |
+| PATCH | /api/evaluaciones/{id}/criterios/{criterio_id} | docente | Ajuste {nivel_final, motivo} (motivo obligatorio) → recalcula nota en el backend; solo en borrador/en_revision (409 si no); nivel inexistente → 422; mismo nivel → 200 sin cambios ni auditoría |
+| PATCH | /api/evaluaciones/{id}/retroalimentacion | docente | Edita la retroalimentación general y la de cada criterio (se conserva el original de la IA); campo omitido = sin cambio, `null` = volver al texto de la IA, `""` → 422; motivo opcional; solo en borrador/en_revision |
+| POST | /api/evaluaciones/{id}/aprobar · /publicar | docente | `en_revision → aprobada` (409 si falta un nivel final o la rúbrica ya no es válida) · `aprobada → publicada`. Después de aprobada no se ajusta ni se edita |
+| GET | /api/evaluaciones/{id}/traza | docente | Trazabilidad completa: eventos en orden cronológico (fecha UTC), usuario, acción, antes/después y motivo; proveedor, modelo, temperatura, versión de prompt y de rúbrica; respuestas crudas. Se filtran claves que parezcan secretos |
 | GET | /api/estudiantes/{id}/informe | est(propio)/docente | Informe integral (JSON) |
 | GET | /api/estudiantes/{id}/mapa | est(propio)/docente | Grafo {nodos, aristas} |
 | GET/PUT | /api/config-ia · POST /api/config-ia/probar | docente | Configuración IA |

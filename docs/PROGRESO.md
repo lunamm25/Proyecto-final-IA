@@ -8,7 +8,7 @@
 | RF-04 | Portafolio académico | Rol 2 + 3 | Pendiente | |
 | RF-05 | Evaluación inteligente | Rol 1 + 2 + 3 | En progreso (backend: lanzar en segundo plano, nota, borrador/error, consulta; falta material real de la entrega y evaluador de Rol 1 en main) | |
 | RF-06 | Verificación de código / sandbox | Rol 4 | ✅ Completado | Luna Murillo / 2026-11-13 |
-| RF-07 | Revisión docente (HITL) | Rol 2 + 3 | Pendiente | |
+| RF-07 | Revisión docente (HITL) | Rol 2 + 3 | En progreso (backend listo: revisar, ajustar, editar retroalimentación, aprobar, publicar, listado y traza; falta frontend) | |
 | RF-08 | Informe integral | Rol 1 + 2 + 3 | Pendiente | |
 | RF-09 | Mapa mental | Rol 1 + 2 + 3 | Pendiente | |
 | RF-10 | Configuración de IA | Rol 1 + 3 | Pendiente | |
@@ -48,3 +48,5 @@
 - 2026-11-14 · Mariana (Rol 2) · Merge de `main` en `rol2-backend` (cambios de Laura: motor de IA y extracción de rúbricas; de Luna: sandbox y CI). Conflictos en `main.py` (se integró el router `sandbox` en `crear_app`) y `PROGRESO.md`. RF-03 pasa a "En progreso" (backend: validador y versionado; Rol 1: extracción). Excepción de ruff N818 solo para `app/ia/providers.py` en `backend/pyproject.toml`. 320 tests en verde · Pendientes para el equipo: `POST /api/sandbox/ejecutar` es público y no está en §11 (avisar a Luna); acordar cuál copia de `rubricas_demo` es la fuente.
 
 - 2026-11-14 · Mariana (Rol 2) · RF-05: `POST /api/entregas/{id}/evaluar` (202 + `procesando`, tarea de fondo con BackgroundTasks, 409 doble lanzamiento) y `GET /api/evaluaciones/{id}` (estudiante solo publicadas; 403 "pendiente de revisión docente"). Nota calculada solo por `nota.py` con la versión de rúbrica de la entrega; respuestas crudas solo en `auditoria`; adaptador perezoso al evaluador de Rol 1. Migración `0003_estado_procesando.sql` **pendiente de aplicar en Supabase**. 382 tests en verde · Siguiente paso: material real de la entrega (PDF desde Storage, resumen de código, verificación de Rol 4) con `POST /api/entregas`; esperar `app/ia/evaluador.py` en main.
+
+- 2026-11-14 · Mariana (Rol 2) · RF-07 revisión docente (HITL): `GET /api/evaluaciones` (listado paginado), `POST /{id}/revisar`, `PATCH /{id}/criterios/{criterio_id}` (motivo obligatorio, nota recalculada solo por `nota.py`), `PATCH /{id}/retroalimentacion` (conserva el original de la IA), `POST /{id}/aprobar`, `POST /{id}/publicar` y `GET /{id}/traza`. Cada acción queda en `auditoria` en la misma transacción; el lanzamiento también se registra. REQUISITOS §10 y §11 actualizados. 517 tests en verde · **Pendiente en Supabase: aplicar las migraciones 0003 (`estado procesando`) y 0004 (`retroalimentacion_docente`)** — sin ellas fallan las rutas de evaluaciones · Siguiente paso: `POST /api/entregas` con material real (PDF desde Storage).
