@@ -7,11 +7,7 @@ import pytest
 from app.ia.schemas import RubricaSchema
 
 CARPETA_DEMO = Path(__file__).parent / "fixtures" / "rubricas_demo"
-ARCHIVOS_DEMO = [
-    "rubrica_fundamentos_ia.json",
-    "rubrica_lab01.json",
-    "rubrica_manizales.json",
-]
+ARCHIVOS_DEMO = [ruta.name for ruta in sorted(CARPETA_DEMO.glob("rubrica_*.json"))]
 
 
 def _cargar(nombre: str) -> RubricaSchema:
