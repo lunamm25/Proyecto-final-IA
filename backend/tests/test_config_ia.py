@@ -38,7 +38,7 @@ CAMPOS_GET = {
     "proveedores_permitidos",
     "versiones_prompt",
 }
-VALIDO = {"proveedor": "gemini", "modelo": "gemini-2.5-flash", "temperatura": 0.05}
+VALIDO = {"proveedor": "gemini", "modelo": "gemini-3.6-flash", "temperatura": 0.05}
 
 
 def assert_error(respuesta, codigo: int, fragmento: str = "") -> None:
@@ -113,9 +113,9 @@ def test_admin_get_200(cliente_api):
 
 
 def test_get_con_fila(cliente_api, fabrica_api):
-    crear_fila(fabrica_api, modelo="gemini-2.5-flash", temperatura=0.15)
+    crear_fila(fabrica_api, modelo="gemini-3.6-flash", temperatura=0.15)
     datos = cliente_api.get(RUTA, headers=ADM).json()
-    assert (datos["proveedor"], datos["modelo"]) == ("gemini", "gemini-2.5-flash")
+    assert (datos["proveedor"], datos["modelo"]) == ("gemini", "gemini-3.6-flash")
     assert datos["temperatura"] == pytest.approx(0.15)
     assert datos["origen"] == "base_de_datos"
     assert datos["modelo_permitido"] is True
@@ -125,10 +125,10 @@ def test_get_con_fila(cliente_api, fabrica_api):
 
 
 def test_get_sin_fila_usa_settings(cliente_api):
-    usar_ajustes(cliente_api, llm_provider="gemini", llm_model="gemini-2.5-flash")
+    usar_ajustes(cliente_api, llm_provider="gemini", llm_model="gemini-3.6-flash")
     datos = cliente_api.get(RUTA, headers=ADM).json()
     assert datos["origen"] == "entorno"
-    assert (datos["proveedor"], datos["modelo"]) == ("gemini", "gemini-2.5-flash")
+    assert (datos["proveedor"], datos["modelo"]) == ("gemini", "gemini-3.6-flash")
     assert datos["temperatura"] == pytest.approx(0.1)
     assert datos["actualizado_por"] is None and datos["actualizado_en"] is None
 
@@ -196,7 +196,7 @@ def test_proveedores_permitidos_sin_fake(cliente_api):
     usar_ajustes(cliente_api, openai_compat_modelos="llama3.1:8b, qwen2.5:7b")
     proveedores = cliente_api.get(RUTA, headers=ADM).json()["proveedores_permitidos"]
     assert [p["proveedor"] for p in proveedores] == ["gemini", "openai_compat"]
-    assert proveedores[0]["modelos"] == ["gemini-3.5-flash-lite", "gemini-2.5-flash"]
+    assert proveedores[0]["modelos"] == ["gemini-3.5-flash-lite", "gemini-3.6-flash"]
     assert proveedores[1]["modelos"] == ["llama3.1:8b", "qwen2.5:7b"]
     assert all(p["etiqueta"] for p in proveedores)
 
@@ -218,6 +218,49 @@ def test_openai_sin_lista_ni_proveedor_queda_vacio(cliente_api):
     assert proveedores[1]["modelos"] == []
 
 
+def test_modelos_probados_por_proveedor(cliente_api):
+    usar_ajustes(cliente_api, openai_compat_modelos="llama3.1:8b")
+    proveedores = cliente_api.get(RUTA, headers=ADM).json()["proveedores_permitidos"]
+    assert all(
+        set(p) == {"proveedor", "etiqueta", "modelos", "modelos_probados"} for p in proveedores
+    )
+    assert all(isinstance(m, str) for p in proveedores for m in p["modelos"])
+    assert proveedores[0]["modelos_probados"] == ["gemini-3.5-flash-lite"]
+    assert proveedores[1]["modelos_probados"] == []
+
+
+def test_modelos_probados_solo_si_estan_permitidos(cliente_api, monkeypatch):
+    monkeypatch.setattr(
+        servicio,
+        "MODELOS_PROBADOS",
+        {
+            "gemini": ("gemini-3.5-flash-lite", "gemini-x-no-permitido"),
+            "openai_compat": ("llama3",),
+        },
+    )
+    proveedores = cliente_api.get(RUTA, headers=ADM).json()["proveedores_permitidos"]
+    assert proveedores[0]["modelos_probados"] == ["gemini-3.5-flash-lite"]
+    assert proveedores[1]["modelos_probados"] == []
+
+
+def test_put_gemini_25_flash_retirado_422(cliente_api, fabrica_api):
+    r = poner(cliente_api, {**VALIDO, "modelo": "gemini-2.5-flash"})
+    assert_error(
+        r,
+        422,
+        "Modelo no permitido para gemini. Opciones: gemini-3.5-flash-lite, gemini-3.6-flash.",
+    )
+    assert fila(fabrica_api) is None and auditorias(fabrica_api) == []
+
+
+def test_fila_guardada_con_modelo_retirado_no_falla(cliente_api, fabrica_api):
+    crear_fila(fabrica_api, modelo="gemini-2.5-flash")
+    r = cliente_api.get(RUTA, headers=ADM)
+    assert r.status_code == 200, r.text
+    assert r.json()["modelo"] == "gemini-2.5-flash"
+    assert r.json()["modelo_permitido"] is False
+
+
 def test_modelo_de_la_fila_fuera_de_lista(cliente_api, fabrica_api):
     crear_fila(fabrica_api, modelo="gemini-1.0-viejo")
     datos = cliente_api.get(RUTA, headers=ADM).json()
@@ -234,12 +277,12 @@ def test_put_valido_actualiza_y_audita(cliente_api, fabrica_api):
     assert r.status_code == 200, r.text
     datos = r.json()
     assert set(datos) == CAMPOS_GET
-    assert (datos["proveedor"], datos["modelo"]) == ("gemini", "gemini-2.5-flash")
+    assert (datos["proveedor"], datos["modelo"]) == ("gemini", "gemini-3.6-flash")
     assert datos["temperatura"] == pytest.approx(0.05)
     assert datos["origen"] == "base_de_datos" and datos["modelo_permitido"] is True
     assert datos["actualizado_por"]["id"] == str(ID_ADMIN)
     guardada = fila(fabrica_api)
-    assert (guardada.modelo, guardada.temperatura) == ("gemini-2.5-flash", pytest.approx(0.05))
+    assert (guardada.modelo, guardada.temperatura) == ("gemini-3.6-flash", pytest.approx(0.05))
     [registro] = auditorias(fabrica_api)
     assert registro.usuario_id == ID_ADMIN
     assert (registro.entidad, registro.entidad_id) == ("config_ia", "1")
@@ -251,7 +294,7 @@ def test_put_valido_actualiza_y_audita(cliente_api, fabrica_api):
     }
     assert registro.despues == {
         "proveedor": "gemini",
-        "modelo": "gemini-2.5-flash",
+        "modelo": "gemini-3.6-flash",
         "temperatura": 0.05,
     }
     assert registro.motivo is None
@@ -259,45 +302,45 @@ def test_put_valido_actualiza_y_audita(cliente_api, fabrica_api):
 
 def test_put_actualiza_quien_lo_cambio(cliente_api, fabrica_api):
     with fabrica_api() as s:
-        s.add(ConfigIA(id=1, proveedor="gemini", modelo="gemini-2.5-flash", temperatura=0.1))
+        s.add(ConfigIA(id=1, proveedor="gemini", modelo="gemini-3.6-flash", temperatura=0.1))
         s.commit()
     poner(cliente_api, VALIDO)
     assert fila(fabrica_api).actualizado_por == ID_ADMIN
 
 
 def test_put_mismo_valor_200_sin_auditoria(cliente_api, fabrica_api):
-    crear_fila(fabrica_api, modelo="gemini-2.5-flash", temperatura=0.05)
+    crear_fila(fabrica_api, modelo="gemini-3.6-flash", temperatura=0.05)
     antes = fila(fabrica_api).actualizado_en
     r = poner(
-        cliente_api, {"proveedor": " gemini ", "modelo": " gemini-2.5-flash ", "temperatura": 0.05}
+        cliente_api, {"proveedor": " gemini ", "modelo": " gemini-3.6-flash ", "temperatura": 0.05}
     )
     assert r.status_code == 200, r.text
-    assert r.json()["modelo"] == "gemini-2.5-flash"
+    assert r.json()["modelo"] == "gemini-3.6-flash"
     assert auditorias(fabrica_api) == []
     assert fila(fabrica_api).actualizado_en == antes
 
 
 def test_primer_put_crea_fila_y_audita_origen_entorno(cliente_api, fabrica_api):
-    usar_ajustes(cliente_api, llm_provider="gemini", llm_model="gemini-2.5-flash")
+    usar_ajustes(cliente_api, llm_provider="gemini", llm_model="gemini-3.6-flash")
     r = poner(
-        cliente_api, {"proveedor": "gemini", "modelo": "gemini-2.5-flash", "temperatura": 0.1}
+        cliente_api, {"proveedor": "gemini", "modelo": "gemini-3.6-flash", "temperatura": 0.1}
     )
     assert r.status_code == 200, r.text
     assert r.json()["origen"] == "base_de_datos"
     guardada = fila(fabrica_api)
-    assert (guardada.proveedor, guardada.modelo) == ("gemini", "gemini-2.5-flash")
+    assert (guardada.proveedor, guardada.modelo) == ("gemini", "gemini-3.6-flash")
     assert guardada.actualizado_por == ID_ADMIN
     [registro] = auditorias(fabrica_api)
     assert registro.accion == "cambiar_config_ia"
     assert registro.antes == {
         "origen": "entorno",
         "proveedor": "gemini",
-        "modelo": "gemini-2.5-flash",
+        "modelo": "gemini-3.6-flash",
         "temperatura": 0.1,
     }
     assert registro.despues == {
         "proveedor": "gemini",
-        "modelo": "gemini-2.5-flash",
+        "modelo": "gemini-3.6-flash",
         "temperatura": 0.1,
     }
 
@@ -325,7 +368,7 @@ def test_put_modelo_fuera_de_lista_422(cliente_api, fabrica_api):
 
 @pytest.mark.parametrize(
     "modelo",
-    ["gemini 2.5", "gemini-2.5-flash\nX", "a" * 101, "", "-empieza-mal", "x;rm -rf"],
+    ["gemini 2.5", "gemini-3.6-flash\nX", "a" * 101, "", "-empieza-mal", "x;rm -rf"],
     ids=["espacio", "salto", "largo", "vacio", "guion-inicial", "punto-y-coma"],
 )
 def test_put_modelo_con_formato_invalido_422(cliente_api, fabrica_api, modelo):
@@ -385,7 +428,7 @@ def test_put_temperatura_invalida_422(cliente_api, fabrica_api, temperatura, fra
 
 
 def test_put_temperatura_nan_422(cliente_api):
-    cuerpo = b'{"proveedor": "gemini", "modelo": "gemini-2.5-flash", "temperatura": NaN}'
+    cuerpo = b'{"proveedor": "gemini", "modelo": "gemini-3.6-flash", "temperatura": NaN}'
     r = cliente_api.put(RUTA, content=cuerpo, headers={**ADM, "Content-Type": "application/json"})
     assert_error(r, 422, "temperatura: debe ser un número finito")
 
@@ -435,7 +478,7 @@ def test_put_falla_auditoria_no_guarda_cambio(fabrica_api, monkeypatch):
     with fabrica_api() as s:
         actor = s.get(Perfil, ID_ADMIN)
         with pytest.raises(IntegrityError):
-            servicio.cambiar_config(s, actor, "gemini", "gemini-2.5-flash", 0.05, ajustes())
+            servicio.cambiar_config(s, actor, "gemini", "gemini-3.6-flash", 0.05, ajustes())
     guardada = fila(fabrica_api)
     assert (guardada.modelo, guardada.temperatura) == ("gemini-3.5-flash-lite", 0.1)
     assert auditorias(fabrica_api) == []
@@ -541,13 +584,13 @@ def test_probar_exito_200_y_audita(cliente_api, fabrica_api):
 
 
 def test_probar_usa_la_configuracion_guardada(cliente_api, fabrica_api):
-    crear_fila(fabrica_api, modelo="gemini-2.5-flash", temperatura=0.05)
+    crear_fila(fabrica_api, modelo="gemini-3.6-flash", temperatura=0.05)
     usar_ajustes(cliente_api, gemini_api_key=CLAVE_GEMINI)
     probador = ProbadorFalso()
     usar_probador(cliente_api, probador)
     datos = probar(cliente_api).json()
-    assert datos["modelo"] == "gemini-2.5-flash"
-    assert probador.llamadas == [("gemini", "gemini-2.5-flash", 0.05, 10.0)]
+    assert datos["modelo"] == "gemini-3.6-flash"
+    assert probador.llamadas == [("gemini", "gemini-3.6-flash", 0.05, 10.0)]
 
 
 def test_probar_no_cambia_la_configuracion(cliente_api, fabrica_api):

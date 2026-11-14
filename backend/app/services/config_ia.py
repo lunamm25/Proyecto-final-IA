@@ -21,7 +21,15 @@ from app.services.evaluaciones import TEMPERATURA_MAXIMA, ConfigEvaluacion, conf
 from app.services.evaluador_ia import ProbadorConexion, ProveedorSinConfigurarError
 
 # Modelos de Gemini que el admin puede elegir. Para añadir uno, agrégalo a esta tupla.
-MODELOS_GEMINI: tuple[str, ...] = ("gemini-3.5-flash-lite", "gemini-2.5-flash")
+# El primero es el predeterminado y el probado.
+# gemini-3.6-flash: sin probar con nuestros prompts; gemini-2.5-flash retirado por Google
+MODELOS_GEMINI: tuple[str, ...] = ("gemini-3.5-flash-lite", "gemini-3.6-flash")
+
+# Modelos ya probados con nuestros prompts, por proveedor (solo cuentan si están permitidos).
+MODELOS_PROBADOS: dict[str, tuple[str, ...]] = {
+    "gemini": ("gemini-3.5-flash-lite",),
+    "openai_compat": (),
+}
 
 # Proveedores elegibles desde el panel (nombre que espera el código → etiqueta para la interfaz).
 PROVEEDORES: dict[str, str] = {
@@ -141,7 +149,14 @@ def obtener_config(db: Session, settings: Settings) -> EstadoConfigIA:
         temperatura_maxima=TEMPERATURA_MAXIMA,
         claves=_claves_configuradas(settings),
         proveedores_permitidos=[
-            {"proveedor": nombre, "etiqueta": etiqueta, "modelos": permitidos[nombre]}
+            {
+                "proveedor": nombre,
+                "etiqueta": etiqueta,
+                "modelos": permitidos[nombre],
+                "modelos_probados": [
+                    m for m in MODELOS_PROBADOS.get(nombre, ()) if m in permitidos[nombre]
+                ],
+            }
             for nombre, etiqueta in PROVEEDORES.items()
         ],
         versiones_prompt=versiones_prompt(),

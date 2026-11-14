@@ -490,6 +490,9 @@ class ProveedorPermitido(BaseModel):
     proveedor: str
     etiqueta: str
     modelos: list[str]
+    modelos_probados: list[str] = Field(
+        description="Subconjunto de `modelos` ya probado con nuestros prompts."
+    )
 
 
 class ConfigIARespuesta(BaseModel):
