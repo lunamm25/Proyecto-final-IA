@@ -15,7 +15,8 @@ backend/app/api/     Rutas FastAPI                               (Rol 2)
 backend/app/models/  SQLAlchemy                                  (Rol 2)
 backend/app/services/ Lógica de negocio (nota, HITL, informe)    (Rol 2)
 backend/app/ia/      LLMProvider, prompts, schemas, evaluador    (Rol 1)
-backend/app/verificacion/ Estático + sandbox                     (Rol 4)
+backend/app/verificacion/ Análisis estático                      (Rol 4)
+backend/app/sandbox/      Sandbox de ejecución                   (Rol 4)
 backend/tests/       Pytest
 supabase/migrations/ SQL
 docs/                REQUISITOS.md, USO_IA.md, ARQUITECTURA.md
