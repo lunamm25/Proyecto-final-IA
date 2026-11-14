@@ -50,3 +50,15 @@
 - ✅ PR `rol4-devops` → `main` creado y mergeado con todos los checks en verde
 - ✅ Frontend desplegado en Vercel: https://proyecto-final-ia-vaiw.vercel.app
 - ✅ Revisión del PR #1 de Laura (Rol 1) — cambios aprobados y mergeados a `main`
+
+cat >> docs/PROGRESO.md << 'EOF'
+
+## 2026-11-14 — Luna (Rol 4 DevOps/Calidad)
+
+- ✅ Revisión PR #4 de Laura (Rol 1): `providers.py` (método `generar_texto`), `evaluador.py` (separación conteos/texto libre del sandbox), `comun.py` (refactor utilidades comunes) — código aprobado, CI en verde, mergeado a `main`
+- ✅ Formato del dict del sandbox confirmado a Laura: `{"stdout": "...", "stderr": "...", "codigo_salida": 0, "error": null}`; solo conteos numéricos pasan al LLM vía `separar_verificacion`
+- ✅ Bucket privado de Supabase Storage creado (`entregas`, privado, límite ZIP 20 MB)
+- ✅ Variable `SUPABASE_BUCKET` agregada a Render (Environment) y a `backend/.env.example`
+- ✅ Variable `GEMINI_API_KEY` agregada a Render (Environment) — redeploy automático
+- ✅ Supabase Auth configurado: Site URL → Vercel, Redirect → localhost:3000, confirmación de correo desactivada para desarrollo
+EOF
