@@ -128,3 +128,54 @@
     @apply font-sans;
   }
 }
+/* Impresión / "Guardar como PDF" (informe RF-08 CA4): A4, fondo blanco y texto negro. */
+@media print {
+  @page {
+    size: A4;
+    margin: 15mm;
+  }
+
+  :root,
+  .dark {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0 0 0);
+    --primary: oklch(0.205 0 0);
+    --muted: oklch(0.96 0 0);
+    --muted-foreground: oklch(0.35 0 0);
+    --border: oklch(0.8 0 0);
+    --chart-2: oklch(0.6 0 0);
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  button,
+  .informe-imprimible details,
+  .recharts-tooltip-wrapper {
+    display: none !important;
+  }
+
+  .informe-imprimible table,
+  .informe-imprimible tr,
+  .informe-imprimible li,
+  .informe-imprimible .recharts-wrapper {
+    break-inside: avoid;
+  }
+
+  .informe-imprimible h1,
+  .informe-imprimible h2 {
+    break-after: avoid;
+  }
+}

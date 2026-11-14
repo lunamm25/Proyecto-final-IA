@@ -556,40 +556,81 @@ export const informeMock: Informe = {
   estudiante_nombre: "Ana Estudiante",
   notas_laboratorio: [
     { laboratorio_id: "lab-1", codigo: "C1-L1", titulo: "Fundamentos de IA y Python", cohorte: 1, evaluacion_id: "eva-0", nota: 3.6 },
+    { laboratorio_id: "lab-2", codigo: "C1-L2", titulo: "Aprendizaje automático supervisado", cohorte: 1, evaluacion_id: "eva-2", nota: 3.2 },
     { laboratorio_id: "lab-3", codigo: "C2-L1", titulo: "Ingeniería de prompts con LLMs", cohorte: 2, evaluacion_id: "eva-1", nota: 4.2 },
+    { laboratorio_id: "lab-4", codigo: "C2-L2", titulo: "RAG con modelos locales", cohorte: 2, evaluacion_id: "eva-3", nota: 3.8 },
   ],
   promedios_cohorte: [
-    { cohorte: 1, promedio: 3.6 },
-    { cohorte: 2, promedio: 4.2 },
+    { cohorte: 1, promedio: 3.4 },
+    { cohorte: 2, promedio: 4.0 },
   ],
-  promedio_general: 3.9,
+  promedio_general: 3.7,
   dominio_competencias: [
     { competencia: "Fundamentos de IA", dominio: 0.7, nivel: "medio" },
-    { competencia: "Ingeniería de prompts", dominio: 1, nivel: "alto" },
+    { competencia: "Aprendizaje automático", dominio: 0.55, nivel: "medio" },
+    { competencia: "Ingeniería de prompts", dominio: 0.9, nivel: "alto" },
     { competencia: "LLMs", dominio: 0.8, nivel: "alto" },
-    { competencia: "Ética y verificación", dominio: 0.5, nivel: "medio" },
-    { competencia: "RAG", dominio: 0, nivel: "sin_evidencia" },
+    { competencia: "RAG", dominio: 0.6, nivel: "medio" },
+    { competencia: "Ética y verificación", dominio: 0.35, nivel: "bajo" },
+    { competencia: "Agentes de IA", dominio: 0, nivel: "sin_evidencia" },
   ],
-  evolucion: { cohorte_1: 3.6, cohorte_2: 4.2, diferencia: 0.6 },
+  evolucion: { cohorte_1: 3.4, cohorte_2: 4.0, diferencia: 0.6 },
   narrativa: {
-    competencias_desarrolladas: ["Diseño de prompts estructurados", "Validación de salidas de LLM"],
-    brechas: ["Análisis de sesgos", "Manejo robusto de errores"],
+    competencias_desarrolladas: [
+      "Diseño de prompts estructurados con rol, formato de salida y ejemplos.",
+      "Validación de las salidas del LLM con esquemas Pydantic.",
+      "Construcción de un flujo RAG básico con un modelo local.",
+    ],
+    brechas: [
+      "Análisis de sesgos y verificación de las respuestas del modelo.",
+      "Reporte de métricas en los modelos de aprendizaje supervisado.",
+      "Aún no hay evidencia en agentes de IA.",
+    ],
     plan_fortalecimiento: [
       {
-        accion: "Analizar sesgos en las respuestas de un LLM con al menos dos casos.",
+        accion: "Analizar sesgos en las respuestas de un LLM con al menos dos casos documentados.",
         recurso: "Guía de evaluación de LLMs del curso",
         prioridad: "alta",
         competencia: "Ética y verificación",
       },
       {
-        accion: "Implementar reintentos y manejo de errores de formato.",
-        recurso: "Documentación de Pydantic",
+        accion: "Reportar precisión, exhaustividad y matriz de confusión del clasificador.",
+        recurso: "Documentación de métricas de scikit-learn",
         prioridad: "media",
-        competencia: "LLMs",
+        competencia: "Aprendizaje automático",
+      },
+      {
+        accion: "Implementar un agente sencillo con una herramienta y documentar sus límites.",
+        recurso: "Laboratorio C2-L3 · Agentes de IA",
+        prioridad: "media",
+        competencia: "Agentes de IA",
+      },
+      {
+        accion: "Comparar dos estrategias de fragmentación de documentos en el flujo RAG.",
+        recurso: "Tutorial de RAG con Ollama",
+        prioridad: "baja",
+        competencia: "RAG",
       },
     ],
-    conclusion: "La estudiante mejoró de la cohorte 1 a la 2, con dominio alto en ingeniería de prompts.",
+    conclusion:
+      "La estudiante mejoró de la cohorte 1 a la cohorte 2 y alcanzó un dominio alto en ingeniería de prompts y LLMs. El siguiente paso es fortalecer la verificación ética de las respuestas y empezar a trabajar con agentes.",
   },
+  generado_en: FECHA,
+};
+
+/** Informe de un estudiante sin evaluaciones publicadas (est-2 en el modo mock). */
+export const informeSinPublicadasMock: Informe = {
+  estudiante_id: "est-2",
+  estudiante_nombre: "Juan Pérez",
+  notas_laboratorio: [],
+  promedios_cohorte: [
+    { cohorte: 1, promedio: null },
+    { cohorte: 2, promedio: null },
+  ],
+  promedio_general: null,
+  dominio_competencias: [],
+  evolucion: { cohorte_1: null, cohorte_2: null, diferencia: null },
+  narrativa: null,
   generado_en: FECHA,
 };
 

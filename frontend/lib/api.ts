@@ -8,6 +8,7 @@ import {
   entregasMock,
   evaluacionesMock,
   informeMock,
+  informeSinPublicadasMock,
   laboratoriosSinRubricaMock,
   mapaMock,
   perfilesMock,
@@ -673,8 +674,24 @@ export async function obtenerTraza(id: string): Promise<Traza> {
 
 // ---------- Informe y mapa ----------
 
+const informesMock: Record<string, Informe> = {
+  [informeMock.estudiante_id]: informeMock,
+  [informeSinPublicadasMock.estudiante_id]: informeSinPublicadasMock,
+};
+
+/** Simula el permiso del backend: el estudiante solo ve su informe; docente y admin, cualquiera. */
+async function informeMockPara(estudianteId: string): Promise<Informe> {
+  const perfil = await perfilMockActual();
+  if (perfil.rol === "estudiante" && perfil.id !== estudianteId) {
+    throw new ErrorApi(403, "Solo puedes ver tu propio informe.");
+  }
+  const informe = informesMock[estudianteId];
+  if (!informe) throw new ErrorApi(404, "No encontramos un estudiante con ese identificador.");
+  return simulado(() => informe);
+}
+
 export async function obtenerInforme(estudianteId: string): Promise<Informe> {
-  if (MODO_MOCK) return simulado(() => ({ ...informeMock, estudiante_id: estudianteId }));
+  if (MODO_MOCK) return informeMockPara(estudianteId);
   return peticion<Informe>("GET", `/estudiantes/${encodeURIComponent(estudianteId)}/informe`);
 }
 
