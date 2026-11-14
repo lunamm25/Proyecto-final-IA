@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Numeric,
     Text,
     UniqueConstraint,
@@ -32,6 +33,14 @@ class Evaluacion(Base):
         ),
         CheckConstraint(
             "nota is null or (nota >= 0 and nota <= 5)", name="evaluaciones_nota_check"
+        ),
+        # Una sola evaluación en curso por entrega (migración 0003).
+        Index(
+            "ux_evaluaciones_entrega_procesando",
+            "entrega_id",
+            unique=True,
+            sqlite_where=text("estado = 'procesando'"),
+            postgresql_where=text("estado = 'procesando'"),
         ),
     )
 

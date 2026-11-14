@@ -13,6 +13,10 @@ class NoEncontradoError(DominioError):
     """El recurso pedido no existe (HTTP 404)."""
 
 
+class ProhibidoError(DominioError):
+    """El usuario no puede ver o hacer esto en el estado actual (HTTP 403)."""
+
+
 class ConflictoError(DominioError):
     """La operación choca con el estado actual de los datos (HTTP 409)."""
 

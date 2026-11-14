@@ -10,7 +10,7 @@ JSONType = JSON().with_variant(JSONB(), "postgresql")
 # bigint en Postgres; INTEGER en SQLite para que funcione el autoincremento.
 IdType = BigInteger().with_variant(Integer(), "sqlite")
 
-ESTADOS_EVALUACION = ("borrador", "en_revision", "aprobada", "publicada", "error")
+ESTADOS_EVALUACION = ("procesando", "borrador", "en_revision", "aprobada", "publicada", "error")
 ESTADOS_RUBRICA = ("borrador", "aprobada")
 ROLES = ("estudiante", "docente", "admin")
 

@@ -8,10 +8,12 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
-from app.db import get_db
+from app.db import SessionLocal, get_db
 from app.models import Perfil
 from app.models.tipos import ROLES
 from app.services.auth import TokenInvalidoError, validar_token
+from app.services.evaluador_ia import Evaluador, evaluar_con_ia
+from app.services.material import CargadorMaterial, obtener_material
 
 esquema_bearer = HTTPBearer(
     auto_error=False,
@@ -68,3 +70,18 @@ def requiere_rol(*roles: str) -> Callable[..., Perfil]:
 
 UsuarioActual = Annotated[Perfil, Depends(usuario_actual)]
 """Atajo para declarar en una ruta: `perfil: UsuarioActual`."""
+
+
+def obtener_evaluador() -> Evaluador:
+    """Evaluador de IA usado por la tarea de fondo (los tests lo sustituyen)."""
+    return evaluar_con_ia
+
+
+def obtener_cargador_material() -> CargadorMaterial:
+    """Función que obtiene el material de una entrega (provisional, ver services/material)."""
+    return obtener_material
+
+
+def obtener_fabrica_sesiones() -> Callable[[], Session]:
+    """Fábrica de sesiones propia de la tarea de fondo (no reutiliza la de la petición)."""
+    return SessionLocal

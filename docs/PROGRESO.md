@@ -6,7 +6,7 @@
 | RF-02 | Cohortes y laboratorios | Rol 2 | En progreso | |
 | RF-03 | Gestión de rúbricas | Rol 1 + 2 + 3 | En progreso (backend: validador y versionado; Rol 1: extracción) | |
 | RF-04 | Portafolio académico | Rol 2 + 3 | Pendiente | |
-| RF-05 | Evaluación inteligente | Rol 1 + 2 + 3 | Pendiente | |
+| RF-05 | Evaluación inteligente | Rol 1 + 2 + 3 | En progreso (backend: lanzar en segundo plano, nota, borrador/error, consulta; falta material real de la entrega y evaluador de Rol 1 en main) | |
 | RF-06 | Verificación de código / sandbox | Rol 4 | ✅ Completado | Luna Murillo / 2026-11-13 |
 | RF-07 | Revisión docente (HITL) | Rol 2 + 3 | Pendiente | |
 | RF-08 | Informe integral | Rol 1 + 2 + 3 | Pendiente | |
@@ -46,3 +46,5 @@
 - 2026-11-14 · Mariana (Rol 2) · Gestión de usuarios y roles (RF-01 CA3): `GET /api/usuarios` y `PATCH /api/usuarios/{id}/rol`, **solo admin** (decisión del equipo; REQUISITOS §11 y RF-01 CA3 actualizados, antes decían admin/docente). 409 si un admin se quita su propio rol de admin o si se dejaría el sistema sin admin; mismo rol → 200 sin auditoría; cada cambio queda en `auditoria`. Migración `0002_perfiles_correo.sql` (columna `correo` en `perfiles`). 256 tests en verde · Siguiente paso: aplicar la 0002 en Supabase (obligatorio antes de usar esta versión del backend) y nombrar al primer admin.
 
 - 2026-11-14 · Mariana (Rol 2) · Merge de `main` en `rol2-backend` (cambios de Laura: motor de IA y extracción de rúbricas; de Luna: sandbox y CI). Conflictos en `main.py` (se integró el router `sandbox` en `crear_app`) y `PROGRESO.md`. RF-03 pasa a "En progreso" (backend: validador y versionado; Rol 1: extracción). Excepción de ruff N818 solo para `app/ia/providers.py` en `backend/pyproject.toml`. 320 tests en verde · Pendientes para el equipo: `POST /api/sandbox/ejecutar` es público y no está en §11 (avisar a Luna); acordar cuál copia de `rubricas_demo` es la fuente.
+
+- 2026-11-14 · Mariana (Rol 2) · RF-05: `POST /api/entregas/{id}/evaluar` (202 + `procesando`, tarea de fondo con BackgroundTasks, 409 doble lanzamiento) y `GET /api/evaluaciones/{id}` (estudiante solo publicadas; 403 "pendiente de revisión docente"). Nota calculada solo por `nota.py` con la versión de rúbrica de la entrega; respuestas crudas solo en `auditoria`; adaptador perezoso al evaluador de Rol 1. Migración `0003_estado_procesando.sql` **pendiente de aplicar en Supabase**. 382 tests en verde · Siguiente paso: material real de la entrega (PDF desde Storage, resumen de código, verificación de Rol 4) con `POST /api/entregas`; esperar `app/ia/evaluador.py` en main.

@@ -11,11 +11,13 @@ from app.services.errores import (
     DatosInvalidosError,
     DominioError,
     NoEncontradoError,
+    ProhibidoError,
     RubricaConInconsistenciasError,
 )
 
 CODIGOS: dict[type[DominioError], int] = {
     NoEncontradoError: status.HTTP_404_NOT_FOUND,
+    ProhibidoError: status.HTTP_403_FORBIDDEN,
     ConflictoError: status.HTTP_409_CONFLICT,
     DatosInvalidosError: status.HTTP_422_UNPROCESSABLE_CONTENT,
 }

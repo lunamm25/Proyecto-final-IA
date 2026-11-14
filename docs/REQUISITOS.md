@@ -245,8 +245,8 @@ Prefijo `/api`. Autenticación: `Authorization: Bearer <JWT de Supabase>`. Error
 | GET | /api/laboratorios/{id}/rubrica | todos | Versión vigente |
 | POST | /api/entregas | estudiante | multipart: laboratorio_id, pdf, zip? , github_url?, extras? |
 | GET | /api/entregas?estudiante_id= | est(propias)/docente | Portafolio |
-| POST | /api/entregas/{id}/evaluar | estudiante/docente | Lanza evaluación (202 + evaluacion_id) |
-| GET | /api/evaluaciones/{id} | según estado/rol | Detalle (estudiante solo si `publicada`) |
+| POST | /api/entregas/{id}/evaluar | estudiante (solo sus entregas)/docente | Lanza evaluación en segundo plano: 202 `{evaluacion_id, estado: "procesando"}` · 404 si la entrega no existe o es ajena (estudiante) · 409 si ya hay una evaluación `procesando` o la rúbrica de la entrega tiene inconsistencias. Al terminar queda `borrador` (nota calculada por el backend) o `error` (mensaje genérico; detalle solo en auditoría) |
+| GET | /api/evaluaciones/{id} | según estado/rol | Detalle: estado, nota, criterios, citas (`similitud` de 0 a 100, `verificada`), versión de rúbrica. Docente/admin: todo (nunca respuestas crudas). Estudiante: solo sus evaluaciones `publicada`, sin datos internos del modelo; propia no publicada → 403 "La evaluación está pendiente de revisión docente."; ajena o inexistente → 404 |
 | PATCH | /api/evaluaciones/{id}/criterios/{criterio_id} | docente | Ajuste {nivel_final, motivo} → recalcula nota |
 | POST | /api/evaluaciones/{id}/aprobar · /publicar | docente | Cambios de estado |
 | GET | /api/evaluaciones/{id}/traza | docente | Trazabilidad completa |
