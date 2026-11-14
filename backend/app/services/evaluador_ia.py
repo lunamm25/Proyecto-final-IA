@@ -10,6 +10,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from pydantic import BaseModel
+
 from app.config import Settings, get_settings
 from app.services.errores import DominioError
 
@@ -19,6 +21,10 @@ MSG_PROVEEDOR_DESCONOCIDO = "Proveedor de IA desconocido: '{}'. Usa gemini u ope
 
 class EvaluadorNoDisponibleError(DominioError):
     """El módulo de IA (evaluador o proveedores) no se pudo importar."""
+
+
+class ProveedorSinConfigurarError(Exception):
+    """Falta la clave u otro dato del proveedor de IA en la configuración del servidor."""
 
 
 class EvaluacionIAError(Exception):
@@ -101,15 +107,19 @@ def _importar(nombre: str) -> Any:
         raise EvaluadorNoDisponibleError(MSG_NO_DISPONIBLE) from error
 
 
-def construir_proveedor(solicitud: ConfigProveedor, settings: Settings) -> Any:
-    """Crea el LLMProvider de Rol 1 según proveedor, modelo y temperatura configurados."""
+def construir_proveedor(
+    solicitud: ConfigProveedor, settings: Settings, timeout: float | None = None
+) -> Any:
+    """Crea el LLMProvider de Rol 1 según la configuración (timeout opcional, en segundos)."""
     providers = _importar("app.ia.providers")
     nombre = solicitud.proveedor.strip().lower()
+    extra: dict[str, float] = {} if timeout is None else {"timeout": timeout}
     if nombre == "gemini":
         return providers.GeminiProvider(
             api_key=settings.gemini_api_key,
             modelo=solicitud.modelo,
             temperatura=solicitud.temperatura,
+            **extra,
         )
     if nombre == "openai_compat":
         base_url = settings.openai_compat_base_url.strip() or providers.OLLAMA_BASE_URL
@@ -121,8 +131,36 @@ def construir_proveedor(solicitud: ConfigProveedor, settings: Settings) -> Any:
             api_key=api_key,
             modelo=solicitud.modelo,
             temperatura=solicitud.temperatura,
+            **extra,
         )
     raise ValueError(MSG_PROVEEDOR_DESCONOCIDO.format(nombre))
+
+
+ProbadorConexion = Callable[[ConfigProveedor, Settings, float], None]
+"""Recibe la configuración, los Settings y el timeout en segundos; lanza si falla."""
+
+
+class PruebaConexionSchema(BaseModel):
+    """Respuesta mínima pedida al modelo para comprobar la conexión."""
+
+    ok: bool
+
+
+PROMPT_PRUEBA = 'Prueba de conexión. Responde solo con este JSON: {"ok": true}'
+
+
+def probar_conexion_ia(config: ConfigProveedor, settings: Settings, timeout: float) -> None:
+    """Hace una llamada mínima al proveedor configurado; lanza excepción si falla."""
+    providers = _importar("app.ia.providers")
+    try:
+        proveedor = construir_proveedor(config, settings, timeout=timeout)
+    except providers.ErrorConfiguracionLLM as error:
+        raise ProveedorSinConfigurarError(str(error)) from error
+    generar_texto = getattr(proveedor, "generar_texto", None)
+    if callable(generar_texto):
+        generar_texto(PROMPT_PRUEBA, PruebaConexionSchema)
+    else:
+        proveedor.generar_json(PROMPT_PRUEBA, PruebaConexionSchema)
 
 
 def _cita(cita: Any) -> dict[str, Any]:

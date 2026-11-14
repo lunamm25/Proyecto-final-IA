@@ -508,3 +508,18 @@ class ConfigIARespuesta(BaseModel):
     claves: ClavesIARespuesta
     proveedores_permitidos: list[ProveedorPermitido]
     versiones_prompt: dict[str, str | None]
+
+
+class PruebaConexionRespuesta(BaseModel):
+    """Resultado de probar la conexión con el proveedor de IA (mensaje genérico, sin secretos)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    ok: bool
+    proveedor: str
+    modelo: str
+    latencia_ms: int | None = Field(
+        description="Tiempo de respuesta. null si no se llamó (falta la clave); "
+        "igual al límite si se agotó el tiempo."
+    )
+    mensaje: str

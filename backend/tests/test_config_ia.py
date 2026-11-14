@@ -1,15 +1,19 @@
-"""Pruebas de la configuración de IA (RF-10): GET/PUT /api/config-ia, solo admin."""
+"""Pruebas de la configuración de IA (RF-10): GET/PUT/probar /api/config-ia, solo admin."""
 
+import json
 import sys
+import time
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from app.api import deps
 from app.config import get_settings
 from app.models import Auditoria, ConfigIA, Perfil
 from app.services import config_ia as servicio
-from app.services.evaluaciones import configuracion_ia
+from app.services import evaluador_ia
+from app.services.evaluaciones import ConfigEvaluacion, configuracion_ia
 from tests.test_auth import ID_ADMIN, ID_DOCENTE, ID_ESTUDIANTE, ajustes, con_token, token_hs
 
 EST = con_token(token_hs(ID_ESTUDIANTE))
@@ -444,3 +448,366 @@ def test_put_cambia_la_config_que_usan_las_evaluaciones(cliente_api, fabrica_api
         config = configuracion_ia(s, ajustes())
     assert (config.proveedor, config.modelo) == ("openai_compat", "llama3.1:8b")
     assert config.temperatura == pytest.approx(0.2)
+
+
+# ---------- POST /api/config-ia/probar (RF-10 CA2) ----------
+
+RUTA_PROBAR = "/api/config-ia/probar"
+MSG_OK = "Conexión correcta con el proveedor de IA."
+MSG_FALLO = "No se pudo conectar con el proveedor de IA. Revisa la configuración del servidor."
+MSG_SIN_CLAVE = "Falta configurar la clave del proveedor en el servidor."
+CAMPOS_PRUEBA = {"ok", "proveedor", "modelo", "latencia_ms", "mensaje"}
+CLAVE_SB = "sb_secret_INVENTADA_789"
+
+
+class ProbadorFalso:
+    """Probador de conexión de prueba: registra llamadas y hace lo que se le indique."""
+
+    def __init__(self, error: Exception | None = None, espera: float = 0.0) -> None:
+        self.error = error
+        self.espera = espera
+        self.llamadas: list[tuple] = []
+
+    def __call__(self, config, settings, timeout: float) -> None:
+        self.llamadas.append((config.proveedor, config.modelo, config.temperatura, timeout))
+        if self.espera:
+            time.sleep(self.espera)
+        if self.error is not None:
+            raise self.error
+
+
+def usar_probador(cliente, probador, limite: float | None = None) -> None:
+    """Sustituye el probador real (y opcionalmente el límite de tiempo) por los de prueba."""
+    cliente.app.dependency_overrides[deps.obtener_probador] = lambda: probador
+    if limite is not None:
+        cliente.app.dependency_overrides[deps.obtener_limite_prueba_ia] = lambda: limite
+
+
+def probar(cliente, headers=ADM):
+    """POST /api/config-ia/probar."""
+    return cliente.post(RUTA_PROBAR, headers=headers)
+
+
+def auditorias_prueba(fabrica) -> list[Auditoria]:
+    """Filas de auditoría de pruebas de conexión."""
+    return [a for a in auditorias(fabrica) if a.accion == "probar_config_ia"]
+
+
+def texto_auditoria(fabrica) -> str:
+    """antes/despues/motivo de toda la auditoría como texto (para buscar secretos)."""
+    filas = auditorias(fabrica)
+    return json.dumps([[a.antes, a.despues, a.motivo] for a in filas], ensure_ascii=False)
+
+
+def test_probar_sin_token_401(cliente_api, fabrica_api):
+    usar_probador(cliente_api, ProbadorFalso())
+    assert_error(cliente_api.post(RUTA_PROBAR), 401)
+    assert auditorias(fabrica_api) == []
+
+
+@pytest.mark.parametrize("headers", [EST, DOC], ids=["estudiante", "docente"])
+def test_probar_no_admin_403(cliente_api, fabrica_api, headers):
+    probador = ProbadorFalso()
+    usar_probador(cliente_api, probador)
+    assert_error(probar(cliente_api, headers), 403)
+    assert probador.llamadas == [] and auditorias(fabrica_api) == []
+
+
+def test_probar_exito_200_y_audita(cliente_api, fabrica_api):
+    usar_ajustes(cliente_api, gemini_api_key=CLAVE_GEMINI)
+    probador = ProbadorFalso()
+    usar_probador(cliente_api, probador, limite=2.5)
+    r = probar(cliente_api)
+    assert r.status_code == 200, r.text
+    datos = r.json()
+    assert set(datos) == CAMPOS_PRUEBA
+    assert datos["ok"] is True and datos["mensaje"] == MSG_OK
+    assert (datos["proveedor"], datos["modelo"]) == ("gemini", "gemini-3.5-flash-lite")
+    assert isinstance(datos["latencia_ms"], int) and datos["latencia_ms"] >= 0
+    assert probador.llamadas == [("gemini", "gemini-3.5-flash-lite", 0.1, 2.5)]
+    [registro] = auditorias_prueba(fabrica_api)
+    assert registro.usuario_id == ID_ADMIN
+    assert (registro.entidad, registro.entidad_id) == ("config_ia", "1")
+    assert registro.antes is None and registro.motivo is None
+    assert registro.despues == {
+        "ok": True,
+        "proveedor": "gemini",
+        "modelo": "gemini-3.5-flash-lite",
+        "latencia_ms": datos["latencia_ms"],
+        "resultado": "ok",
+        "error": None,
+    }
+    assert CLAVE_GEMINI not in r.text and CLAVE_GEMINI not in texto_auditoria(fabrica_api)
+
+
+def test_probar_usa_la_configuracion_guardada(cliente_api, fabrica_api):
+    crear_fila(fabrica_api, modelo="gemini-2.5-flash", temperatura=0.05)
+    usar_ajustes(cliente_api, gemini_api_key=CLAVE_GEMINI)
+    probador = ProbadorFalso()
+    usar_probador(cliente_api, probador)
+    datos = probar(cliente_api).json()
+    assert datos["modelo"] == "gemini-2.5-flash"
+    assert probador.llamadas == [("gemini", "gemini-2.5-flash", 0.05, 10.0)]
+
+
+def test_probar_no_cambia_la_configuracion(cliente_api, fabrica_api):
+    crear_fila(fabrica_api)
+    usar_ajustes(cliente_api, gemini_api_key=CLAVE_GEMINI)
+    usar_probador(cliente_api, ProbadorFalso(error=RuntimeError("caído")))
+    probar(cliente_api)
+    guardada = fila(fabrica_api)
+    assert (guardada.proveedor, guardada.modelo, guardada.temperatura) == (
+        "gemini",
+        "gemini-3.5-flash-lite",
+        0.1,
+    )
+    assert [a.accion for a in auditorias(fabrica_api)] == ["probar_config_ia"]
+
+
+def test_probar_fallo_mensaje_generico_y_detalle_tachado(cliente_api, fabrica_api):
+    usar_ajustes(
+        cliente_api,
+        gemini_api_key=CLAVE_GEMINI,
+        openai_compat_api_key=CLAVE_OPENAI,
+        openai_compat_base_url=URL_PRIVADA,
+    )
+    jwt_falso = token_hs(ID_ADMIN)
+    crudo = (
+        f"Fallo con clave {CLAVE_GEMINI} y {CLAVE_OPENAI} en {URL_PRIVADA}; "
+        f"Authorization: Bearer abc.def.ghi; token {jwt_falso}; {CLAVE_SB}; "
+        "url=http://127.0.0.1:9/v1/chat?api_key=xyz987&token=tok654 key=k321"
+    )
+    usar_probador(cliente_api, ProbadorFalso(error=RuntimeError(crudo)))
+    r = probar(cliente_api)
+    assert r.status_code == 200, r.text
+    datos = r.json()
+    assert datos["ok"] is False and datos["mensaje"] == MSG_FALLO
+    assert isinstance(datos["latencia_ms"], int)
+    [registro] = auditorias_prueba(fabrica_api)
+    assert registro.despues["resultado"] == "fallo"
+    assert registro.despues["error"]["tipo"] == "RuntimeError"
+    mensaje = registro.despues["error"]["mensaje"]
+    assert mensaje.startswith("Fallo con clave ***")
+    secretos = [
+        CLAVE_GEMINI,
+        CLAVE_OPENAI,
+        URL_PRIVADA,
+        "contrasena",
+        "llm.ejemplo.com",
+        "abc.def.ghi",
+        jwt_falso,
+        jwt_falso[:20],
+        CLAVE_SB,
+        "127.0.0.1:9",
+        "xyz987",
+        "tok654",
+        "k321",
+    ]
+    for secreto in secretos:
+        assert secreto not in r.text, secreto
+        assert secreto not in texto_auditoria(fabrica_api), secreto
+
+
+def test_probar_tiempo_agotado_no_espera_al_proveedor(cliente_api, fabrica_api):
+    usar_ajustes(cliente_api, gemini_api_key=CLAVE_GEMINI)
+    usar_probador(cliente_api, ProbadorFalso(espera=1.0), limite=0.05)
+    inicio = time.monotonic()
+    r = probar(cliente_api)
+    assert time.monotonic() - inicio < 0.8
+    datos = r.json()
+    assert r.status_code == 200 and datos["ok"] is False
+    assert datos["mensaje"].startswith("El proveedor de IA no respondió a tiempo")
+    assert datos["latencia_ms"] == 50
+    [registro] = auditorias_prueba(fabrica_api)
+    assert registro.despues["resultado"] == "tiempo_agotado"
+    assert registro.despues["latencia_ms"] == 50
+    assert registro.despues["error"]["tipo"] == "TimeoutError"
+
+
+def test_probar_tiempo_agotado_mensaje_con_el_limite_real(cliente_api):
+    usar_ajustes(cliente_api, gemini_api_key=CLAVE_GEMINI)
+    usar_probador(cliente_api, ProbadorFalso(espera=0.5), limite=0.01)
+    assert probar(cliente_api).json()["mensaje"] == (
+        "El proveedor de IA no respondió a tiempo (0.01 s)."
+    )
+
+
+def test_limite_por_defecto_es_10_segundos():
+    assert deps.obtener_limite_prueba_ia() == 10.0
+    assert servicio.mensaje_tiempo_agotado(10.0) == (
+        "El proveedor de IA no respondió a tiempo (10 s)."
+    )
+
+
+def test_probar_gemini_sin_clave_no_llama(cliente_api, fabrica_api):
+    probador = ProbadorFalso()
+    usar_probador(cliente_api, probador)
+    datos = probar(cliente_api).json()
+    assert datos == {
+        "ok": False,
+        "proveedor": "gemini",
+        "modelo": "gemini-3.5-flash-lite",
+        "latencia_ms": None,
+        "mensaje": MSG_SIN_CLAVE,
+    }
+    assert probador.llamadas == []
+    [registro] = auditorias_prueba(fabrica_api)
+    assert registro.despues["resultado"] == "sin_clave"
+    assert registro.despues["latencia_ms"] is None
+
+
+def test_probar_openai_remoto_sin_clave(cliente_api, fabrica_api):
+    crear_fila(fabrica_api, proveedor="openai_compat", modelo="llama3")
+    usar_ajustes(cliente_api, openai_compat_base_url="https://api.groq.com/openai/v1")
+    probador = ProbadorFalso()
+    usar_probador(cliente_api, probador)
+    r = probar(cliente_api)
+    assert r.json()["mensaje"] == MSG_SIN_CLAVE and probador.llamadas == []
+    assert "groq" not in r.text and "groq" not in texto_auditoria(fabrica_api)
+
+
+@pytest.mark.parametrize("url", ["", "http://localhost:11434/v1", "http://127.0.0.1:9/v1"])
+def test_probar_openai_local_no_necesita_clave(cliente_api, fabrica_api, url):
+    crear_fila(fabrica_api, proveedor="openai_compat", modelo="llama3")
+    usar_ajustes(cliente_api, openai_compat_base_url=url)
+    probador = ProbadorFalso()
+    usar_probador(cliente_api, probador)
+    assert probar(cliente_api).json()["ok"] is True
+    assert len(probador.llamadas) == 1
+
+
+def test_probar_error_de_configuracion_del_proveedor_es_sin_clave(cliente_api, fabrica_api):
+    usar_ajustes(cliente_api, gemini_api_key=CLAVE_GEMINI)
+    error = evaluador_ia.ProveedorSinConfigurarError(f"Falta algo: {CLAVE_GEMINI}")
+    usar_probador(cliente_api, ProbadorFalso(error=error))
+    r = probar(cliente_api)
+    assert r.json()["mensaje"] == MSG_SIN_CLAVE and r.json()["latencia_ms"] is None
+    [registro] = auditorias_prueba(fabrica_api)
+    assert registro.despues["resultado"] == "sin_clave"
+    assert CLAVE_GEMINI not in texto_auditoria(fabrica_api)
+
+
+def test_probar_no_importa_modulos_de_ia(cliente_api, monkeypatch):
+    for nombre in [m for m in sys.modules if m == "app.ia" or m.startswith("app.ia.")]:
+        monkeypatch.delitem(sys.modules, nombre)
+    usar_ajustes(cliente_api, gemini_api_key=CLAVE_GEMINI)
+    usar_probador(cliente_api, ProbadorFalso())
+    assert probar(cliente_api).json()["ok"] is True
+    assert "app.ia.evaluador" not in sys.modules
+    assert not [m for m in sys.modules if m == "app.ia" or m.startswith("app.ia.")]
+
+
+# ---------- Tachado de secretos ----------
+
+
+@pytest.mark.parametrize(
+    ("texto", "esperado"),
+    [
+        ("ver https://u:p@host.com/x?y=1 ya", "ver *** ya"),
+        ("Authorization: Bearer abc123", "Authorization: Bearer ***"),
+        ("clave sk-abcDEF123_x fin", "clave *** fin"),
+        ("clave AIzaSyFALSA_123-x fin", "clave *** fin"),
+        (f"clave {CLAVE_SB} fin", "clave *** fin"),
+        ("jwt eyJhbGciOi.eyJzdWIi.firma fin", "jwt *** fin"),
+        ("api_key=123 key=456 token=789 KEY=000", "api_key=*** key=*** token=*** KEY=***"),
+        ("postgresql://user:pass@db:5432/x", "***"),
+        ("sin secretos", "sin secretos"),
+    ],
+)
+def test_tachar_patrones(texto, esperado):
+    assert servicio.tachar_secretos(texto, ajustes()) == esperado
+
+
+def test_tachar_valores_exactos_de_settings():
+    settings = ajustes(
+        gemini_api_key="valor-gemini-raro",
+        openai_compat_api_key="otra-clave",
+        openai_compat_base_url="mi-servidor.interno:8080",
+    )
+    texto = "valor-gemini-raro / otra-clave / mi-servidor.interno:8080"
+    assert servicio.tachar_secretos(texto, settings) == "*** / *** / ***"
+
+
+def test_tachar_recorta_el_mensaje():
+    tachado = servicio.tachar_secretos("x" * 5000, ajustes())
+    assert len(tachado) <= servicio.LIMITE_MENSAJE_ERROR
+
+
+# ---------- Probador real (sin red: el proveedor se sustituye) ----------
+
+
+class ProveedorDePrueba:
+    """Proveedor sustituto que registra las llamadas (sin red)."""
+
+    def __init__(self) -> None:
+        self.llamadas: list[str] = []
+
+    def generar_json(self, prompt, schema, imagenes=None):
+        self.llamadas.append("generar_json")
+        return schema(ok=True)
+
+
+class ProveedorConTexto(ProveedorDePrueba):
+    """Proveedor sustituto con `generar_texto` (una sola llamada, versión de rol1-ia)."""
+
+    def generar_texto(self, prompt, schema, imagenes=None):
+        self.llamadas.append("generar_texto")
+        return '{"ok": true}'
+
+
+@pytest.mark.parametrize(
+    ("clase", "metodo"),
+    [(ProveedorDePrueba, "generar_json"), (ProveedorConTexto, "generar_texto")],
+)
+def test_probador_real_hace_una_sola_llamada(monkeypatch, clase, metodo):
+    proveedor = clase()
+    recibidos = {}
+
+    def construir(config, settings, timeout=None):
+        recibidos["timeout"] = timeout
+        return proveedor
+
+    monkeypatch.setattr(evaluador_ia, "construir_proveedor", construir)
+    config = ConfigEvaluacion("gemini", "gemini-3.5-flash-lite", 0.1)
+    evaluador_ia.probar_conexion_ia(config, ajustes(), 7.0)
+    assert proveedor.llamadas == [metodo]
+    assert recibidos["timeout"] == 7.0
+
+
+def test_probador_real_traduce_error_de_configuracion(monkeypatch):
+    from app.ia.providers import ErrorConfiguracionLLM
+
+    def construir(config, settings, timeout=None):
+        raise ErrorConfiguracionLLM("Falta GEMINI_API_KEY para usar el proveedor Gemini.")
+
+    monkeypatch.setattr(evaluador_ia, "construir_proveedor", construir)
+    config = ConfigEvaluacion("gemini", "gemini-3.5-flash-lite", 0.1)
+    with pytest.raises(evaluador_ia.ProveedorSinConfigurarError):
+        evaluador_ia.probar_conexion_ia(config, ajustes(), 7.0)
+
+
+def test_obtener_probador_por_defecto_es_el_real():
+    assert deps.obtener_probador() is evaluador_ia.probar_conexion_ia
+
+
+class ModuloProveedores:
+    """Sustituto de `app.ia.providers` que registra los argumentos del constructor."""
+
+    OLLAMA_BASE_URL = "http://localhost:11434/v1"
+
+    def __init__(self) -> None:
+        self.argumentos: dict = {}
+
+    def GeminiProvider(self, **kwargs):  # noqa: N802  (imita el nombre de la clase)
+        self.argumentos = kwargs
+        return "proveedor"
+
+
+def test_construir_proveedor_timeout_opcional(monkeypatch):
+    modulo = ModuloProveedores()
+    monkeypatch.setattr(evaluador_ia, "_importar", lambda _nombre: modulo)
+    config = ConfigEvaluacion("gemini", "gemini-3.5-flash-lite", 0.1)
+    evaluador_ia.construir_proveedor(config, ajustes(gemini_api_key="x"))
+    assert "timeout" not in modulo.argumentos
+    evaluador_ia.construir_proveedor(config, ajustes(gemini_api_key="x"), timeout=10.0)
+    assert modulo.argumentos["timeout"] == 10.0

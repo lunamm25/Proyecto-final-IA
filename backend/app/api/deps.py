@@ -12,7 +12,13 @@ from app.db import SessionLocal, get_db
 from app.models import Perfil
 from app.models.tipos import ROLES
 from app.services.auth import TokenInvalidoError, validar_token
-from app.services.evaluador_ia import Evaluador, evaluar_con_ia
+from app.services.config_ia import LIMITE_PRUEBA_SEGUNDOS
+from app.services.evaluador_ia import (
+    Evaluador,
+    ProbadorConexion,
+    evaluar_con_ia,
+    probar_conexion_ia,
+)
 from app.services.informe_ia import IAInforme, IAInformeReal
 from app.services.material import CargadorMaterial, obtener_material
 
@@ -76,6 +82,16 @@ UsuarioActual = Annotated[Perfil, Depends(usuario_actual)]
 def obtener_evaluador() -> Evaluador:
     """Evaluador de IA usado por la tarea de fondo (los tests lo sustituyen)."""
     return evaluar_con_ia
+
+
+def obtener_probador() -> ProbadorConexion:
+    """Probador de conexión con el proveedor de IA (los tests lo sustituyen)."""
+    return probar_conexion_ia
+
+
+def obtener_limite_prueba_ia() -> float:
+    """Tiempo máximo total, en segundos, de la prueba de conexión (los tests lo bajan)."""
+    return LIMITE_PRUEBA_SEGUNDOS
 
 
 def obtener_cargador_material() -> CargadorMaterial:

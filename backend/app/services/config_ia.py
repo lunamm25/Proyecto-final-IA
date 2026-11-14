@@ -1,4 +1,4 @@
-"""Configuración de IA (RF-10): consulta y cambio de proveedor, modelo y temperatura.
+"""Configuración de IA (RF-10): consulta, cambio y prueba de conexión del proveedor.
 
 Nunca se devuelven ni se guardan claves ni URL: solo si están configuradas (booleanos).
 Las versiones de prompt se leen de la primera línea de cada archivo, sin importar `app.ia`.
@@ -6,6 +6,8 @@ Las versiones de prompt se leen de la primera línea de cada archivo, sin import
 
 import math
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -15,7 +17,8 @@ from sqlalchemy.orm import Session
 from app.config import Settings
 from app.models import Auditoria, ConfigIA, Perfil
 from app.services.errores import DatosInvalidosError
-from app.services.evaluaciones import TEMPERATURA_MAXIMA, configuracion_ia
+from app.services.evaluaciones import TEMPERATURA_MAXIMA, ConfigEvaluacion, configuracion_ia
+from app.services.evaluador_ia import ProbadorConexion, ProveedorSinConfigurarError
 
 # Modelos de Gemini que el admin puede elegir. Para añadir uno, agrégalo a esta tupla.
 MODELOS_GEMINI: tuple[str, ...] = ("gemini-3.5-flash-lite", "gemini-2.5-flash")
@@ -209,3 +212,153 @@ def cambiar_config(
     db.commit()
     db.refresh(fila)
     return obtener_config(db, settings)
+
+
+# ---------- Prueba de conexión (RF-10 CA2) ----------
+
+LIMITE_PRUEBA_SEGUNDOS = 10.0
+LIMITE_MENSAJE_ERROR = 500
+ACCION_PROBAR = "probar_config_ia"
+MSG_PRUEBA_OK = "Conexión correcta con el proveedor de IA."
+MSG_PRUEBA_FALLO = (
+    "No se pudo conectar con el proveedor de IA. Revisa la configuración del servidor."
+)
+MSG_PRUEBA_SIN_CLAVE = "Falta configurar la clave del proveedor en el servidor."
+MSG_PRUEBA_TIEMPO = "El proveedor de IA no respondió a tiempo ({:g} s)."
+MENSAJES_PRUEBA = {
+    "ok": MSG_PRUEBA_OK,
+    "fallo": MSG_PRUEBA_FALLO,
+    "sin_clave": MSG_PRUEBA_SIN_CLAVE,
+}
+HOSTS_LOCALES = ("localhost", "127.0.0.1")
+# Valores de Settings que nunca deben quedar escritos en auditoría si aparecen en un error.
+CAMPOS_SECRETOS = (
+    "gemini_api_key",
+    "openai_compat_api_key",
+    "openai_compat_base_url",
+    "supabase_service_key",
+    "supabase_jwt_secret",
+    "database_url",
+)
+TACHADO = "***"
+PATRONES_SECRETOS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://\S+"), TACHADO),
+    (re.compile(r"(?i)\bBearer\s+\S+"), f"Bearer {TACHADO}"),
+    (re.compile(r"\beyJ[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*"), TACHADO),
+    (re.compile(r"\bsk-[A-Za-z0-9_-]+"), TACHADO),
+    (re.compile(r"\bAIza[A-Za-z0-9_-]+"), TACHADO),
+    (re.compile(r"\bsb_secret_[A-Za-z0-9_-]+"), TACHADO),
+    (re.compile(r"(?i)\b(api_key|key|token)=[^\s&;,]+"), rf"\1={TACHADO}"),
+)
+
+
+@dataclass(frozen=True)
+class ResultadoPrueba:
+    """Resultado de probar la conexión (sin claves ni texto crudo del error)."""
+
+    ok: bool
+    proveedor: str
+    modelo: str
+    latencia_ms: int | None
+    mensaje: str
+
+
+def mensaje_tiempo_agotado(limite: float) -> str:
+    """Mensaje para el usuario cuando el proveedor no responde dentro del límite."""
+    return MSG_PRUEBA_TIEMPO.format(limite)
+
+
+def tachar_secretos(texto: str, settings: Settings) -> str:
+    """Sustituye claves, tokens y URL por *** y recorta el texto (solo para auditoría)."""
+    valores = {str(getattr(settings, campo, "") or "").strip() for campo in CAMPOS_SECRETOS}
+    for valor in sorted((v for v in valores if len(v) >= 4), key=len, reverse=True):
+        texto = texto.replace(valor, TACHADO)
+    for patron, reemplazo in PATRONES_SECRETOS:
+        texto = patron.sub(reemplazo, texto)
+    return texto[:LIMITE_MENSAJE_ERROR]
+
+
+def _falta_clave(proveedor: str, settings: Settings) -> str | None:
+    """Qué variable falta para usar el proveedor (sin revelar valores), o None."""
+    if proveedor == "gemini" and not settings.gemini_api_key.strip():
+        return "Falta GEMINI_API_KEY."
+    if proveedor == "openai_compat" and not settings.openai_compat_api_key.strip():
+        url = settings.openai_compat_base_url.strip()
+        if url and not any(host in url for host in HOSTS_LOCALES):
+            return "Falta OPENAI_COMPAT_API_KEY para una URL base remota."
+    return None
+
+
+def _milisegundos(inicio: float) -> int:
+    """Milisegundos transcurridos desde `inicio` (time.monotonic)."""
+    return round((time.monotonic() - inicio) * 1000)
+
+
+def _ejecutar_con_limite(
+    probador: ProbadorConexion, config: ConfigEvaluacion, settings: Settings, limite: float
+) -> tuple[str, int | None, Exception | None]:
+    """Llama al probador en un hilo y espera como máximo `limite` segundos en total."""
+    ejecutor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="probar-ia")
+    inicio = time.monotonic()
+    futuro = ejecutor.submit(probador, config, settings, limite)
+    try:
+        futuro.result(timeout=limite)
+    except TimeoutError as error:
+        return "tiempo_agotado", round(limite * 1000), error
+    except ProveedorSinConfigurarError as error:
+        return "sin_clave", None, error
+    except Exception as error:  # cualquier fallo del proveedor se resume como "fallo"
+        return "fallo", _milisegundos(inicio), error
+    finally:
+        ejecutor.shutdown(wait=False, cancel_futures=True)
+    return "ok", _milisegundos(inicio), None
+
+
+def _detalle_error(
+    resultado: str, error: Exception, settings: Settings, limite: float
+) -> dict[str, str]:
+    """Tipo y mensaje tachado del error, solo para auditoría."""
+    if resultado == "tiempo_agotado":
+        return {"tipo": "TimeoutError", "mensaje": f"Sin respuesta en {limite:g} s."}
+    return {"tipo": type(error).__name__, "mensaje": tachar_secretos(str(error), settings)}
+
+
+def probar_conexion(
+    db: Session,
+    actor: Perfil,
+    settings: Settings,
+    probador: ProbadorConexion,
+    limite: float = LIMITE_PRUEBA_SEGUNDOS,
+) -> ResultadoPrueba:
+    """Prueba la configuración guardada y deja el resultado en auditoría (siempre)."""
+    config = configuracion_ia(db, settings)
+    falta = _falta_clave(config.proveedor.strip().lower(), settings)
+    error: dict[str, str] | None
+    if falta is not None:
+        resultado, latencia = "sin_clave", None
+        error = {"tipo": "ClaveNoConfigurada", "mensaje": falta}
+    else:
+        resultado, latencia, excepcion = _ejecutar_con_limite(probador, config, settings, limite)
+        error = (
+            None if excepcion is None else _detalle_error(resultado, excepcion, settings, limite)
+        )
+    ok = resultado == "ok"
+    db.add(
+        Auditoria(
+            usuario_id=actor.id,
+            entidad=ENTIDAD_AUDITORIA,
+            entidad_id="1",
+            accion=ACCION_PROBAR,
+            despues={
+                "ok": ok,
+                "proveedor": config.proveedor,
+                "modelo": config.modelo,
+                "latencia_ms": latencia,
+                "resultado": resultado,
+                "error": error,
+            },
+        )
+    )
+    db.commit()
+    mensaje = MENSAJES_PRUEBA.get(resultado) or mensaje_tiempo_agotado(limite)
+    return ResultadoPrueba(ok, config.proveedor, config.modelo, latencia, mensaje)
