@@ -9,8 +9,8 @@
 | RF-05 | Evaluación inteligente | Rol 1 + 2 + 3 | En progreso (backend: lanzar en segundo plano, nota, borrador/error, consulta; falta material real de la entrega y evaluador de Rol 1 en main) | |
 | RF-06 | Verificación de código / sandbox | Rol 4 | ✅ Completado | Luna Murillo / 2026-11-13 |
 | RF-07 | Revisión docente (HITL) | Rol 2 + 3 | En progreso (backend listo: revisar, ajustar, editar retroalimentación, aprobar, publicar, listado y traza; falta frontend) | |
-| RF-08 | Informe integral | Rol 1 + 2 + 3 | Pendiente | |
-| RF-09 | Mapa mental | Rol 1 + 2 + 3 | Pendiente | |
+| RF-08 | Informe integral | Rol 1 + 2 + 3 | En progreso (backend listo: números, narrativa vía adaptador con caché; falta `app/ia/informe.py` en main y frontend) | |
+| RF-09 | Mapa mental | Rol 1 + 2 + 3 | En progreso (backend listo: grafo con niveles, evidencias y aspectos; falta mapeo de Rol 1 en main y frontend) | |
 | RF-10 | Configuración de IA | Rol 1 + 3 | Pendiente | |
 | RF-11 | Proyecto y equipo | Rol 3 | Pendiente | |
 | Deploy | URL pública + datos demo | Rol 4 |  ✅ Completado | |
@@ -50,3 +50,5 @@
 - 2026-11-14 · Mariana (Rol 2) · RF-05: `POST /api/entregas/{id}/evaluar` (202 + `procesando`, tarea de fondo con BackgroundTasks, 409 doble lanzamiento) y `GET /api/evaluaciones/{id}` (estudiante solo publicadas; 403 "pendiente de revisión docente"). Nota calculada solo por `nota.py` con la versión de rúbrica de la entrega; respuestas crudas solo en `auditoria`; adaptador perezoso al evaluador de Rol 1. Migración `0003_estado_procesando.sql` **pendiente de aplicar en Supabase**. 382 tests en verde · Siguiente paso: material real de la entrega (PDF desde Storage, resumen de código, verificación de Rol 4) con `POST /api/entregas`; esperar `app/ia/evaluador.py` en main.
 
 - 2026-11-14 · Mariana (Rol 2) · RF-07 revisión docente (HITL): `GET /api/evaluaciones` (listado paginado), `POST /{id}/revisar`, `PATCH /{id}/criterios/{criterio_id}` (motivo obligatorio, nota recalculada solo por `nota.py`), `PATCH /{id}/retroalimentacion` (conserva el original de la IA), `POST /{id}/aprobar`, `POST /{id}/publicar` y `GET /{id}/traza`. Cada acción queda en `auditoria` en la misma transacción; el lanzamiento también se registra. REQUISITOS §10 y §11 actualizados. 517 tests en verde · **Pendiente en Supabase: aplicar las migraciones 0003 (`estado procesando`) y 0004 (`retroalimentacion_docente`)** — sin ellas fallan las rutas de evaluaciones · Siguiente paso: `POST /api/entregas` con material real (PDF desde Storage).
+
+- 2026-11-14 · Mariana (Rol 2) · RF-08 y RF-09: `GET /api/estudiantes` (listado paginado, ruta nueva en §11), `GET /api/estudiantes/{id}/informe` y `GET /api/estudiantes/{id}/mapa`. Solo evaluaciones publicadas; todos los números los calcula el backend (Fraction + ROUND_HALF_UP); la IA de Rol 1 se llama mediante un adaptador perezoso y solo redacta la narrativa / el mapeo a temáticas, sin datos personales. Caché en la tabla `cache_ia` (mapeo por versión de rúbrica; narrativa por estudiante, regenerada si cambian sus números o el prompt). REQUISITOS §10 y §11 actualizados. 569 tests en verde · **Pendiente en Supabase: aplicar la migración 0005 (`cache_ia`)**, además de 0002–0004 si aún no se aplicaron · Siguiente paso: `POST /api/entregas` con material real.

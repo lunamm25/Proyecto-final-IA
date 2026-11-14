@@ -301,3 +301,153 @@ class TrazaRespuesta(BaseModel):
     rubrica_version_id: int | None
     rubrica_version: int | None
     eventos: list[EventoTrazaRespuesta]
+
+
+# ---------- Estudiantes: listado, informe (RF-08) y mapa (RF-09) ----------
+
+NivelDominio = Literal["bajo", "medio", "alto"]
+
+
+class EstudianteListado(BaseModel):
+    """Estudiante en el listado docente con sus laboratorios evaluados (publicados)."""
+
+    id: uuid.UUID
+    nombre: str | None
+    correo: str | None
+    laboratorios_evaluados: int = Field(
+        description="Laboratorios distintos con al menos una evaluación publicada."
+    )
+
+
+class ListadoEstudiantesRespuesta(BaseModel):
+    """Página del listado de estudiantes."""
+
+    items: list[EstudianteListado]
+    total: int
+    limit: int
+    offset: int
+
+
+class LaboratorioInformeRespuesta(BaseModel):
+    """Nota de un laboratorio (evaluación publicada más reciente)."""
+
+    laboratorio_id: int
+    codigo: str
+    titulo: str
+    cohorte: str
+    cohorte_numero: int
+    nota: float | None
+    evaluacion_id: int
+    publicada_en: datetime | None
+
+
+class PromedioCohorteRespuesta(BaseModel):
+    """Promedio de las notas de una cohorte (null si no tiene laboratorios evaluados)."""
+
+    cohorte: str
+    cohorte_numero: int
+    promedio: float | None
+    laboratorios_evaluados: int
+
+
+class CompetenciaInformeRespuesta(BaseModel):
+    """Dominio 0–5 de una competencia: promedio de normalizado × 5 de sus criterios."""
+
+    competencia: str
+    promedio: float | None
+    nivel_dominio: NivelDominio | None
+    criterios_evaluados: int
+
+
+class TematicaInformeRespuesta(BaseModel):
+    """Dominio 0–5 de una temática (incluye los criterios de sus subtemas)."""
+
+    tematica_id: int
+    tematica: str
+    promedio: float | None
+    nivel_dominio: NivelDominio | None
+    criterios_evaluados: int
+
+
+class EvolucionRespuesta(BaseModel):
+    """Promedio de la última cohorte − promedio de la primera (null si falta alguno)."""
+
+    cohorte_inicial: str
+    cohorte_final: str
+    promedio_inicial: float | None
+    promedio_final: float | None
+    diferencia: float | None
+
+
+class AccionPlanRespuesta(BaseModel):
+    """Acción del plan de fortalecimiento (redactada por la IA)."""
+
+    accion: str
+    recurso: str
+    prioridad: str
+    competencia: str
+
+
+class NarrativaRespuesta(BaseModel):
+    """Textos de la IA. `estado`: generada, sin_datos, no_disponible o error (con `mensaje`)."""
+
+    estado: Literal["generada", "sin_datos", "no_disponible", "error"]
+    mensaje: str | None = None
+    competencias_desarrolladas: list[str] = []
+    brechas: list[str] = []
+    plan_fortalecimiento: list[AccionPlanRespuesta] = []
+    conclusion: str | None = None
+    generada_en: datetime | None = None
+
+
+class InformeRespuesta(BaseModel):
+    """Informe integrado: los números los calcula el backend; la narrativa va aparte."""
+
+    estudiante: EstudianteResumen
+    laboratorios_evaluados: int
+    laboratorios: list[LaboratorioInformeRespuesta]
+    promedios_cohorte: list[PromedioCohorteRespuesta]
+    promedio_general: float | None
+    competencias: list[CompetenciaInformeRespuesta]
+    tematicas: list[TematicaInformeRespuesta]
+    evolucion: EvolucionRespuesta | None
+    narrativa: NarrativaRespuesta
+    avisos: list[str]
+
+
+class EvidenciaMapaRespuesta(BaseModel):
+    """Cita verificada que respalda un nodo."""
+
+    fragmento: str
+    fuente: str
+    ubicacion: str | None
+    laboratorio: str
+    criterio_id: str
+
+
+class NodoMapaRespuesta(BaseModel):
+    """Nodo del mapa: temática, subtema, concepto, competencia o laboratorio."""
+
+    id: str = Field(examples=["tematica:3", "concepto:3:perceptron", "lab:C1-01"])
+    tipo: Literal["tematica", "subtema", "concepto", "competencia", "laboratorio"]
+    etiqueta: str
+    dominio: float | None = Field(description="0–5; en laboratorios, su nota.")
+    nivel_dominio: NivelDominio | None
+    evidencias: list[EvidenciaMapaRespuesta]
+    aspectos_por_profundizar: list[str]
+    laboratorios: list[str]
+
+
+class AristaMapaRespuesta(BaseModel):
+    """Relación padre → hijo del mapa."""
+
+    origen: str
+    destino: str
+
+
+class MapaRespuesta(BaseModel):
+    """Grafo {nodos, aristas} del mapa de conocimiento y avisos para el usuario."""
+
+    nodos: list[NodoMapaRespuesta]
+    aristas: list[AristaMapaRespuesta]
+    avisos: list[str]

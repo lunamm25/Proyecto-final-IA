@@ -229,6 +229,11 @@ verificaciones_codigo(id, evaluacion_id FK, sintaxis jsonb, ruff jsonb, compleji
 auditoria(id, usuario_id, entidad, entidad_id, accion, antes jsonb, despues jsonb, motivo, creado_en)
 tematicas(id, nombre, padre_id NULL, descripcion)            -- taxonomía del mapa mental
 config_ia(id=1, proveedor, modelo, temperatura, actualizado_por, actualizado_en)
+cache_ia(id, tipo[informe_narrativo|mapeo_tematicas], clave, huella, prompt_version, proveedor, modelo,
+         contenido jsonb, generado_en)                    -- UNIQUE(tipo, clave); migración 0005
+-- cache_ia: salida ya validada de la IA para no llamar al LLM en cada GET. informe_narrativo → clave = id del
+-- estudiante; mapeo_tematicas → clave = id de la versión de rúbrica. Se regenera si cambia la huella (SHA-256
+-- de los datos enviados) o la versión del prompt. Los números del informe NO se guardan: se recalculan siempre.
 ```
 
 ## 11. Contrato de API (para trabajar en paralelo frontend/backend)
@@ -256,8 +261,9 @@ Prefijo `/api`. Autenticación: `Authorization: Bearer <JWT de Supabase>`. Error
 | PATCH | /api/evaluaciones/{id}/retroalimentacion | docente | Edita la retroalimentación general y la de cada criterio (se conserva el original de la IA); campo omitido = sin cambio, `null` = volver al texto de la IA, `""` → 422; motivo opcional; solo en borrador/en_revision |
 | POST | /api/evaluaciones/{id}/aprobar · /publicar | docente | `en_revision → aprobada` (409 si falta un nivel final o la rúbrica ya no es válida) · `aprobada → publicada`. Después de aprobada no se ajusta ni se edita |
 | GET | /api/evaluaciones/{id}/traza | docente | Trazabilidad completa: eventos en orden cronológico (fecha UTC), usuario, acción, antes/después y motivo; proveedor, modelo, temperatura, versión de prompt y de rúbrica; respuestas crudas. Se filtran claves que parezcan secretos |
-| GET | /api/estudiantes/{id}/informe | est(propio)/docente | Informe integral (JSON) |
-| GET | /api/estudiantes/{id}/mapa | est(propio)/docente | Grafo {nodos, aristas} |
+| GET | /api/estudiantes?limit=&offset= | docente | Listado paginado `{items, total, limit, offset}` de estudiantes con id, nombre, correo y `laboratorios_evaluados` (laboratorios distintos con evaluación publicada), ordenado por nombre |
+| GET | /api/estudiantes/{id}/informe | est(propio)/docente | Informe integral (JSON). Solo evaluaciones `publicada` (por laboratorio, la más reciente). Números calculados por el backend (notas por laboratorio en orden C1-01…C2-02, promedios por cohorte, general, por competencia y por temática, evolución; ROUND_HALF_UP; `promedio_general` null sin datos). `narrativa` de la IA en campo aparte con `estado`: `generada` · `sin_datos` · `no_disponible` · `error` (mensaje genérico). Incluye `avisos`. Otro estudiante → 404 |
+| GET | /api/estudiantes/{id}/mapa | est(propio)/docente | Grafo `{nodos, aristas, avisos}`: temática → subtema → concepto → laboratorio; cada nodo con dominio (0–5), nivel (bajo <3,0 · medio 3,0–3,9 · alto ≥4,0), evidencias verificadas y aspectos por profundizar. Si el mapeo de la IA no está disponible, se agrupa por competencia y se informa en `avisos`. Sin datos → `{nodos: [], aristas: []}` |
 | GET/PUT | /api/config-ia · POST /api/config-ia/probar | docente | Configuración IA |
 
 ## 12. Casos de uso principales

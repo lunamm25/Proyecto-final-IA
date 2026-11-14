@@ -13,6 +13,7 @@ from app.models import Perfil
 from app.models.tipos import ROLES
 from app.services.auth import TokenInvalidoError, validar_token
 from app.services.evaluador_ia import Evaluador, evaluar_con_ia
+from app.services.informe_ia import IAInforme, IAInformeReal
 from app.services.material import CargadorMaterial, obtener_material
 
 esquema_bearer = HTTPBearer(
@@ -85,3 +86,8 @@ def obtener_cargador_material() -> CargadorMaterial:
 def obtener_fabrica_sesiones() -> Callable[[], Session]:
     """Fábrica de sesiones propia de la tarea de fondo (no reutiliza la de la petición)."""
     return SessionLocal
+
+
+def obtener_ia_informe() -> IAInforme:
+    """IA del informe y del mapa (narrativa y mapeo de temáticas); los tests la sustituyen."""
+    return IAInformeReal()

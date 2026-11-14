@@ -8,7 +8,7 @@ que el backend arranque aunque el evaluador aún no exista en esta versión.
 import importlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol
 
 from app.config import Settings, get_settings
 from app.services.errores import DominioError
@@ -80,6 +80,19 @@ class ResultadoIA:
 Evaluador = Callable[[SolicitudEvaluacion], ResultadoIA]
 
 
+class ConfigProveedor(Protocol):
+    """Lo mínimo para crear un proveedor: nombre, modelo y temperatura."""
+
+    @property
+    def proveedor(self) -> str: ...
+
+    @property
+    def modelo(self) -> str: ...
+
+    @property
+    def temperatura(self) -> float: ...
+
+
 def _importar(nombre: str) -> Any:
     """Importa un módulo de IA o lanza EvaluadorNoDisponibleError."""
     try:
@@ -88,7 +101,7 @@ def _importar(nombre: str) -> Any:
         raise EvaluadorNoDisponibleError(MSG_NO_DISPONIBLE) from error
 
 
-def construir_proveedor(solicitud: SolicitudEvaluacion, settings: Settings) -> Any:
+def construir_proveedor(solicitud: ConfigProveedor, settings: Settings) -> Any:
     """Crea el LLMProvider de Rol 1 según proveedor, modelo y temperatura configurados."""
     providers = _importar("app.ia.providers")
     nombre = solicitud.proveedor.strip().lower()

@@ -40,6 +40,10 @@ TABLAS_Y_COLUMNAS = {
     "config_ia": {
         "id", "proveedor", "modelo", "temperatura", "actualizado_por", "actualizado_en",
     },
+    "cache_ia": {
+        "id", "tipo", "clave", "huella", "prompt_version", "proveedor", "modelo", "contenido",
+        "generado_en",
+    },
 }
 
 

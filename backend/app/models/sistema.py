@@ -1,4 +1,4 @@
-"""Modelos de sistema: auditoría de ajustes y configuración de IA."""
+"""Modelos de sistema: auditoría, configuración de IA y caché de resultados de IA."""
 
 import uuid
 from datetime import datetime
@@ -12,13 +12,14 @@ from sqlalchemy import (
     Index,
     Integer,
     Text,
+    UniqueConstraint,
     Uuid,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
-from app.models.tipos import JSONType, fecha_creacion, id_pk
+from app.models.tipos import JSONType, fecha_creacion, id_pk, lista_sql
 
 
 class Auditoria(Base):
@@ -61,3 +62,30 @@ class ConfigIA(Base):
     actualizado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+
+TIPOS_CACHE_IA = ("informe_narrativo", "mapeo_tematicas")
+
+
+class CacheIA(Base):
+    """Resultado de IA reutilizable (narrativa del informe o mapeo de temáticas) (0005).
+
+    `clave`: id del estudiante (informe) o de la versión de rúbrica (mapeo). `huella`: hash de
+    los datos de entrada; si cambia, se vuelve a generar. Las respuestas crudas van a auditoría.
+    """
+
+    __tablename__ = "cache_ia"
+    __table_args__ = (
+        UniqueConstraint("tipo", "clave", name="cache_ia_tipo_clave_key"),
+        CheckConstraint(f"tipo in ({lista_sql(TIPOS_CACHE_IA)})", name="cache_ia_tipo_check"),
+    )
+
+    id: Mapped[int] = id_pk()
+    tipo: Mapped[str] = mapped_column(Text, nullable=False)
+    clave: Mapped[str] = mapped_column(Text, nullable=False)
+    huella: Mapped[str] = mapped_column(Text, nullable=False)
+    prompt_version: Mapped[str | None] = mapped_column(Text)
+    proveedor: Mapped[str | None] = mapped_column(Text)
+    modelo: Mapped[str | None] = mapped_column(Text)
+    contenido: Mapped[Any] = mapped_column(JSONType, nullable=False)
+    generado_en: Mapped[datetime] = fecha_creacion()
