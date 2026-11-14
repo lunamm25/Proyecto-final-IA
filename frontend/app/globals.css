@@ -39,6 +39,18 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-nivel-alto: var(--nivel-alto);
+  --color-nivel-alto-texto: var(--nivel-alto-texto);
+  --color-nivel-alto-fondo: var(--nivel-alto-fondo);
+  --color-nivel-medio: var(--nivel-medio);
+  --color-nivel-medio-texto: var(--nivel-medio-texto);
+  --color-nivel-medio-fondo: var(--nivel-medio-fondo);
+  --color-nivel-bajo: var(--nivel-bajo);
+  --color-nivel-bajo-texto: var(--nivel-bajo-texto);
+  --color-nivel-bajo-fondo: var(--nivel-bajo-fondo);
+  --color-nivel-sin: var(--nivel-sin);
+  --color-nivel-sin-texto: var(--nivel-sin-texto);
+  --color-nivel-sin-fondo: var(--nivel-sin-fondo);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -81,6 +93,19 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  /* Niveles de dominio del mapa mental (RF-09): color fuerte, texto sobre él y fondo suave. */
+  --nivel-alto: oklch(0.45 0.12 150);
+  --nivel-alto-texto: oklch(1 0 0);
+  --nivel-alto-fondo: oklch(0.95 0.04 150);
+  --nivel-medio: oklch(0.47 0.1 70);
+  --nivel-medio-texto: oklch(1 0 0);
+  --nivel-medio-fondo: oklch(0.96 0.05 85);
+  --nivel-bajo: oklch(0.5 0.18 27);
+  --nivel-bajo-texto: oklch(1 0 0);
+  --nivel-bajo-fondo: oklch(0.95 0.03 27);
+  --nivel-sin: oklch(0.48 0 0);
+  --nivel-sin-texto: oklch(1 0 0);
+  --nivel-sin-fondo: oklch(0.97 0 0);
 }
 
 .dark {
@@ -115,6 +140,18 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --nivel-alto: oklch(0.78 0.14 150);
+  --nivel-alto-texto: oklch(0.2 0.03 150);
+  --nivel-alto-fondo: oklch(0.28 0.05 150);
+  --nivel-medio: oklch(0.82 0.13 85);
+  --nivel-medio-texto: oklch(0.22 0.04 85);
+  --nivel-medio-fondo: oklch(0.29 0.05 85);
+  --nivel-bajo: oklch(0.75 0.14 27);
+  --nivel-bajo-texto: oklch(0.2 0.04 27);
+  --nivel-bajo-fondo: oklch(0.29 0.06 27);
+  --nivel-sin: oklch(0.75 0 0);
+  --nivel-sin-texto: oklch(0.18 0 0);
+  --nivel-sin-fondo: oklch(0.26 0 0);
 }
 
 @layer base {
@@ -128,6 +165,18 @@
     @apply font-sans;
   }
 }
+/* Lienzo del mapa mental (React Flow) con los colores del tema. */
+.react-flow {
+  --xy-background-color: transparent;
+  --xy-edge-stroke: var(--muted-foreground);
+  --xy-minimap-background-color: var(--card);
+  --xy-minimap-mask-background-color: oklch(0.5 0 0 / 15%);
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-background-color-hover: var(--muted);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+}
+
 /* Impresión / "Guardar como PDF" (informe RF-08 CA4): A4, fondo blanco y texto negro. */
 @media print {
   @page {

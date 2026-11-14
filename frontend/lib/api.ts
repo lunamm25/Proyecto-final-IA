@@ -11,6 +11,7 @@ import {
   informeSinPublicadasMock,
   laboratoriosSinRubricaMock,
   mapaMock,
+  mapaVacioMock,
   perfilesMock,
   rubricaExtraidaMock,
   resultadoSimuladoMock,
@@ -695,8 +696,24 @@ export async function obtenerInforme(estudianteId: string): Promise<Informe> {
   return peticion<Informe>("GET", `/estudiantes/${encodeURIComponent(estudianteId)}/informe`);
 }
 
+const mapasMock: Record<string, Mapa> = {
+  [informeMock.estudiante_id]: mapaMock,
+  [informeSinPublicadasMock.estudiante_id]: mapaVacioMock,
+};
+
+/** Simula el permiso del backend: el estudiante solo ve su mapa; docente y admin, cualquiera. */
+async function mapaMockPara(estudianteId: string): Promise<Mapa> {
+  const perfil = await perfilMockActual();
+  if (perfil.rol === "estudiante" && perfil.id !== estudianteId) {
+    throw new ErrorApi(403, "Solo puedes ver tu propio mapa mental.");
+  }
+  const mapa = mapasMock[estudianteId];
+  if (!mapa) throw new ErrorApi(404, "No encontramos un estudiante con ese identificador.");
+  return simulado(() => mapa);
+}
+
 export async function obtenerMapa(estudianteId: string): Promise<Mapa> {
-  if (MODO_MOCK) return simulado(() => mapaMock);
+  if (MODO_MOCK) return mapaMockPara(estudianteId);
   return peticion<Mapa>("GET", `/estudiantes/${encodeURIComponent(estudianteId)}/mapa`);
 }
 

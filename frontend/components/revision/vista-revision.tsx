@@ -32,6 +32,24 @@ const ENLACE_BANDEJA = (
   </Link>
 );
 
+const CLASE_ENLACE_ESTUDIANTE =
+  "inline-flex h-8 items-center justify-center rounded-lg border px-3 text-sm font-medium transition-colors hover:bg-muted outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
+
+/** Enlaces al informe y al mapa mental del estudiante de la evaluación. */
+function EnlacesEstudiante({ estudianteId }: { estudianteId: string }) {
+  const id = encodeURIComponent(estudianteId);
+  return (
+    <nav aria-label="Aprendizaje del estudiante" className="mt-3 flex flex-wrap gap-2">
+      <Link href={`/informe/${id}`} className={CLASE_ENLACE_ESTUDIANTE}>
+        Ver informe
+      </Link>
+      <Link href={`/mapa/${id}`} className={CLASE_ENLACE_ESTUDIANTE}>
+        Ver mapa
+      </Link>
+    </nav>
+  );
+}
+
 interface CabeceraProps {
   evaluacion: Evaluacion;
   contexto: ContextoEvaluacion;
@@ -49,6 +67,7 @@ function Cabecera({ evaluacion, contexto, alCambiar }: CabeceraProps) {
           <h1 className="text-2xl font-bold">{contexto.laboratorio?.titulo ?? "Revisión de la evaluación"}</h1>
           <p className="mt-1 text-sm">Estudiante: <span className="font-medium">{nombre ?? evaluacion.estudiante_id}</span></p>
           <p className="text-sm text-muted-foreground">Generada el {formatearFechaHora(evaluacion.creada_en)}</p>
+          <EnlacesEstudiante estudianteId={evaluacion.estudiante_id} />
         </div>
         <div className="flex flex-col items-start gap-2 sm:items-end">
           <EtiquetaEstadoEvaluacion estado={evaluacion.estado} procesando={procesando} />

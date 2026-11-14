@@ -1,14 +1,19 @@
 import type { Metadata } from "next";
-import { PaginaProximamente } from "@/components/pagina-proximamente";
+import { Suspense } from "react";
+import { GuardaRol } from "@/components/guarda-rol";
+import { EsqueletoMapa } from "@/components/mapa/esqueleto-mapa";
+import { VistaMapaPropio } from "@/components/mapa/vista-mapa";
 
 export const metadata: Metadata = { title: "Mapa mental de competencias" };
 
 export default function PaginaMapa() {
   return (
-    <PaginaProximamente
-      titulo="Mapa mental de competencias"
-      descripcion="Explora tus competencias en IA coloreadas por nivel de dominio."
-      roles={["estudiante"]}
-    />
+    <div className="mx-auto w-full max-w-7xl px-4 py-8">
+      <Suspense fallback={<EsqueletoMapa />}>
+        <GuardaRol roles={["estudiante"]}>
+          <VistaMapaPropio />
+        </GuardaRol>
+      </Suspense>
+    </div>
   );
 }
