@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Suspense } from "react";
 import { Navegacion } from "@/components/navegacion";
 import { PiePagina } from "@/components/pie-pagina";
 import { ProveedorSesion } from "@/components/proveedor-sesion";
@@ -32,7 +33,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body className="flex min-h-full flex-col">
         <ProveedorSesion>
-          <Navegacion />
+          {/* Suspense: en rutas dinámicas usePathname solo se conoce al recibir la petición. */}
+          <Suspense fallback={<div className="h-14 border-b print:hidden" aria-hidden="true" />}>
+            <Navegacion />
+          </Suspense>
           <main className="flex flex-1 flex-col">{children}</main>
         </ProveedorSesion>
         <PiePagina />

@@ -9,6 +9,7 @@ import type {
   Mapa,
   Perfil,
   Rol,
+  Rubrica,
   RubricaVersion,
   Traza,
   Usuario,
@@ -111,9 +112,28 @@ export const cohortesMock: Cohorte[] = [
         descripcion: "Agente con herramientas para resolver tareas de varios pasos.",
         objetivos: "Implementar un agente con herramientas y documentar sus límites.",
       },
+      {
+        id: "lab-6",
+        cohorte_id: "coh-2",
+        codigo: "C2-L4",
+        titulo: "Evaluación de modelos de lenguaje",
+        descripcion: "Comparar dos LLMs con un conjunto de pruebas propio.",
+        objetivos: "Definir métricas, ejecutar pruebas reproducibles y reportar hallazgos.",
+      },
+      {
+        id: "lab-7",
+        cohorte_id: "coh-2",
+        codigo: "C2-L5",
+        titulo: "Proyecto integrador",
+        descripcion: "Aplicación completa que integra los temas del curso.",
+        objetivos: "Integrar prompts, RAG y agentes en una solución documentada.",
+      },
     ],
   },
 ];
+
+/** Laboratorios sin rúbrica vigente en el modo mock (para probar RF-02 CA2). */
+export const laboratoriosSinRubricaMock: string[] = ["lab-7"];
 
 export const rubricaVersionMock: RubricaVersion = {
   id: "rv-1",
@@ -164,6 +184,47 @@ export const rubricaVersionMock: RubricaVersion = {
       },
     ],
   },
+};
+
+/**
+ * Resultado simulado de "extraer rúbrica con IA". Tiene inconsistencias a propósito para probar el editor:
+ * las ponderaciones suman 95 %, un nivel no tiene descriptor y los puntajes del criterio c2 no están ordenados.
+ */
+export const rubricaExtraidaMock: Rubrica = {
+  titulo: "Rúbrica extraída – Laboratorio",
+  criterios: [
+    {
+      id: "c1",
+      competencia: "Programación en Python",
+      nombre: "Calidad del código",
+      ponderacion: 40,
+      niveles: [
+        { nombre: "Excelente", puntaje: 5, descriptor: "Código modular, legible y con pruebas." },
+        { nombre: "Aceptable", puntaje: 3, descriptor: "Código funcional con poca estructura." },
+        { nombre: "Insuficiente", puntaje: 1, descriptor: "" },
+      ],
+    },
+    {
+      id: "c2",
+      competencia: "Comunicación técnica",
+      nombre: "Informe del laboratorio",
+      ponderacion: 30,
+      niveles: [
+        { nombre: "Bueno", puntaje: 3, descriptor: "Informe completo con conclusiones claras." },
+        { nombre: "Excelente", puntaje: 5, descriptor: "Informe completo, con análisis y referencias." },
+      ],
+    },
+    {
+      id: "c3",
+      competencia: "Análisis de resultados",
+      nombre: "Interpretación de métricas",
+      ponderacion: 25,
+      niveles: [
+        { nombre: "Excelente", puntaje: 5, descriptor: "Interpreta las métricas y propone mejoras." },
+        { nombre: "Insuficiente", puntaje: 1, descriptor: "Reporta métricas sin interpretarlas." },
+      ],
+    },
+  ],
 };
 
 export const entregasMock: Entrega[] = [

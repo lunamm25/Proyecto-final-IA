@@ -8,12 +8,15 @@ import {
   entregasMock,
   evaluacionesMock,
   informeMock,
+  laboratoriosSinRubricaMock,
   mapaMock,
   perfilesMock,
+  rubricaExtraidaMock,
   rubricaVersionMock,
   trazaMock,
   usuariosMock,
 } from "@/lib/mocks";
+import { calcularInconsistencias } from "@/lib/inconsistencias-rubrica";
 import { leerSesionMock } from "@/lib/sesion-mock";
 import { obtenerSupabaseNavegador } from "@/lib/supabase/cliente";
 import type {
@@ -25,7 +28,6 @@ import type {
   ErrorRespuesta,
   Evaluacion,
   EstadoEvaluacion,
-  Inconsistencia,
   Informe,
   Laboratorio,
   LaboratorioEntrada,
@@ -166,10 +168,74 @@ const estadoMock = {
   evaluaciones: structuredClone(evaluacionesMock),
   usuarios: structuredClone(usuariosMock),
   config: structuredClone(configIAMock),
+  rubricas: rubricasInicialesMock(),
 };
+
+/** Versión vigente por laboratorio (en memoria); los de `laboratoriosSinRubricaMock` empiezan sin rúbrica. */
+function rubricasInicialesMock(): Record<string, RubricaVersion> {
+  const vigentes: Record<string, RubricaVersion> = {};
+  cohortesMock
+    .flatMap((cohorte) => cohorte.laboratorios)
+    .filter((lab) => !laboratoriosSinRubricaMock.includes(lab.id))
+    .forEach((lab) => {
+      vigentes[lab.id] = { ...structuredClone(rubricaVersionMock), laboratorio_id: lab.id };
+    });
+  return vigentes;
+}
 
 function noEncontrado(): ErrorApi {
   return new ErrorApi(404, MENSAJES_POR_ESTADO[404]);
+}
+
+function existeLaboratorioMock(id: string): boolean {
+  return estadoMock.cohortes.some((cohorte) => cohorte.laboratorios.some((l) => l.id === id));
+}
+
+function rubricaVigenteMock(laboratorioId: string): RubricaVersion {
+  const vigente = estadoMock.rubricas[laboratorioId];
+  if (!existeLaboratorioMock(laboratorioId) || !vigente) {
+    throw new ErrorApi(404, "Este laboratorio aún no tiene una rúbrica vigente.");
+  }
+  return vigente;
+}
+
+function guardarVersionMock(laboratorioId: string, rubrica: Rubrica): RubricaVersion {
+  if (!existeLaboratorioMock(laboratorioId)) throw noEncontrado();
+  if (!validarRubricaMock(rubrica).valida) {
+    throw new ErrorApi(422, "La rúbrica tiene inconsistencias y no se puede aprobar.");
+  }
+  const anterior = estadoMock.rubricas[laboratorioId];
+  const nueva: RubricaVersion = {
+    id: `rv-${Date.now()}`,
+    rubrica_id: anterior?.rubrica_id ?? `rub-${laboratorioId}`,
+    laboratorio_id: laboratorioId,
+    version: (anterior?.version ?? 0) + 1,
+    contenido: structuredClone(rubrica),
+    estado: "aprobada",
+    creada_por: perfilesMock.docente.id,
+    creada_en: new Date().toISOString(),
+  };
+  estadoMock.rubricas[laboratorioId] = nueva;
+  return nueva;
+}
+
+function validarCodigoUnicoMock(datos: LaboratorioEntrada, idActual: string | null): void {
+  const cohorte = estadoMock.cohortes.find((c) => c.id === datos.cohorte_id);
+  if (!cohorte) throw noEncontrado();
+  const codigo = datos.codigo.trim().toLowerCase();
+  if (cohorte.laboratorios.some((l) => l.id !== idActual && l.codigo.trim().toLowerCase() === codigo)) {
+    throw new ErrorApi(409, `Ya existe un laboratorio con el código ${datos.codigo} en esta cohorte.`);
+  }
+}
+
+/** Validación aproximada de POST /api/entregas solo para el modo mock; la oficial la hace el backend. */
+function validarEntregaMock(datos: NuevaEntrega): void {
+  if (!datos.pdf.name.toLowerCase().endsWith(".pdf")) {
+    throw new ErrorApi(422, "El informe debe ser un archivo PDF.");
+  }
+  if (Boolean(datos.zip) === Boolean(datos.github_url)) {
+    throw new ErrorApi(422, "Debes enviar el código como ZIP o como URL de GitHub (solo una de las dos).");
+  }
 }
 
 function buscarEvaluacionMock(id: string): Evaluacion {
@@ -187,42 +253,9 @@ function cambiarEstadoMock(id: string, estado: EstadoEvaluacion): Evaluacion {
   return evaluacion;
 }
 
-/** Validación aproximada solo para el modo mock; la validación oficial la hace el backend. */
+/** Validación del modo mock con la misma lógica del editor; la validación oficial la hace el backend. */
 function validarRubricaMock(rubrica: Rubrica): ResultadoValidacion {
-  const inconsistencias: Inconsistencia[] = [];
-  const suma = rubrica.criterios.reduce((total, c) => total + c.ponderacion, 0);
-  if (Math.abs(suma - 100) > 0.01) {
-    inconsistencias.push({
-      tipo: "ponderaciones_no_suman_100",
-      mensaje: `Las ponderaciones suman ${suma} % y deben sumar 100 %.`,
-      criterio_id: null,
-    });
-  }
-  rubrica.criterios.forEach((criterio) => {
-    if (criterio.competencia.trim() === "") {
-      inconsistencias.push({
-        tipo: "competencia_vacia",
-        mensaje: `El criterio "${criterio.nombre}" no tiene competencia.`,
-        criterio_id: criterio.id,
-      });
-    }
-    if (criterio.niveles.length === 0) {
-      inconsistencias.push({
-        tipo: "criterio_sin_niveles",
-        mensaje: `El criterio "${criterio.nombre}" no tiene niveles.`,
-        criterio_id: criterio.id,
-      });
-    }
-    criterio.niveles.forEach((nivel) => {
-      if (nivel.descriptor.trim() === "") {
-        inconsistencias.push({
-          tipo: "nivel_sin_descriptor",
-          mensaje: `El nivel "${nivel.nombre}" del criterio "${criterio.nombre}" no tiene descriptor.`,
-          criterio_id: criterio.id,
-        });
-      }
-    });
-  });
+  const inconsistencias = calcularInconsistencias(rubrica);
   return { valida: inconsistencias.length === 0, inconsistencias };
 }
 
@@ -264,30 +297,31 @@ export async function listarCohortes(): Promise<Cohorte[]> {
 export async function crearLaboratorio(datos: LaboratorioEntrada): Promise<Laboratorio> {
   if (MODO_MOCK) {
     return simulado(() => {
-      const cohorte = estadoMock.cohortes.find((c) => c.id === datos.cohorte_id);
-      if (!cohorte) throw noEncontrado();
+      validarCodigoUnicoMock(datos, null);
       const laboratorio: Laboratorio = { ...datos, id: `lab-${Date.now()}` };
-      cohorte.laboratorios.push(laboratorio);
+      estadoMock.cohortes.find((c) => c.id === datos.cohorte_id)?.laboratorios.push(laboratorio);
       return laboratorio;
     });
   }
   return peticion<Laboratorio>("POST", "/laboratorios", datos);
 }
 
+/** En modo mock, si cambia la cohorte el laboratorio se mueve a la nueva cohorte. */
+function actualizarLaboratorioMock(id: string, datos: LaboratorioEntrada): Laboratorio {
+  if (!existeLaboratorioMock(id)) throw noEncontrado();
+  validarCodigoUnicoMock(datos, id);
+  const laboratorio: Laboratorio = { ...datos, id };
+  estadoMock.cohortes.forEach((cohorte) => {
+    cohorte.laboratorios = cohorte.laboratorios.filter((l) => l.id !== id || cohorte.id === datos.cohorte_id);
+    const indice = cohorte.laboratorios.findIndex((l) => l.id === id);
+    if (indice >= 0) cohorte.laboratorios[indice] = laboratorio;
+    else if (cohorte.id === datos.cohorte_id) cohorte.laboratorios.push(laboratorio);
+  });
+  return laboratorio;
+}
+
 export async function actualizarLaboratorio(id: string, datos: LaboratorioEntrada): Promise<Laboratorio> {
-  if (MODO_MOCK) {
-    return simulado(() => {
-      for (const cohorte of estadoMock.cohortes) {
-        const indice = cohorte.laboratorios.findIndex((l) => l.id === id);
-        if (indice >= 0) {
-          const laboratorio: Laboratorio = { ...datos, id };
-          cohorte.laboratorios[indice] = laboratorio;
-          return laboratorio;
-        }
-      }
-      throw noEncontrado();
-    });
-  }
+  if (MODO_MOCK) return simulado(() => actualizarLaboratorioMock(id, datos));
   return peticion<Laboratorio>("PUT", `/laboratorios/${encodeURIComponent(id)}`, datos);
 }
 
@@ -307,14 +341,27 @@ export async function eliminarLaboratorio(id: string): Promise<void> {
 // ---------- Rúbricas ----------
 
 export async function obtenerRubricaVigente(laboratorioId: string): Promise<RubricaVersion> {
-  if (MODO_MOCK) return simulado(() => ({ ...rubricaVersionMock, laboratorio_id: laboratorioId }));
+  if (MODO_MOCK) return simulado(() => rubricaVigenteMock(laboratorioId));
   return peticion<RubricaVersion>("GET", `/laboratorios/${encodeURIComponent(laboratorioId)}/rubrica`);
+}
+
+/** Igual que obtenerRubricaVigente, pero devuelve null si el laboratorio no tiene versión vigente (404). */
+export async function obtenerRubricaVigenteONula(laboratorioId: string): Promise<RubricaVersion | null> {
+  try {
+    const rubrica = await obtenerRubricaVigente(laboratorioId);
+    return rubrica.estado === "aprobada" ? rubrica : null;
+  } catch (causa) {
+    if (causa instanceof ErrorApi && causa.status === 404) return null;
+    throw causa;
+  }
 }
 
 export async function extraerRubrica(laboratorioId: string, archivo: File): Promise<ResultadoExtraccion> {
   if (MODO_MOCK) {
+    await esperar(1200);
     return simulado(() => {
-      const rubrica = rubricaVersionMock.contenido;
+      if (!existeLaboratorioMock(laboratorioId)) throw noEncontrado();
+      const rubrica = { ...rubricaExtraidaMock, titulo: `Rúbrica extraída de ${archivo.name}` };
       return { rubrica, inconsistencias: validarRubricaMock(rubrica).inconsistencias };
     });
   }
@@ -333,22 +380,7 @@ export async function validarRubrica(rubrica: Rubrica): Promise<ResultadoValidac
 }
 
 export async function guardarVersionRubrica(laboratorioId: string, rubrica: Rubrica): Promise<RubricaVersion> {
-  if (MODO_MOCK) {
-    return simulado(() => {
-      const validacion = validarRubricaMock(rubrica);
-      if (!validacion.valida) {
-        throw new ErrorApi(422, "La rúbrica tiene inconsistencias y no se puede aprobar.");
-      }
-      return {
-        ...rubricaVersionMock,
-        id: `rv-${Date.now()}`,
-        laboratorio_id: laboratorioId,
-        version: rubricaVersionMock.version + 1,
-        contenido: rubrica,
-        creada_en: new Date().toISOString(),
-      };
-    });
-  }
+  if (MODO_MOCK) return simulado(() => guardarVersionMock(laboratorioId, rubrica));
   return peticion<RubricaVersion>(
     "POST",
     `/laboratorios/${encodeURIComponent(laboratorioId)}/rubrica/versiones`,
@@ -371,11 +403,12 @@ export async function listarEntregas(estudianteId?: string): Promise<Entrega[]> 
 export async function crearEntrega(datos: NuevaEntrega): Promise<Entrega> {
   if (MODO_MOCK) {
     return simulado(() => {
+      validarEntregaMock(datos);
       const entrega: Entrega = {
         id: `ent-${Date.now()}`,
         estudiante_id: perfilesMock.estudiante.id,
         laboratorio_id: datos.laboratorio_id,
-        rubrica_version_id: rubricaVersionMock.id,
+        rubrica_version_id: rubricaVigenteMock(datos.laboratorio_id).id,
         pdf_path: datos.pdf.name,
         codigo_zip_path: datos.zip?.name ?? null,
         github_url: datos.github_url ?? null,
@@ -397,7 +430,18 @@ export async function crearEntrega(datos: NuevaEntrega): Promise<Entrega> {
 }
 
 export async function evaluarEntrega(entregaId: string): Promise<RespuestaEvaluar> {
-  if (MODO_MOCK) return simulado(() => ({ evaluacion_id: "eva-2", estado: "borrador" as const }));
+  if (MODO_MOCK) {
+    return simulado(() => {
+      const entrega = estadoMock.entregas.find((e) => e.id === entregaId);
+      if (!entrega) throw noEncontrado();
+      if (entrega.evaluacion && entrega.evaluacion.estado !== "error") {
+        throw new ErrorApi(409, "Esta entrega ya fue enviada a evaluación.");
+      }
+      const respuesta: RespuestaEvaluar = { evaluacion_id: `eva-${Date.now()}`, estado: "borrador" };
+      entrega.evaluacion = { id: respuesta.evaluacion_id, estado: respuesta.estado, nota: null };
+      return respuesta;
+    });
+  }
   return peticion<RespuestaEvaluar>("POST", `/entregas/${encodeURIComponent(entregaId)}/evaluar`);
 }
 
