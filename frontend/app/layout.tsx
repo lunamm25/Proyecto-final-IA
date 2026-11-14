@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Navegacion } from "@/components/navegacion";
 import { PiePagina } from "@/components/pie-pagina";
+import { ProveedorSesion } from "@/components/proveedor-sesion";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -30,8 +31,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
-        <Navegacion rol={null} />
-        <main className="flex flex-1 flex-col">{children}</main>
+        <ProveedorSesion>
+          <Navegacion />
+          <main className="flex flex-1 flex-col">{children}</main>
+        </ProveedorSesion>
         <PiePagina />
       </body>
     </html>

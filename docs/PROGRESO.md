@@ -12,7 +12,7 @@
 | RF-08 | Informe integral | Rol 1 + 2 + 3 | Pendiente | |
 | RF-09 | Mapa mental | Rol 1 + 2 + 3 | Pendiente | |
 | RF-10 | Configuración de IA | Rol 1 + 3 | Pendiente | |
-| RF-11 | Proyecto y equipo | Rol 3 | Hecho (faltan fotos reales) | Daniela (Rol 3) · 2026-11-13 |
+| RF-11 | Proyecto y equipo | Rol 3 | Hecho | Daniela (Rol 3) · 2026-11-13 |
 | Deploy | URL pública + datos demo | Rol 4 | Pendiente | |
 
 ## Bitácora de sesiones

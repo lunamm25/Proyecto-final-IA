@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { GraduationCap, Menu, X } from "lucide-react";
+import { GraduationCap, LogOut, Menu, X } from "lucide-react";
+import { useSesion } from "@/components/proveedor-sesion";
 import { cn } from "@/lib/utils";
 import type { Rol } from "@/lib/tipos";
 
@@ -22,6 +23,7 @@ function enlacesPorRol(rol: Rol | null): EnlaceNav[] {
   }
   if (rol === "docente" || rol === "admin") {
     const enlaces: EnlaceNav[] = [
+      { href: "/docente", etiqueta: "Panel" },
       { href: "/docente/laboratorios", etiqueta: "Laboratorios y rúbricas" },
       { href: "/docente/revision", etiqueta: "Evaluaciones" },
       { href: "/docente/config-ia", etiqueta: "Configuración IA" },
@@ -37,18 +39,24 @@ function enlacesPorRol(rol: Rol | null): EnlaceNav[] {
 }
 
 function estaActivo(pathname: string, href: string): boolean {
-  if (href === "/") return pathname === "/";
+  if (href === "/" || href === "/docente") return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-interface NavegacionProps {
-  rol: Rol | null;
-}
-
-export function Navegacion({ rol }: NavegacionProps) {
+export function Navegacion() {
   const pathname = usePathname();
+  const router = useRouter();
   const [abierto, setAbierto] = useState(false);
-  const enlaces = enlacesPorRol(rol);
+  const { estado, perfil, cerrarSesion } = useSesion();
+  const enlaces = estado === "cargando" ? [] : enlacesPorRol(perfil?.rol ?? null);
+  const conSesion = estado === "autenticado" || estado === "error";
+
+  const salir = async () => {
+    setAbierto(false);
+    await cerrarSesion();
+    router.push("/login");
+    router.refresh();
+  };
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur print:hidden">
@@ -76,6 +84,19 @@ export function Navegacion({ rol }: NavegacionProps) {
               </Link>
             </li>
           ))}
+          {conSesion && (
+            <li>
+              <button
+                type="button"
+                onClick={salir}
+                title={perfil ? `${perfil.nombre} (${perfil.rol})` : undefined}
+                className="ml-2 inline-flex items-center gap-1 rounded-md border px-3 py-2 text-sm hover:bg-muted"
+              >
+                <LogOut className="size-4" aria-hidden="true" />
+                Cerrar sesión
+              </button>
+            </li>
+          )}
         </ul>
 
         <button
@@ -107,6 +128,18 @@ export function Navegacion({ rol }: NavegacionProps) {
               </Link>
             </li>
           ))}
+          {conSesion && (
+            <li>
+              <button
+                type="button"
+                onClick={salir}
+                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <LogOut className="size-4" aria-hidden="true" />
+                Cerrar sesión
+              </button>
+            </li>
+          )}
         </ul>
       )}
     </header>
