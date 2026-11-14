@@ -36,10 +36,18 @@ def _limitar_temperatura(temperatura: float) -> float:
     return max(0.0, min(float(temperatura), TEMPERATURA_MAXIMA))
 
 
+def _validar_max_retries(max_retries: int) -> int:
+    """Valida los reintentos: negativo es error y más de MAX_REINTENTOS se recorta."""
+    if max_retries < 0:
+        raise ErrorConfiguracionLLM("max_retries no puede ser negativo.")
+    return min(int(max_retries), MAX_REINTENTOS)
+
+
 class LLMProvider(ABC):
     """Interfaz común: genera JSON validado contra un esquema Pydantic."""
 
     nombre: str = "base"
+    max_retries: int = MAX_REINTENTOS
 
     def __init__(self, modelo: str, temperatura: float = 0.1) -> None:
         """Guarda modelo y temperatura (limitada a 0.2)."""
@@ -65,7 +73,7 @@ class LLMProvider(ABC):
         """Llama al modelo, valida con el esquema y reintenta hasta 2 veces si falla."""
         prompt_actual = prompt
         ultimo_error = ""
-        for _ in range(MAX_REINTENTOS + 1):
+        for _ in range(self.max_retries + 1):
             crudo = self._llamar(prompt_actual, schema, imagenes)
             self.ultima_respuesta_cruda = crudo
             try:
@@ -78,7 +86,7 @@ class LLMProvider(ABC):
                     "Corrige la respuesta y devuelve SOLO el JSON válido, sin texto adicional."
                 )
         raise ErrorRespuestaLLM(
-            f"El modelo no devolvió un JSON válido tras {MAX_REINTENTOS + 1} intentos. "
+            f"El modelo no devolvió un JSON válido tras {self.max_retries + 1} intentos. "
             f"Último error: {ultimo_error}"
         )
 
@@ -94,9 +102,11 @@ class GeminiProvider(LLMProvider):
         modelo: str = "gemini-3.5-flash-lite",
         temperatura: float = 0.1,
         timeout: float = TIMEOUT_SEGUNDOS,
+        max_retries: int = MAX_REINTENTOS,
     ) -> None:
-        """Crea el cliente de Gemini con timeout."""
+        """Crea el cliente de Gemini con timeout y reintentos (0 a 2)."""
         super().__init__(modelo, temperatura)
+        self.max_retries = _validar_max_retries(max_retries)
         if not api_key:
             raise ErrorConfiguracionLLM("Falta GEMINI_API_KEY para usar el proveedor Gemini.")
         try:
@@ -146,9 +156,11 @@ class OpenAICompatProvider(LLMProvider):
         modelo: str,
         temperatura: float = 0.1,
         timeout: float = TIMEOUT_SEGUNDOS,
+        max_retries: int = MAX_REINTENTOS,
     ) -> None:
-        """Crea el cliente OpenAI apuntando a la base_url indicada."""
+        """Crea el cliente OpenAI apuntando a la base_url indicada, con reintentos (0 a 2)."""
         super().__init__(modelo, temperatura)
+        self.max_retries = _validar_max_retries(max_retries)
         try:
             from openai import OpenAI
         except ImportError as error:
