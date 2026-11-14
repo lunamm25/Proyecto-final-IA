@@ -4,6 +4,7 @@ import "@xyflow/react/dist/style.css";
 import { useEffect, type RefObject } from "react";
 import { Background, Controls, MiniMap, ReactFlow, useReactFlow, type Edge, type NodeMouseHandler, type OnNodesChange } from "@xyflow/react";
 import { ESTILO_NIVEL } from "@/components/mapa/estilos-mapa";
+import { nivelDe } from "@/components/mapa/grafo-mapa";
 import type { NodoFlujo } from "@/components/mapa/flujo-mapa";
 import { TIPOS_NODO } from "@/components/mapa/nodo-mapa";
 
@@ -32,7 +33,7 @@ interface PropsLienzo {
 }
 
 function colorMiniMapa(nodo: NodoFlujo): string {
-  return ESTILO_NIVEL[nodo.data.nodo.nivel].colorMini;
+  return ESTILO_NIVEL[nivelDe(nodo.data.nodo)].colorMini;
 }
 
 /** Lienzo de React Flow: zoom, desplazamiento, arrastre de nodos, controles y minimapa (oculto en móvil). */

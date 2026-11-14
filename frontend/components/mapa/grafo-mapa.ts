@@ -2,11 +2,23 @@
 // Solo transforman para presentar: no crean nodos, niveles, evidencias ni relaciones.
 import type { AristaMapa, Mapa, NivelDominio, NodoMapa, TipoNodo } from "@/lib/tipos";
 
+/** Nivel para presentar: el backend envía `nivel_dominio` null cuando no hay datos; aquí se llama "sin_dato". */
+export type NivelMapa = NivelDominio | "sin_dato";
+
+export function nivelDe(nodo: Pick<NodoMapa, "nivel_dominio">): NivelMapa {
+  return nodo.nivel_dominio ?? "sin_dato";
+}
+
+/** Clave estable de una arista (el backend no les da id). */
+export function claveArista(arista: AristaMapa): string {
+  return `${arista.origen}->${arista.destino}`;
+}
+
 export interface Jerarquia {
   /** Nodos en el orden recibido (sin ids repetidos). */
   nodos: NodoMapa[];
   porId: Map<string, NodoMapa>;
-  /** Hijos por id según `padre_id` (solo padres que existen). */
+  /** Hijos por id: el primer origen de una arista que llega a un nodo es su padre (no hay padre_id). */
   hijos: Map<string, string[]>;
   padreDe: Map<string, string>;
   raices: string[];
@@ -21,13 +33,19 @@ export interface Posicion {
 
 export interface Filtro {
   consulta: string;
-  niveles: ReadonlySet<NivelDominio>;
+  niveles: ReadonlySet<NivelMapa>;
 }
 
-export const NIVELES: NivelDominio[] = ["alto", "medio", "bajo", "sin_evidencia"];
+export const NIVELES: NivelMapa[] = ["alto", "medio", "bajo", "sin_dato"];
 
 /** Ancho fijo por tipo de nodo (px): permite un layout estable y centrar sin medir el DOM. */
-export const ANCHO_NODO: Record<TipoNodo, number> = { tematica: 240, concepto: 210, laboratorio: 200 };
+export const ANCHO_NODO: Record<TipoNodo, number> = {
+  tematica: 240,
+  subtema: 220,
+  competencia: 210,
+  concepto: 210,
+  laboratorio: 200,
+};
 export const ALTO_APROXIMADO_NODO = 64;
 
 const SEPARACION_COLUMNAS = 300;
@@ -45,9 +63,10 @@ function nodosUnicos(nodos: NodoMapa[]): Map<string, NodoMapa> {
 function aristasValidas(aristas: AristaMapa[], porId: Map<string, NodoMapa>): AristaMapa[] {
   const vistas = new Set<string>();
   return aristas.filter((arista) => {
+    const clave = claveArista(arista);
     const valida =
-      porId.has(arista.origen) && porId.has(arista.destino) && arista.origen !== arista.destino && !vistas.has(arista.id);
-    vistas.add(arista.id);
+      porId.has(arista.origen) && porId.has(arista.destino) && arista.origen !== arista.destino && !vistas.has(clave);
+    vistas.add(clave);
     return valida;
   });
 }
@@ -56,7 +75,7 @@ function agregarHijo(hijos: Map<string, string[]>, padre: string, hijo: string):
   hijos.set(padre, [...(hijos.get(padre) ?? []), hijo]);
 }
 
-/** Recorre desde `id` marcando visitados (sirve para detectar ciclos en `padre_id`). */
+/** Recorre desde `id` marcando visitados (sirve para detectar ciclos en las aristas). */
 function marcarAlcanzables(id: string, hijos: Map<string, string[]>, visitados: Set<string>): void {
   const pila = [id];
   while (pila.length > 0) {
@@ -67,7 +86,7 @@ function marcarAlcanzables(id: string, hijos: Map<string, string[]>, visitados: 
   }
 }
 
-/** Rompe ciclos de `padre_id`: el primer nodo inalcanzable de cada ciclo pasa a ser raíz. */
+/** Rompe ciclos: el primer nodo inalcanzable de cada ciclo pasa a ser raíz. */
 function romperCiclos(j: Jerarquia): void {
   const visitados = new Set<string>();
   j.raices.forEach((raiz) => marcarAlcanzables(raiz, j.hijos, visitados));
@@ -81,7 +100,10 @@ function romperCiclos(j: Jerarquia): void {
   });
 }
 
-/** Organiza los nodos del backend en árbol usando `padre_id` e ignora aristas inválidas. */
+/**
+ * Organiza los nodos del backend en árbol a partir de las aristas (en el orden recibido): la primera arista que
+ * llega a un nodo define su padre; las demás son relaciones transversales. Ignora aristas inválidas.
+ */
 export function construirJerarquia(mapa: Mapa): Jerarquia {
   const porId = nodosUnicos(mapa.nodos);
   const j: Jerarquia = {
@@ -92,14 +114,13 @@ export function construirJerarquia(mapa: Mapa): Jerarquia {
     raices: [],
     aristas: aristasValidas(mapa.aristas, porId),
   };
+  j.aristas.forEach(({ origen, destino }) => {
+    if (j.padreDe.has(destino)) return;
+    j.padreDe.set(destino, origen);
+    agregarHijo(j.hijos, origen, destino);
+  });
   j.nodos.forEach((nodo) => {
-    const padre = nodo.padre_id;
-    if (padre !== null && padre !== nodo.id && porId.has(padre)) {
-      j.padreDe.set(nodo.id, padre);
-      agregarHijo(j.hijos, padre, nodo.id);
-    } else {
-      j.raices.push(nodo.id);
-    }
+    if (!j.padreDe.has(nodo.id)) j.raices.push(nodo.id);
   });
   romperCiclos(j);
   return j;
@@ -181,7 +202,7 @@ export function filtroActivo(filtro: Filtro): boolean {
 
 export function coincide(nodo: NodoMapa, filtro: Filtro): boolean {
   const consulta = normalizarTexto(filtro.consulta);
-  return filtro.niveles.has(nodo.nivel) && (consulta === "" || normalizarTexto(nodo.etiqueta).includes(consulta));
+  return filtro.niveles.has(nivelDe(nodo)) && (consulta === "" || normalizarTexto(nodo.etiqueta).includes(consulta));
 }
 
 /** Ids que cumplen búsqueda y filtro, en orden de profundidad. */

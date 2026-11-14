@@ -1,21 +1,27 @@
 // Datos simulados con la misma forma del contrato §11. Las notas son valores fijos:
 // el frontend nunca calcula la nota (la calcula el backend).
 import type {
+  Cita,
   Cohorte,
   ConfigIA,
   Entrega,
   Evaluacion,
+  EvaluacionCriterio,
+  EvidenciaMapa,
   Informe,
   Laboratorio,
   Mapa,
+  NivelDominio,
   NodoMapa,
   Perfil,
+  Retroalimentacion,
+  RetroalimentacionCriterioIA,
   Rol,
   Rubrica,
   RubricaVersion,
+  TipoNodo,
   Traza,
   Usuario,
-  VerificacionCodigo,
 } from "@/lib/tipos";
 
 const FECHA = "2026-11-10T15:00:00Z";
@@ -46,6 +52,15 @@ export const usuariosMock: Usuario[] = [
   { id: "doc-1", nombre: "Carlos Docente", correo: "docente@demo.edu.co", rol: "docente" },
   { id: "adm-1", nombre: "Admin Demo", correo: "admin@demo.edu.co", rol: "admin" },
   { id: "est-2", nombre: "Juan Pérez", correo: "juan.perez@demo.edu.co", rol: "estudiante" },
+  { id: "est-3", nombre: "María Gómez", correo: "maria.gomez@demo.edu.co", rol: "estudiante" },
+  ...["Andrés", "Camila", "Diego", "Elena", "Felipe", "Gabriela", "Hugo", "Isabel", "Julián", "Karen", "Luis", "Natalia"].map(
+    (nombre, i): Usuario => ({
+      id: `est-${i + 4}`,
+      nombre: `${nombre} Prueba`,
+      correo: `${nombre.toLowerCase()}.prueba@demo.edu.co`,
+      rol: "estudiante",
+    }),
+  ),
 ];
 
 /**
@@ -307,138 +322,113 @@ export const entregasMock: Entrega[] = [
   },
 ];
 
-const verificacionMock: VerificacionCodigo = {
-  sintaxis: [
-    { archivo: "main.py", valido: true, error: null },
-    { archivo: "prompts.py", valido: true, error: null },
-  ],
-  ruff: { errores: 1, advertencias: 3, mensajes: ["prompts.py:12: F401 'os' importado y no usado"] },
-  complejidad: { promedio: 2.4, maxima: 6, rango: "A" },
-  tests: { ejecutados: true, aprobados: 4, fallidos: 1, detalle: "test_formato_json falló" },
-  metricas: {
-    archivos: 6,
-    lineas: 312,
-    tiene_readme: true,
-    tiene_requirements: true,
-    tiene_tests: true,
-    lenguajes: ["Python"],
-  },
-  sandbox: "subprocess",
-  limitaciones: ["Sin aislamiento de red completo en este entorno."],
-};
+/** Cita del mock con la forma de CitaRespuesta (la similitud la calcula el backend). */
+function cita(fragmento: string, fuente: string, ubicacion: string, verificada: boolean): Cita {
+  return { fragmento, fuente, ubicacion, verificada, similitud: verificada ? 93 : 41 };
+}
 
-export const evaluacionPublicadaMock: Evaluacion = {
-  id: 1,
-  entrega_id: 3,
-  estudiante_id: "est-1",
-  laboratorio_id: 3,
-  estado: "publicada",
-  nota: 4.2,
-  proveedor: "gemini",
-  modelo: "gemini-2.0-flash",
-  prompt_version: "evaluacion-v1",
-  temperatura: 0.1,
-  rubrica_version: 1,
-  criterios: [
-    {
-      criterio_id: "c1",
-      nombre: "Diseño de prompts",
-      competencia: "Ingeniería de prompts",
-      ponderacion: 40,
-      nivel_ia: "Excelente",
-      nivel_final: "Excelente",
-      evidencias: [
-        {
-          fragmento: "Se definió un rol de experto y un formato JSON de salida con dos ejemplos.",
-          fuente: "informe",
-          ubicacion: "página 3",
-          verificada: true,
-        },
-        {
-          fragmento: "SYSTEM_PROMPT = \"Eres un asistente experto en...\"",
-          fuente: "codigo",
-          ubicacion: "prompts.py:5",
-          verificada: true,
-        },
-      ],
-      justificacion: "Los prompts incluyen rol, contexto, formato y ejemplos, como pide el nivel Excelente.",
-      fortalezas: ["Uso de ejemplos few-shot", "Formato de salida explícito"],
-      debilidades: ["No se versionan los prompts"],
-      recomendacion: "Guardar los prompts en archivos con versión para comparar resultados.",
-      ajuste_docente: null,
-    },
-    {
-      criterio_id: "c2",
-      nombre: "Salidas estructuradas y validación",
-      competencia: "LLMs",
-      ponderacion: 35,
-      nivel_ia: "Excelente",
-      nivel_final: "Bueno",
-      evidencias: [
-        {
-          fragmento: "La respuesta se valida con un modelo Pydantic antes de guardarla.",
-          fuente: "informe",
-          ubicacion: "página 4",
-          verificada: true,
-        },
-        {
-          fragmento: "Se implementaron reintentos automáticos con backoff exponencial.",
-          fuente: "informe",
-          ubicacion: "página 5",
-          verificada: false,
-        },
-      ],
-      justificacion: "Valida la mayoría de las salidas, pero un test de formato falla.",
-      fortalezas: ["Validación con Pydantic"],
-      debilidades: ["No maneja todos los errores de formato"],
-      recomendacion: "Agregar manejo de errores cuando la salida no cumple el esquema.",
-      ajuste_docente: "La evidencia de reintentos no aparece en el material y un test falla.",
-    },
-    {
-      criterio_id: "c3",
-      nombre: "Análisis crítico de resultados",
-      competencia: "Ética y verificación",
-      ponderacion: 25,
-      nivel_ia: "Bueno",
-      nivel_final: "Bueno",
-      evidencias: [
-        {
-          fragmento: "El modelo inventó una referencia bibliográfica en la prueba 3.",
-          fuente: "informe",
-          ubicacion: "página 6",
-          verificada: true,
-        },
-      ],
-      justificacion: "Identifica una alucinación con un ejemplo concreto, sin profundizar en sesgos.",
-      fortalezas: ["Detecta alucinaciones"],
-      debilidades: ["No analiza sesgos"],
-      recomendacion: "Incluir un análisis de sesgos con al menos dos casos.",
-      ajuste_docente: null,
-    },
-  ],
+const criteriosPublicadaMock: EvaluacionCriterio[] = [
+  {
+    criterio_id: "c1",
+    nivel_ia: "Excelente",
+    nivel_final: "Excelente",
+    puntaje_normalizado: 1,
+    citas: [
+      cita("Se definió un rol de experto y un formato JSON de salida con dos ejemplos.", "informe", "página 3", true),
+      cita('SYSTEM_PROMPT = "Eres un asistente experto en..."', "codigo", "prompts.py:5", true),
+    ],
+    justificacion: "Los prompts incluyen rol, contexto, formato y ejemplos, como pide el nivel Excelente.",
+    fortalezas: ["Uso de ejemplos few-shot", "Formato de salida explícito"],
+    debilidades: ["No se versionan los prompts"],
+    recomendacion: "Guardar los prompts en archivos con versión para comparar resultados.",
+    ajuste_docente: null,
+    original_ia: null,
+  },
+  {
+    criterio_id: "c2",
+    nivel_ia: "Excelente",
+    nivel_final: "Bueno",
+    puntaje_normalizado: 0.8,
+    citas: [
+      cita("La respuesta se valida con un modelo Pydantic antes de guardarla.", "informe", "página 4", true),
+      cita("Se implementaron reintentos automáticos con backoff exponencial.", "informe", "página 5", false),
+    ],
+    justificacion: "Valida la mayoría de las salidas, pero un test de formato falla.",
+    fortalezas: ["Validación con Pydantic"],
+    debilidades: ["No maneja todos los errores de formato"],
+    recomendacion: "Agregar manejo de errores cuando la salida no cumple el esquema.",
+    ajuste_docente: "La evidencia de reintentos no aparece en el material y un test falla.",
+    original_ia: null,
+  },
+  {
+    criterio_id: "c3",
+    nivel_ia: "Bueno",
+    nivel_final: "Bueno",
+    puntaje_normalizado: 0.8,
+    citas: [cita("El modelo inventó una referencia bibliográfica en la prueba 3.", "informe", "página 6", true)],
+    justificacion: "Identifica una alucinación con un ejemplo concreto, sin profundizar en sesgos.",
+    fortalezas: ["Detecta alucinaciones"],
+    debilidades: ["No analiza sesgos"],
+    recomendacion: "Incluir un análisis de sesgos con al menos dos casos.",
+    ajuste_docente: null,
+    original_ia: null,
+  },
+];
+
+const retroalimentacionMock: Retroalimentacion = {
   aprendizajes_identificados: ["Diseño de prompts estructurados", "Validación de salidas con esquemas"],
   como_aplico_conocimientos: "Aplicó few-shot y validación con Pydantic en un clasificador de textos.",
   aspectos_a_fortalecer: ["Manejo de errores", "Análisis de sesgos"],
   retroalimentacion_general: "Buen trabajo: los prompts son claros y la validación es sólida. Falta robustez ante errores.",
-  verificacion: verificacionMock,
+};
+
+/** Textos originales de la IA de un criterio (lo que el docente ve como "propuesta de la IA"). */
+function originalIa(criterio: EvaluacionCriterio): RetroalimentacionCriterioIA {
+  return {
+    justificacion: criterio.justificacion,
+    fortalezas: criterio.fortalezas,
+    debilidades: criterio.debilidades,
+    recomendacion: criterio.recomendacion,
+  };
+}
+
+const criteriosConOriginal = criteriosPublicadaMock.map((criterio) => ({ ...criterio, original_ia: originalIa(criterio) }));
+
+export const evaluacionPublicadaMock: Evaluacion = {
+  id: 1,
+  entrega_id: 3,
+  estado: "publicada",
+  nota: 4.2,
+  rubrica_version_id: 103,
+  rubrica_version: 1,
+  proveedor: "gemini",
+  modelo: "gemini-2.0-flash",
+  temperatura: 0.1,
+  prompt_version: "evaluacion-v1",
   error: null,
+  criterios: criteriosConOriginal,
+  retroalimentacion: retroalimentacionMock,
+  retroalimentacion_ia: retroalimentacionMock,
   creada_en: "2026-10-15T15:00:00Z",
   aprobada_en: "2026-10-16T10:00:00Z",
   publicada_en: "2026-10-16T10:05:00Z",
 };
 
+/** Criterios recién salidos de la IA: nivel final = nivel IA y sin ajustes. */
+const criteriosBorradorMock: EvaluacionCriterio[] = criteriosConOriginal.map((criterio) => ({
+  ...criterio,
+  nivel_final: criterio.nivel_ia,
+  ajuste_docente: null,
+}));
+
 export const evaluacionBorradorMock: Evaluacion = {
   ...evaluacionPublicadaMock,
   id: 2,
   entrega_id: 4,
-  laboratorio_id: 4,
+  rubrica_version_id: 104,
   estado: "borrador",
   nota: 3.8,
-  criterios: evaluacionPublicadaMock.criterios.map((criterio) => ({
-    ...criterio,
-    nivel_final: criterio.nivel_ia,
-    ajuste_docente: null,
-  })),
+  criterios: criteriosBorradorMock,
   aprobada_en: null,
   publicada_en: null,
   creada_en: "2026-11-05T15:00:00Z",
@@ -448,7 +438,7 @@ const evaluacionEnRevisionMock: Evaluacion = {
   ...evaluacionBorradorMock,
   id: 3,
   entrega_id: 2,
-  laboratorio_id: 2,
+  rubrica_version_id: 102,
   estado: "en_revision",
   nota: 3.1,
   creada_en: "2026-09-20T15:00:00Z",
@@ -458,15 +448,12 @@ const evaluacionErrorMock: Evaluacion = {
   ...evaluacionBorradorMock,
   id: 4,
   entrega_id: 6,
-  laboratorio_id: 6,
+  rubrica_version_id: 106,
   estado: "error",
   nota: null,
   criterios: [],
-  aprendizajes_identificados: [],
-  como_aplico_conocimientos: "",
-  aspectos_a_fortalecer: [],
-  retroalimentacion_general: "",
-  verificacion: null,
+  retroalimentacion: null,
+  retroalimentacion_ia: null,
   error: "La respuesta del modelo no cumplió el esquema después de 2 reintentos: falta el criterio c3.",
   creada_en: "2026-11-11T15:00:00Z",
 };
@@ -475,8 +462,7 @@ const evaluacionAprobadaMock: Evaluacion = {
   ...evaluacionBorradorMock,
   id: 5,
   entrega_id: 7,
-  estudiante_id: "est-2",
-  laboratorio_id: 3,
+  rubrica_version_id: 103,
   estado: "aprobada",
   nota: 4.6,
   aprobada_en: "2026-11-10T09:00:00Z",
@@ -492,83 +478,103 @@ export const evaluacionesMock: Evaluacion[] = [
 ];
 
 /** Resultado que "devuelve el pipeline" al terminar una evaluación simulada. La nota es un valor fijo de ejemplo. */
-export const resultadoSimuladoMock: Pick<
-  Evaluacion,
-  | "nota"
-  | "criterios"
-  | "aprendizajes_identificados"
-  | "como_aplico_conocimientos"
-  | "aspectos_a_fortalecer"
-  | "retroalimentacion_general"
-  | "verificacion"
-> = {
+export const resultadoSimuladoMock: Pick<Evaluacion, "nota" | "criterios" | "retroalimentacion" | "retroalimentacion_ia"> = {
   nota: 3.8,
-  criterios: evaluacionBorradorMock.criterios,
-  aprendizajes_identificados: evaluacionBorradorMock.aprendizajes_identificados,
-  como_aplico_conocimientos: evaluacionBorradorMock.como_aplico_conocimientos,
-  aspectos_a_fortalecer: evaluacionBorradorMock.aspectos_a_fortalecer,
-  retroalimentacion_general: evaluacionBorradorMock.retroalimentacion_general,
-  verificacion: verificacionMock,
+  criterios: criteriosBorradorMock,
+  retroalimentacion: retroalimentacionMock,
+  retroalimentacion_ia: retroalimentacionMock,
 };
 
 export const trazaMock: Traza = {
   evaluacion_id: 1,
+  entrega_id: 3,
+  estado: "publicada",
+  nota: 4.2,
   proveedor: "gemini",
   modelo: "gemini-2.0-flash",
-  prompt_version: "evaluacion-v1",
   temperatura: 0.1,
+  prompt_version: "evaluacion-v1",
+  rubrica_version_id: 103,
   rubrica_version: 1,
-  respuesta_cruda: { criterios: [{ criterio_id: "c1", nivel_elegido: "Excelente" }] },
-  verificacion: verificacionMock,
-  auditoria: [
+  eventos: [
     {
-      id: "aud-1",
-      usuario_id: "doc-1",
-      usuario_nombre: "Carlos Docente",
-      accion: "ajuste_criterio",
+      id: 1,
+      fecha: "2026-10-15T15:00:00Z",
+      usuario: { id: "est-1", nombre: "Ana Estudiante" },
+      accion: "lanzar_evaluacion",
+      antes: null,
+      despues: { estado: "procesando" },
+      motivo: null,
+    },
+    {
+      id: 2,
+      fecha: "2026-10-15T15:01:10Z",
+      usuario: null,
+      accion: "evaluacion_completada",
+      antes: { estado: "procesando" },
+      despues: { estado: "borrador" },
+      motivo: null,
+    },
+    {
+      id: 3,
+      fecha: "2026-10-16T09:50:00Z",
+      usuario: { id: "doc-1", nombre: "Carlos Docente" },
+      accion: "ajustar_criterio",
       antes: { criterio_id: "c2", nivel_final: "Excelente" },
       despues: { criterio_id: "c2", nivel_final: "Bueno" },
       motivo: "La evidencia de reintentos no aparece en el material y un test falla.",
-      creado_en: "2026-10-16T09:50:00Z",
     },
     {
-      id: "aud-2",
-      usuario_id: "doc-1",
-      usuario_nombre: "Carlos Docente",
+      id: 4,
+      fecha: "2026-10-16T10:05:00Z",
+      usuario: { id: "doc-1", nombre: "Carlos Docente" },
       accion: "publicar",
       antes: { estado: "aprobada" },
       despues: { estado: "publicada" },
       motivo: null,
-      creado_en: "2026-10-16T10:05:00Z",
     },
   ],
 };
 
 export const informeMock: Informe = {
-  estudiante_id: "est-1",
-  estudiante_nombre: "Ana Estudiante",
-  notas_laboratorio: [
-    { laboratorio_id: 1, codigo: "C1-L1", titulo: "Fundamentos de IA y Python", cohorte: 1, evaluacion_id: 6, nota: 3.6 },
-    { laboratorio_id: 2, codigo: "C1-L2", titulo: "Aprendizaje automático supervisado", cohorte: 1, evaluacion_id: 2, nota: 3.2 },
-    { laboratorio_id: 3, codigo: "C2-L1", titulo: "Ingeniería de prompts con LLMs", cohorte: 2, evaluacion_id: 1, nota: 4.2 },
-    { laboratorio_id: 4, codigo: "C2-L2", titulo: "RAG con modelos locales", cohorte: 2, evaluacion_id: 3, nota: 3.8 },
+  estudiante: { id: "est-1", nombre: "Ana Estudiante" },
+  laboratorios_evaluados: 4,
+  laboratorios: [
+    { laboratorio_id: 1, codigo: "C1-L1", titulo: "Fundamentos de IA y Python", cohorte: "Cohorte 1", cohorte_numero: 1, nota: 3.6, evaluacion_id: 6, publicada_en: "2026-09-05T15:00:00Z" },
+    { laboratorio_id: 2, codigo: "C1-L2", titulo: "Aprendizaje automático supervisado", cohorte: "Cohorte 1", cohorte_numero: 1, nota: 3.2, evaluacion_id: 7, publicada_en: "2026-09-25T15:00:00Z" },
+    { laboratorio_id: 3, codigo: "C2-L1", titulo: "Ingeniería de prompts con LLMs", cohorte: "Cohorte 2", cohorte_numero: 2, nota: 4.2, evaluacion_id: 1, publicada_en: "2026-10-16T10:05:00Z" },
+    { laboratorio_id: 4, codigo: "C2-L2", titulo: "RAG con modelos locales", cohorte: "Cohorte 2", cohorte_numero: 2, nota: 3.8, evaluacion_id: 8, publicada_en: "2026-11-02T15:00:00Z" },
   ],
   promedios_cohorte: [
-    { cohorte: 1, promedio: 3.4 },
-    { cohorte: 2, promedio: 4.0 },
+    { cohorte: "Cohorte 1", cohorte_numero: 1, promedio: 3.4, laboratorios_evaluados: 2 },
+    { cohorte: "Cohorte 2", cohorte_numero: 2, promedio: 4.0, laboratorios_evaluados: 2 },
   ],
   promedio_general: 3.7,
-  dominio_competencias: [
-    { competencia: "Fundamentos de IA", dominio: 0.7, nivel: "medio" },
-    { competencia: "Aprendizaje automático", dominio: 0.55, nivel: "medio" },
-    { competencia: "Ingeniería de prompts", dominio: 0.9, nivel: "alto" },
-    { competencia: "LLMs", dominio: 0.8, nivel: "alto" },
-    { competencia: "RAG", dominio: 0.6, nivel: "medio" },
-    { competencia: "Ética y verificación", dominio: 0.35, nivel: "bajo" },
-    { competencia: "Agentes de IA", dominio: 0, nivel: "sin_evidencia" },
+  competencias: [
+    { competencia: "Fundamentos de IA", promedio: 3.5, nivel_dominio: "medio", criterios_evaluados: 3 },
+    { competencia: "Aprendizaje automático", promedio: 2.8, nivel_dominio: "medio", criterios_evaluados: 3 },
+    { competencia: "Ingeniería de prompts", promedio: 4.5, nivel_dominio: "alto", criterios_evaluados: 2 },
+    { competencia: "LLMs", promedio: 4.0, nivel_dominio: "alto", criterios_evaluados: 2 },
+    { competencia: "RAG", promedio: 3.0, nivel_dominio: "medio", criterios_evaluados: 2 },
+    { competencia: "Ética y verificación", promedio: 1.8, nivel_dominio: "bajo", criterios_evaluados: 2 },
+    { competencia: "Agentes de IA", promedio: null, nivel_dominio: null, criterios_evaluados: 0 },
   ],
-  evolucion: { cohorte_1: 3.4, cohorte_2: 4.0, diferencia: 0.6 },
+  tematicas: [
+    { tematica_id: 1, tematica: "Fundamentos de IA", promedio: 3.5, nivel_dominio: "medio", criterios_evaluados: 3 },
+    { tematica_id: 2, tematica: "Aprendizaje automático", promedio: 2.8, nivel_dominio: "medio", criterios_evaluados: 3 },
+    { tematica_id: 4, tematica: "Ingeniería de prompts", promedio: 4.5, nivel_dominio: "alto", criterios_evaluados: 2 },
+    { tematica_id: 7, tematica: "RAG", promedio: 3.0, nivel_dominio: "medio", criterios_evaluados: 2 },
+  ],
+  evolucion: {
+    cohorte_inicial: "Cohorte 1",
+    cohorte_final: "Cohorte 2",
+    promedio_inicial: 3.4,
+    promedio_final: 4.0,
+    diferencia: 0.6,
+  },
   narrativa: {
+    estado: "generada",
+    mensaje: null,
     competencias_desarrolladas: [
       "Diseño de prompts estructurados con rol, formato de salida y ejemplos.",
       "Validación de las salidas del LLM con esquemas Pydantic.",
@@ -607,62 +613,138 @@ export const informeMock: Informe = {
     ],
     conclusion:
       "La estudiante mejoró de la cohorte 1 a la cohorte 2 y alcanzó un dominio alto en ingeniería de prompts y LLMs. El siguiente paso es fortalecer la verificación ética de las respuestas y empezar a trabajar con agentes.",
+    generada_en: FECHA,
   },
-  generado_en: FECHA,
+  avisos: ["La competencia «Agentes de IA» aún no tiene criterios evaluados."],
+};
+
+/** Informe con números válidos pero narrativa en error (est-3): se muestran los números y el mensaje. */
+export const informeNarrativaErrorMock: Informe = {
+  estudiante: { id: "est-3", nombre: "María Gómez" },
+  laboratorios_evaluados: 2,
+  laboratorios: [
+    { laboratorio_id: 1, codigo: "C1-L1", titulo: "Fundamentos de IA y Python", cohorte: "Cohorte 1", cohorte_numero: 1, nota: 3.4, evaluacion_id: 21, publicada_en: "2026-11-13T21:30:00Z" },
+    { laboratorio_id: 3, codigo: "C2-L1", titulo: "Ingeniería de prompts con LLMs", cohorte: "Cohorte 2", cohorte_numero: 2, nota: 2.9, evaluacion_id: 22, publicada_en: "2026-11-14T04:15:00Z" },
+  ],
+  promedios_cohorte: [
+    { cohorte: "Cohorte 1", cohorte_numero: 1, promedio: 3.4, laboratorios_evaluados: 1 },
+    { cohorte: "Cohorte 2", cohorte_numero: 2, promedio: 2.9, laboratorios_evaluados: 1 },
+  ],
+  promedio_general: 3.2,
+  competencias: [
+    { competencia: "Programación", promedio: 3.2, nivel_dominio: "medio", criterios_evaluados: 3 },
+    { competencia: "Ética y verificación", promedio: 2.4, nivel_dominio: "bajo", criterios_evaluados: 2 },
+    { competencia: "Arquitectura de software", promedio: null, nivel_dominio: null, criterios_evaluados: 0 },
+  ],
+  tematicas: [],
+  evolucion: { cohorte_inicial: "Cohorte 1", cohorte_final: "Cohorte 2", promedio_inicial: 3.4, promedio_final: 2.9, diferencia: -0.5 },
+  narrativa: {
+    estado: "error",
+    mensaje: "No fue posible generar el análisis narrativo en este momento. Los números del informe son válidos.",
+    competencias_desarrolladas: [],
+    brechas: [],
+    plan_fortalecimiento: [],
+    conclusion: null,
+    generada_en: null,
+  },
+  avisos: ["El mapeo a temáticas con IA no está disponible para este estudiante."],
 };
 
 /** Informe de un estudiante sin evaluaciones publicadas (est-2 en el modo mock). */
 export const informeSinPublicadasMock: Informe = {
-  estudiante_id: "est-2",
-  estudiante_nombre: "Juan Pérez",
-  notas_laboratorio: [],
+  estudiante: { id: "est-2", nombre: "Juan Pérez" },
+  laboratorios_evaluados: 0,
+  laboratorios: [],
   promedios_cohorte: [
-    { cohorte: 1, promedio: null },
-    { cohorte: 2, promedio: null },
+    { cohorte: "Cohorte 1", cohorte_numero: 1, promedio: null, laboratorios_evaluados: 0 },
+    { cohorte: "Cohorte 2", cohorte_numero: 2, promedio: null, laboratorios_evaluados: 0 },
   ],
   promedio_general: null,
-  dominio_competencias: [],
-  evolucion: { cohorte_1: null, cohorte_2: null, diferencia: null },
-  narrativa: null,
-  generado_en: FECHA,
+  competencias: [],
+  tematicas: [],
+  evolucion: null,
+  narrativa: {
+    estado: "sin_datos",
+    mensaje: "El estudiante aún no tiene evaluaciones publicadas.",
+    competencias_desarrolladas: [],
+    brechas: [],
+    plan_fortalecimiento: [],
+    conclusion: null,
+    generada_en: null,
+  },
+  avisos: [],
 };
 
-type NodoMapaMock = Omit<NodoMapa, "padre_id" | "laboratorios" | "evidencias" | "por_profundizar"> &
-  Partial<Pick<NodoMapa, "laboratorios" | "evidencias" | "por_profundizar">>;
-
-/** Crea un nodo del mapa simulado con listas vacías por defecto. */
-function nodoMock(padre_id: string | null, datos: NodoMapaMock): NodoMapa {
-  return { laboratorios: [], evidencias: [], por_profundizar: [], ...datos, padre_id };
+/** Datos de un nodo simulado: las evidencias se escriben como texto y el helper las convierte en objetos. */
+interface DatosNodoMock {
+  id: string;
+  etiqueta: string;
+  tipo: TipoNodo;
+  nivel_dominio: NivelDominio | null;
+  dominio: number | null;
+  laboratorios?: string[];
+  evidencias?: string[];
+  aspectos_por_profundizar?: string[];
 }
 
-/** Grafo simulado (RF-09 CA3): temática → subtemas/conceptos → laboratorios donde se aplicó. */
-const nodosMapaMock: NodoMapa[] = [
+/** El padre solo existe en el mock para generar las aristas; el backend no envía padre_id. */
+interface NodoConPadre {
+  padre: string | null;
+  nodo: NodoMapa;
+}
+
+function nodoMock(padre: string | null, datos: DatosNodoMock): NodoConPadre {
+  const laboratorios = datos.laboratorios ?? [];
+  const evidencias: EvidenciaMapa[] = (datos.evidencias ?? []).map((fragmento) => ({
+    fragmento,
+    fuente: "informe",
+    ubicacion: null,
+    laboratorio: laboratorios[0] ?? "",
+    criterio_id: "c1",
+  }));
+  return {
+    padre,
+    nodo: {
+      id: datos.id,
+      tipo: datos.tipo,
+      etiqueta: datos.etiqueta,
+      dominio: datos.dominio,
+      nivel_dominio: datos.nivel_dominio,
+      evidencias,
+      aspectos_por_profundizar: datos.aspectos_por_profundizar ?? [],
+      laboratorios,
+    },
+  };
+}
+
+/** Grafo simulado (RF-09 CA3): temática → subtemas/conceptos/competencias → laboratorios donde se aplicó. Dominio de 0 a 5. */
+const nodosConPadreMock: NodoConPadre[] = [
   nodoMock(null, {
     id: "t-fundamentos",
     etiqueta: "Fundamentos de IA",
     tipo: "tematica",
-    nivel: "medio",
-    dominio: 0.7,
+    nivel_dominio: "medio",
+    dominio: 3.5,
     laboratorios: ["C1-L1"],
     evidencias: ["Explica la diferencia entre búsqueda no informada e informada con un ejemplo propio."],
-    por_profundizar: ["Justificar la elección de la heurística con un análisis de costo."],
+    aspectos_por_profundizar: ["Justificar la elección de la heurística con un análisis de costo."],
   }),
   nodoMock("t-fundamentos", {
     id: "k-busqueda",
     etiqueta: "Búsqueda y resolución de problemas",
-    tipo: "concepto",
-    nivel: "medio",
-    dominio: 0.6,
+    tipo: "subtema",
+    nivel_dominio: "medio",
+    dominio: 3,
     laboratorios: ["C1-L1"],
     evidencias: ["Implementó búsqueda en anchura para el problema del laberinto."],
-    por_profundizar: ["Comparar A* con búsqueda en anchura en tiempo y memoria."],
+    aspectos_por_profundizar: ["Comparar A* con búsqueda en anchura en tiempo y memoria."],
   }),
   nodoMock("k-busqueda", {
     id: "l-c1l1-busqueda",
     etiqueta: "C1-L1 · Fundamentos de IA y Python",
     tipo: "laboratorio",
-    nivel: "medio",
-    dominio: 0.6,
+    nivel_dominio: "medio",
+    dominio: 3,
     laboratorios: ["C1-L1"],
     evidencias: ["laberinto.py:12-48 — función bfs con cola y conjunto de visitados."],
   }),
@@ -670,8 +752,8 @@ const nodosMapaMock: NodoMapa[] = [
     id: "k-python",
     etiqueta: "Python para datos",
     tipo: "concepto",
-    nivel: "alto",
-    dominio: 0.85,
+    nivel_dominio: "alto",
+    dominio: 4.2,
     laboratorios: ["C1-L1"],
     evidencias: ["Usa listas por comprensión y funciones con type hints en todo el cuaderno."],
   }),
@@ -679,8 +761,8 @@ const nodosMapaMock: NodoMapa[] = [
     id: "l-c1l1-python",
     etiqueta: "C1-L1 · Fundamentos de IA y Python",
     tipo: "laboratorio",
-    nivel: "alto",
-    dominio: 0.85,
+    nivel_dominio: "alto",
+    dominio: 4.2,
     laboratorios: ["C1-L1"],
     evidencias: ["utilidades.py — funciones cortas, documentadas y sin errores de ruff."],
   }),
@@ -688,28 +770,28 @@ const nodosMapaMock: NodoMapa[] = [
     id: "t-ml",
     etiqueta: "Aprendizaje automático",
     tipo: "tematica",
-    nivel: "medio",
-    dominio: 0.55,
+    nivel_dominio: "medio",
+    dominio: 2.8,
     laboratorios: ["C1-L2"],
     evidencias: ["Entrenó un árbol de decisión con validación cruzada de 5 particiones."],
-    por_profundizar: ["Reportar métricas más allá de la exactitud."],
+    aspectos_por_profundizar: ["Reportar métricas más allá de la exactitud."],
   }),
   nodoMock("t-ml", {
     id: "k-supervisado",
     etiqueta: "Aprendizaje supervisado",
-    tipo: "concepto",
-    nivel: "medio",
-    dominio: 0.65,
+    tipo: "subtema",
+    nivel_dominio: "medio",
+    dominio: 3.2,
     laboratorios: ["C1-L2"],
     evidencias: ["Separó datos de entrenamiento y prueba antes de normalizar."],
-    por_profundizar: ["Ajuste de hiperparámetros con búsqueda en rejilla."],
+    aspectos_por_profundizar: ["Ajuste de hiperparámetros con búsqueda en rejilla."],
   }),
   nodoMock("k-supervisado", {
     id: "l-c1l2-supervisado",
     etiqueta: "C1-L2 · Aprendizaje automático supervisado",
     tipo: "laboratorio",
-    nivel: "medio",
-    dominio: 0.65,
+    nivel_dominio: "medio",
+    dominio: 3.2,
     laboratorios: ["C1-L2"],
     evidencias: ["Informe, pág. 3: «usamos train_test_split con estratificación»."],
   }),
@@ -717,38 +799,38 @@ const nodosMapaMock: NodoMapa[] = [
     id: "k-metricas",
     etiqueta: "Métricas de evaluación",
     tipo: "concepto",
-    nivel: "bajo",
-    dominio: 0.35,
+    nivel_dominio: "bajo",
+    dominio: 1.8,
     laboratorios: ["C1-L2"],
     evidencias: ["Solo reporta exactitud con un conjunto de datos desbalanceado."],
-    por_profundizar: ["Precisión, exhaustividad y matriz de confusión.", "Curva ROC y AUC."],
+    aspectos_por_profundizar: ["Precisión, exhaustividad y matriz de confusión.", "Curva ROC y AUC."],
   }),
   nodoMock("k-metricas", {
     id: "l-c1l2-metricas",
     etiqueta: "C1-L2 · Aprendizaje automático supervisado",
     tipo: "laboratorio",
-    nivel: "bajo",
-    dominio: 0.35,
+    nivel_dominio: "bajo",
+    dominio: 1.8,
     laboratorios: ["C1-L2"],
     evidencias: ["Informe, pág. 5: «el modelo tiene 92 % de exactitud»."],
-    por_profundizar: ["Interpretar el resultado frente a la clase minoritaria."],
+    aspectos_por_profundizar: ["Interpretar el resultado frente a la clase minoritaria."],
   }),
   nodoMock(null, {
     id: "t-llms",
     etiqueta: "LLMs",
     tipo: "tematica",
-    nivel: "alto",
-    dominio: 0.8,
+    nivel_dominio: "alto",
+    dominio: 4,
     laboratorios: ["C2-L1", "C2-L2"],
     evidencias: ["La respuesta del modelo se valida con Pydantic antes de guardarla."],
-    por_profundizar: ["Manejo de errores de formato y reintentos."],
+    aspectos_por_profundizar: ["Manejo de errores de formato y reintentos."],
   }),
   nodoMock("t-llms", {
     id: "k-salida",
     etiqueta: "Salida estructurada y validación",
     tipo: "concepto",
-    nivel: "alto",
-    dominio: 0.9,
+    nivel_dominio: "alto",
+    dominio: 4.5,
     laboratorios: ["C2-L1"],
     evidencias: ["Define un esquema JSON y rechaza respuestas que no lo cumplen."],
   }),
@@ -756,8 +838,8 @@ const nodosMapaMock: NodoMapa[] = [
     id: "l-c2l1-salida",
     etiqueta: "C2-L1 · Ingeniería de prompts con LLMs",
     tipo: "laboratorio",
-    nivel: "alto",
-    dominio: 0.9,
+    nivel_dominio: "alto",
+    dominio: 4.5,
     laboratorios: ["C2-L1"],
     evidencias: ["cliente_llm.py:30 — RespuestaSchema.model_validate_json(texto)."],
   }),
@@ -765,18 +847,18 @@ const nodosMapaMock: NodoMapa[] = [
     id: "k-parametros",
     etiqueta: "Parámetros de generación",
     tipo: "concepto",
-    nivel: "medio",
-    dominio: 0.6,
+    nivel_dominio: "medio",
+    dominio: 3,
     laboratorios: ["C2-L1", "C2-L2"],
     evidencias: ["Fija temperature en 0,2 para respuestas reproducibles."],
-    por_profundizar: ["Explicar el efecto de top_p y del tamaño de contexto."],
+    aspectos_por_profundizar: ["Explicar el efecto de top_p y del tamaño de contexto."],
   }),
   nodoMock("k-parametros", {
     id: "l-c2l1-parametros",
     etiqueta: "C2-L1 · Ingeniería de prompts con LLMs",
     tipo: "laboratorio",
-    nivel: "medio",
-    dominio: 0.6,
+    nivel_dominio: "medio",
+    dominio: 3,
     laboratorios: ["C2-L1"],
     evidencias: ["Informe, pág. 2: tabla que compara temperature 0,2 y 0,8."],
   }),
@@ -784,18 +866,18 @@ const nodosMapaMock: NodoMapa[] = [
     id: "t-prompts",
     etiqueta: "Ingeniería de prompts",
     tipo: "tematica",
-    nivel: "alto",
-    dominio: 0.9,
+    nivel_dominio: "alto",
+    dominio: 4.5,
     laboratorios: ["C2-L1"],
     evidencias: ["Se definió un rol de experto y un formato JSON de salida con dos ejemplos."],
-    por_profundizar: ["Versionado de prompts."],
+    aspectos_por_profundizar: ["Versionado de prompts."],
   }),
   nodoMock("t-prompts", {
     id: "k-fewshot",
     etiqueta: "Few-shot",
     tipo: "concepto",
-    nivel: "alto",
-    dominio: 1,
+    nivel_dominio: "alto",
+    dominio: 5,
     laboratorios: ["C2-L1"],
     evidencias: ["Uso de dos ejemplos representativos en el prompt."],
   }),
@@ -803,8 +885,8 @@ const nodosMapaMock: NodoMapa[] = [
     id: "l-c2l1-fewshot",
     etiqueta: "C2-L1 · Ingeniería de prompts con LLMs",
     tipo: "laboratorio",
-    nivel: "alto",
-    dominio: 1,
+    nivel_dominio: "alto",
+    dominio: 5,
     laboratorios: ["C2-L1"],
     evidencias: ["prompts/clasificar.md — sección «Ejemplos» con dos casos."],
   }),
@@ -812,8 +894,8 @@ const nodosMapaMock: NodoMapa[] = [
     id: "k-rol",
     etiqueta: "Rol y formato de salida",
     tipo: "concepto",
-    nivel: "alto",
-    dominio: 0.85,
+    nivel_dominio: "alto",
+    dominio: 4.2,
     laboratorios: ["C2-L1"],
     evidencias: ["El prompt fija un rol de evaluador y exige salida en JSON."],
   }),
@@ -821,8 +903,8 @@ const nodosMapaMock: NodoMapa[] = [
     id: "l-c2l1-rol",
     etiqueta: "C2-L1 · Ingeniería de prompts con LLMs",
     tipo: "laboratorio",
-    nivel: "alto",
-    dominio: 0.85,
+    nivel_dominio: "alto",
+    dominio: 4.2,
     laboratorios: ["C2-L1"],
     evidencias: ["prompts/clasificar.md:1-8 — instrucciones de rol y formato."],
   }),
@@ -830,26 +912,26 @@ const nodosMapaMock: NodoMapa[] = [
     id: "k-versionado",
     etiqueta: "Versionado de prompts",
     tipo: "concepto",
-    nivel: "sin_evidencia",
+    nivel_dominio: null,
     dominio: null,
-    por_profundizar: ["Guardar cada prompt con un número de versión y registrar los cambios."],
+    aspectos_por_profundizar: ["Guardar cada prompt con un número de versión y registrar los cambios."],
   }),
   nodoMock(null, {
     id: "t-locales",
     etiqueta: "Modelos locales (Ollama/LM Studio)",
     tipo: "tematica",
-    nivel: "medio",
-    dominio: 0.6,
+    nivel_dominio: "medio",
+    dominio: 3,
     laboratorios: ["C2-L2"],
     evidencias: ["Ejecutó llama3 en Ollama y lo consumió desde Python."],
-    por_profundizar: ["Comparar latencia y calidad frente a un modelo en la nube."],
+    aspectos_por_profundizar: ["Comparar latencia y calidad frente a un modelo en la nube."],
   }),
   nodoMock("t-locales", {
     id: "k-ollama",
     etiqueta: "Ejecución con Ollama",
     tipo: "concepto",
-    nivel: "medio",
-    dominio: 0.6,
+    nivel_dominio: "medio",
+    dominio: 3,
     laboratorios: ["C2-L2"],
     evidencias: ["Documenta los comandos para descargar y servir el modelo."],
   }),
@@ -857,8 +939,8 @@ const nodosMapaMock: NodoMapa[] = [
     id: "l-c2l2-ollama",
     etiqueta: "C2-L2 · RAG con modelos locales",
     tipo: "laboratorio",
-    nivel: "medio",
-    dominio: 0.6,
+    nivel_dominio: "medio",
+    dominio: 3,
     laboratorios: ["C2-L2"],
     evidencias: ["README.md — sección «Cómo ejecutar el modelo local»."],
   }),
@@ -866,18 +948,18 @@ const nodosMapaMock: NodoMapa[] = [
     id: "t-rag",
     etiqueta: "RAG",
     tipo: "tematica",
-    nivel: "medio",
-    dominio: 0.6,
+    nivel_dominio: "medio",
+    dominio: 3,
     laboratorios: ["C2-L2"],
     evidencias: ["Construyó un flujo de recuperación con un índice vectorial local."],
-    por_profundizar: ["Evaluar la calidad de la recuperación con preguntas de prueba."],
+    aspectos_por_profundizar: ["Evaluar la calidad de la recuperación con preguntas de prueba."],
   }),
   nodoMock("t-rag", {
     id: "k-embeddings",
     etiqueta: "Embeddings y búsqueda semántica",
     tipo: "concepto",
-    nivel: "medio",
-    dominio: 0.65,
+    nivel_dominio: "medio",
+    dominio: 3.2,
     laboratorios: ["C2-L2"],
     evidencias: ["Genera embeddings con un modelo local y busca por similitud coseno."],
   }),
@@ -885,8 +967,8 @@ const nodosMapaMock: NodoMapa[] = [
     id: "l-c2l2-embeddings",
     etiqueta: "C2-L2 · RAG con modelos locales",
     tipo: "laboratorio",
-    nivel: "medio",
-    dominio: 0.65,
+    nivel_dominio: "medio",
+    dominio: 3.2,
     laboratorios: ["C2-L2"],
     evidencias: ["indice.py:20-55 — creación del índice y consulta top-k."],
   }),
@@ -894,18 +976,18 @@ const nodosMapaMock: NodoMapa[] = [
     id: "k-fragmentacion",
     etiqueta: "Fragmentación de documentos",
     tipo: "concepto",
-    nivel: "bajo",
-    dominio: 0.4,
+    nivel_dominio: "bajo",
+    dominio: 2,
     laboratorios: ["C2-L2"],
     evidencias: ["Usa fragmentos de tamaño fijo sin solapamiento."],
-    por_profundizar: ["Comparar dos estrategias de fragmentación y su efecto en las respuestas."],
+    aspectos_por_profundizar: ["Comparar dos estrategias de fragmentación y su efecto en las respuestas."],
   }),
   nodoMock("k-fragmentacion", {
     id: "l-c2l2-fragmentacion",
     etiqueta: "C2-L2 · RAG con modelos locales",
     tipo: "laboratorio",
-    nivel: "bajo",
-    dominio: 0.4,
+    nivel_dominio: "bajo",
+    dominio: 2,
     laboratorios: ["C2-L2"],
     evidencias: ["indice.py:8 — CHUNK = 500 sin justificar el valor."],
   }),
@@ -913,28 +995,28 @@ const nodosMapaMock: NodoMapa[] = [
     id: "t-etica",
     etiqueta: "Ética y verificación",
     tipo: "tematica",
-    nivel: "bajo",
-    dominio: 0.35,
+    nivel_dominio: "bajo",
+    dominio: 1.8,
     laboratorios: ["C2-L1"],
     evidencias: ["El modelo inventó una referencia bibliográfica en la prueba 3 y no se detectó."],
-    por_profundizar: ["Análisis de sesgos.", "Verificación de las respuestas contra fuentes."],
+    aspectos_por_profundizar: ["Análisis de sesgos.", "Verificación de las respuestas contra fuentes."],
   }),
   nodoMock("t-etica", {
     id: "k-alucinaciones",
     etiqueta: "Detección de alucinaciones",
     tipo: "concepto",
-    nivel: "bajo",
-    dominio: 0.4,
+    nivel_dominio: "bajo",
+    dominio: 2,
     laboratorios: ["C2-L1"],
     evidencias: ["Menciona las alucinaciones, pero no propone una forma de detectarlas."],
-    por_profundizar: ["Contrastar las citas del modelo con el material original."],
+    aspectos_por_profundizar: ["Contrastar las citas del modelo con el material original."],
   }),
   nodoMock("k-alucinaciones", {
     id: "l-c2l1-alucinaciones",
     etiqueta: "C2-L1 · Ingeniería de prompts con LLMs",
     tipo: "laboratorio",
-    nivel: "bajo",
-    dominio: 0.4,
+    nivel_dominio: "bajo",
+    dominio: 2,
     laboratorios: ["C2-L1"],
     evidencias: ["Informe, pág. 6: «el modelo a veces inventa datos»."],
   }),
@@ -942,46 +1024,122 @@ const nodosMapaMock: NodoMapa[] = [
     id: "k-sesgos",
     etiqueta: "Análisis de sesgos",
     tipo: "concepto",
-    nivel: "sin_evidencia",
+    nivel_dominio: null,
     dominio: null,
-    por_profundizar: ["Documentar al menos dos casos de sesgo en las respuestas de un LLM."],
+    aspectos_por_profundizar: ["Documentar al menos dos casos de sesgo en las respuestas de un LLM."],
   }),
   nodoMock(null, {
     id: "t-agentes",
     etiqueta: "Agentes de IA",
     tipo: "tematica",
-    nivel: "sin_evidencia",
+    nivel_dominio: null,
     dominio: null,
-    por_profundizar: ["Aún no hay evaluaciones publicadas en esta temática."],
+    aspectos_por_profundizar: ["Aún no hay evaluaciones publicadas en esta temática."],
   }),
   nodoMock(null, {
     id: "t-vision",
     etiqueta: "Visión artificial",
     tipo: "tematica",
-    nivel: "sin_evidencia",
+    nivel_dominio: null,
     dominio: null,
-    por_profundizar: ["Aún no hay evaluaciones publicadas en esta temática."],
+    aspectos_por_profundizar: ["Aún no hay evaluaciones publicadas en esta temática."],
   }),
 ];
 
+
+/** Competencia de ejemplo para tener los cinco tipos de nodo del backend. */
+nodosConPadreMock.push(
+  nodoMock("t-fundamentos", {
+    id: "c-programacion",
+    etiqueta: "Programación en Python",
+    tipo: "competencia",
+    nivel_dominio: "alto",
+    dominio: 4.3,
+    laboratorios: ["C1-L1"],
+    evidencias: ["Funciones cortas, con type hints y sin errores de ruff."],
+  }),
+);
+
 /** Mapa de est-1: aristas padre → hijo más una relación transversal (Ollama → laboratorio de RAG). */
 export const mapaMock: Mapa = {
-  nodos: nodosMapaMock,
+  nodos: nodosConPadreMock.map(({ nodo }) => nodo),
   aristas: [
-    ...nodosMapaMock.flatMap((nodo) =>
-      nodo.padre_id === null ? [] : [{ id: `a-${nodo.id}`, origen: nodo.padre_id, destino: nodo.id }],
-    ),
-    { id: "a-ollama-embeddings", origen: "k-ollama", destino: "l-c2l2-embeddings" },
+    ...nodosConPadreMock.flatMap(({ padre, nodo }) => (padre === null ? [] : [{ origen: padre, destino: nodo.id }])),
+    { origen: "k-ollama", destino: "l-c2l2-embeddings" },
   ],
+  avisos: ["Las temáticas sin evaluaciones publicadas aparecen sin nivel de dominio."],
 };
 
 /** Mapa de un estudiante sin evaluaciones publicadas (est-2 en el modo mock). */
-export const mapaVacioMock: Mapa = { nodos: [], aristas: [] };
+export const mapaVacioMock: Mapa = { nodos: [], aristas: [], avisos: [] };
 
+/** Mapa cuando el mapeo de la IA no está disponible: agrupado competencia → criterio → laboratorio, con aviso. */
+export const mapaConAvisosMock: Mapa = {
+  nodos: [
+    { id: "competencia:programacion", tipo: "competencia", etiqueta: "Programación", dominio: 3.2, nivel_dominio: "medio",
+      evidencias: [], aspectos_por_profundizar: ["Agregar pruebas automatizadas."], laboratorios: ["C1-L1", "C2-L1"] },
+    { id: "concepto:programacion:c1", tipo: "concepto", etiqueta: "Calidad del código", dominio: 3.5, nivel_dominio: "medio",
+      evidencias: [{ fragmento: "Las funciones tienen type hints y docstrings.", fuente: "codigo", ubicacion: "utilidades.py:10", laboratorio: "C1-L1", criterio_id: "c1" }],
+      aspectos_por_profundizar: [], laboratorios: ["C1-L1"] },
+    { id: "lab:C1-L1", tipo: "laboratorio", etiqueta: "C1-L1 · Fundamentos de IA y Python", dominio: 3.4, nivel_dominio: "medio",
+      evidencias: [], aspectos_por_profundizar: [], laboratorios: ["C1-L1"] },
+    { id: "competencia:etica", tipo: "competencia", etiqueta: "Ética y verificación", dominio: 2.4, nivel_dominio: "bajo",
+      evidencias: [], aspectos_por_profundizar: ["Verificar las respuestas del modelo con fuentes."], laboratorios: ["C2-L1"] },
+    { id: "lab:C2-L1", tipo: "laboratorio", etiqueta: "C2-L1 · Ingeniería de prompts con LLMs", dominio: 2.9, nivel_dominio: "bajo",
+      evidencias: [], aspectos_por_profundizar: [], laboratorios: ["C2-L1"] },
+    { id: "competencia:arquitectura", tipo: "competencia", etiqueta: "Arquitectura de software", dominio: null, nivel_dominio: null,
+      evidencias: [], aspectos_por_profundizar: [], laboratorios: [] },
+  ],
+  aristas: [
+    { origen: "competencia:programacion", destino: "concepto:programacion:c1" },
+    { origen: "concepto:programacion:c1", destino: "lab:C1-L1" },
+    { origen: "competencia:programacion", destino: "lab:C2-L1" },
+    { origen: "competencia:etica", destino: "lab:C2-L1" },
+  ],
+  avisos: [
+    "El mapeo a temáticas con IA no está disponible: el mapa se agrupa por competencia → criterio → laboratorio.",
+  ],
+};
+
+/**
+ * Configuración de IA (ConfigIARespuesta). Modelos probados y sin probar en ambos proveedores.
+ * En el modo mock, probar la conexión con "qwen2.5" falla (ok: false) para ver ese caso.
+ */
 export const configIAMock: ConfigIA = {
   proveedor: "gemini",
   modelo: "gemini-3.5-flash-lite",
   temperatura: 0.1,
-  actualizado_por: "doc-1",
+  origen: "base_de_datos",
+  modelo_permitido: true,
+  actualizado_por: { id: "adm-1", nombre: "Admin Demo" },
   actualizado_en: FECHA,
+  temperatura_maxima: 0.2,
+  claves: {
+    gemini_api_key_configurada: true,
+    openai_compat_api_key_configurada: false,
+    openai_compat_base_url_configurada: true,
+  },
+  proveedores_permitidos: [
+    {
+      proveedor: "gemini",
+      etiqueta: "Google Gemini",
+      modelos: ["gemini-3.5-flash-lite", "gemini-3.5-flash"],
+      modelos_probados: ["gemini-3.5-flash-lite"],
+    },
+    {
+      proveedor: "openai_compat",
+      etiqueta: "OpenAI-compatible (Ollama, Groq, OpenRouter)",
+      modelos: ["llama3.1:8b", "qwen2.5"],
+      modelos_probados: ["llama3.1:8b"],
+    },
+  ],
+  versiones_prompt: {
+    evaluacion: "evaluacion-v1",
+    extraer_rubrica: "1.0",
+    informe_narrativo: "informe-v1",
+    mapeo_tematicas: null,
+  },
 };
+
+/** Modelo con el que la prueba de conexión simulada falla. */
+export const MODELO_FALLA_MOCK = "qwen2.5";

@@ -43,6 +43,28 @@ function EnlaceVolver() {
   );
 }
 
+/** Un objetivo por línea; se quita el guion inicial ("- Objetivo" → "Objetivo") y se omiten las líneas vacías. */
+export function lineasObjetivos(objetivos: string | null): string[] {
+  return (objetivos ?? "")
+    .split("\n")
+    .map((linea) => linea.replace(/^\s*-\s*/, "").trim())
+    .filter((linea) => linea !== "");
+}
+
+function ListaObjetivos({ objetivos }: { objetivos: string | null }) {
+  const lineas = lineasObjetivos(objetivos);
+  if (lineas.length === 0) {
+    return <p className="mt-1 text-sm text-muted-foreground">El docente aún no ha escrito los objetivos.</p>;
+  }
+  return (
+    <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+      {lineas.map((linea, indice) => (
+        <li key={`${indice}-${linea}`}>{linea}</li>
+      ))}
+    </ul>
+  );
+}
+
 function FichaLaboratorio({ laboratorio, cohorte }: { laboratorio: Laboratorio; cohorte: Cohorte }) {
   return (
     <section aria-labelledby="titulo-laboratorio" className="space-y-3">
@@ -61,9 +83,7 @@ function FichaLaboratorio({ laboratorio, cohorte }: { laboratorio: Laboratorio; 
         </div>
         <div className="rounded-xl border p-4">
           <h2 className="text-sm font-semibold">Objetivos</h2>
-          <p className="mt-1 text-sm whitespace-pre-line text-muted-foreground">
-            {laboratorio.objetivos || "El docente aún no ha escrito los objetivos."}
-          </p>
+          <ListaObjetivos objetivos={laboratorio.objetivos} />
         </div>
       </div>
     </section>

@@ -1,11 +1,19 @@
 import { ESTILO_NIVEL, ESTILO_TIPO } from "@/components/mapa/estilos-mapa";
-import { NIVELES } from "@/components/mapa/grafo-mapa";
+import { NIVELES, type NivelMapa } from "@/components/mapa/grafo-mapa";
 import type { TipoNodo } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
 
-const TIPOS: TipoNodo[] = ["tematica", "concepto", "laboratorio"];
+const TIPOS: TipoNodo[] = ["tematica", "subtema", "competencia", "concepto", "laboratorio"];
 
-/** Leyenda: color + icono + texto por nivel, forma por tipo y estilo de las líneas. */
+/** Rangos que usa el backend para asignar `nivel_dominio` (el frontend no lo calcula, solo lo explica). */
+const RANGO_NIVEL: Record<NivelMapa, string> = {
+  alto: "4,0 o más",
+  medio: "3,0 a 3,9",
+  bajo: "menos de 3,0",
+  sin_dato: "sin datos",
+};
+
+/** Leyenda: color + icono + texto por nivel (con su rango), forma por tipo y estilo de las líneas. */
 export function LeyendaMapa() {
   return (
     <section aria-labelledby="titulo-leyenda" className="rounded-xl border p-3 text-sm">
@@ -13,13 +21,14 @@ export function LeyendaMapa() {
         Leyenda del mapa
       </h2>
       <div className="flex flex-wrap gap-x-6 gap-y-3">
-        <ul className="flex flex-wrap items-center gap-2" aria-label="Niveles de dominio">
+        <ul className="flex flex-wrap items-center gap-2" aria-label="Niveles de dominio (escala de 0 a 5)">
           {NIVELES.map((nivel) => {
             const estilo = ESTILO_NIVEL[nivel];
             return (
               <li key={nivel} className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold", estilo.claseInsignia)}>
                 <estilo.Icono className="size-3.5" aria-hidden="true" />
                 {estilo.etiqueta}
+                <span className="font-normal">({RANGO_NIVEL[nivel]})</span>
               </li>
             );
           })}

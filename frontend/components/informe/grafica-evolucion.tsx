@@ -13,7 +13,7 @@ import {
 } from "@/components/informe/marco-grafica";
 import { SeccionInforme } from "@/components/informe/seccion-informe";
 import { formatearNota } from "@/components/portafolio/estado-entrega";
-import type { Evolucion, NotaLaboratorio } from "@/lib/tipos";
+import type { Evolucion, LaboratorioInforme } from "@/lib/tipos";
 
 const ALTO_GRAFICA = 280;
 
@@ -22,15 +22,20 @@ function colorDeCohorte(cohorte: number): string {
 }
 
 function formatearValor(valor: unknown): string {
-  return typeof valor === "number" ? formatearNota(valor) : String(valor ?? "");
+  return typeof valor === "number" ? formatearNota(valor) : "";
 }
 
-function descripcionAccesible(notas: NotaLaboratorio[], evolucion: Evolucion): string {
-  const barras = notas.map((n) => `${n.codigo} (cohorte ${n.cohorte}): ${formatearNota(n.nota)}`).join("; ");
+function textoEvolucion(evolucion: Evolucion | null): string {
+  if (!evolucion) return "Sin datos de evolución entre cohortes.";
   return (
-    `Gráfica de barras de la nota por laboratorio, escala de 0 a 5. ${barras}. ` +
-    `Promedio cohorte 1: ${textoNota(evolucion.cohorte_1)}; cohorte 2: ${textoNota(evolucion.cohorte_2)}.`
+    `Promedio ${evolucion.cohorte_inicial}: ${textoNota(evolucion.promedio_inicial)}; ` +
+    `${evolucion.cohorte_final}: ${textoNota(evolucion.promedio_final)}.`
   );
+}
+
+function descripcionAccesible(notas: LaboratorioInforme[], evolucion: Evolucion | null): string {
+  const barras = notas.map((n) => `${n.codigo} (${n.cohorte}): ${textoNota(n.nota)}`).join("; ");
+  return `Gráfica de barras de la nota por laboratorio, escala de 0 a 5. ${barras}. ${textoEvolucion(evolucion)}`;
 }
 
 function Leyenda() {
@@ -46,11 +51,14 @@ function Leyenda() {
   );
 }
 
-function ResumenEvolucion({ evolucion }: { evolucion: Evolucion }) {
+function ResumenEvolucion({ evolucion }: { evolucion: Evolucion | null }) {
+  if (!evolucion) {
+    return <p className="text-sm text-muted-foreground">Aún no hay datos para comparar las dos cohortes.</p>;
+  }
   return (
     <p className="text-sm">
-      Promedio cohorte 1: <strong className="tabular-nums">{textoNota(evolucion.cohorte_1)}</strong>
-      {" → "}cohorte 2: <strong className="tabular-nums">{textoNota(evolucion.cohorte_2)}</strong>
+      Promedio {evolucion.cohorte_inicial}: <strong className="tabular-nums">{textoNota(evolucion.promedio_inicial)}</strong>
+      {" → "}{evolucion.cohorte_final}: <strong className="tabular-nums">{textoNota(evolucion.promedio_final)}</strong>
       {evolucion.diferencia !== null && (
         <span className="text-muted-foreground"> ({formatearDiferencia(evolucion.diferencia)} puntos)</span>
       )}
@@ -59,8 +67,8 @@ function ResumenEvolucion({ evolucion }: { evolucion: Evolucion }) {
 }
 
 interface GraficaEvolucionProps {
-  notas: NotaLaboratorio[];
-  evolucion: Evolucion;
+  notas: LaboratorioInforme[];
+  evolucion: Evolucion | null;
   imprimiendo: boolean;
 }
 
@@ -87,7 +95,7 @@ function Grafica({ notas, evolucion, imprimiendo }: GraficaEvolucionProps) {
         />
         <Bar dataKey="nota" name="Nota" radius={[4, 4, 0, 0]} maxBarSize={56} isAnimationActive={false}>
           {notas.map((n) => (
-            <Cell key={n.laboratorio_id} fill={colorDeCohorte(n.cohorte)} />
+            <Cell key={n.laboratorio_id} fill={colorDeCohorte(n.cohorte_numero)} />
           ))}
           <LabelList dataKey="nota" position="top" formatter={formatearValor} style={ESTILO_EJE} />
         </Bar>

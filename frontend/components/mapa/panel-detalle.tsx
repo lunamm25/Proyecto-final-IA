@@ -4,8 +4,9 @@ import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ESTILO_NIVEL, ESTILO_TIPO, formatearDominio } from "@/components/mapa/estilos-mapa";
-import type { Jerarquia } from "@/components/mapa/grafo-mapa";
-import type { NodoMapa } from "@/lib/tipos";
+import { textoFuente } from "@/components/evaluaciones/estado-evaluacion";
+import { nivelDe, type Jerarquia } from "@/components/mapa/grafo-mapa";
+import type { EvidenciaMapa, NodoMapa } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
 
 interface PropsPanel {
@@ -32,6 +33,43 @@ function ListaTexto({ titulo, elementos, vacio }: { titulo: string; elementos: s
   );
 }
 
+/** Evidencias del mapa: citas ya verificadas por el backend (no traen similitud). */
+function ListaEvidencias({ evidencias }: { evidencias: EvidenciaMapa[] }) {
+  return (
+    <section className="space-y-1.5">
+      <h3 className="text-sm font-semibold">Evidencias</h3>
+      {evidencias.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Sin evidencias registradas.</p>
+      ) : (
+        <ul className="space-y-2">
+          {evidencias.map((evidencia, i) => (
+            <li key={`${i}-${evidencia.laboratorio}-${evidencia.criterio_id}`} className="rounded-lg border bg-muted/30 p-2.5 text-sm">
+              <blockquote className="border-l-2 pl-2 italic break-words">“{evidencia.fragmento}”</blockquote>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {[evidencia.laboratorio, `criterio ${evidencia.criterio_id}`, textoFuente(evidencia.fuente), evidencia.ubicacion]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/** Nodos unidos por aristas que no forman parte del árbol (relaciones transversales). */
+function relacionadosTransversales(jerarquia: Jerarquia, id: string): string[] {
+  const padre = jerarquia.padreDe.get(id);
+  const hijos = new Set(jerarquia.hijos.get(id) ?? []);
+  const otros = jerarquia.aristas.flatMap(({ origen, destino }) => {
+    if (origen === id && !hijos.has(destino)) return [destino];
+    if (destino === id && origen !== padre) return [origen];
+    return [];
+  });
+  return [...new Set(otros)];
+}
+
 function Relacionados({ titulo, ids, jerarquia, alAbrir }: { titulo: string; ids: string[]; jerarquia: Jerarquia; alAbrir: (id: string) => void }) {
   if (ids.length === 0) return null;
   return (
@@ -55,7 +93,7 @@ function Relacionados({ titulo, ids, jerarquia, alAbrir }: { titulo: string; ids
 }
 
 function Resumen({ nodo }: { nodo: NodoMapa }) {
-  const nivel = ESTILO_NIVEL[nodo.nivel];
+  const nivel = ESTILO_NIVEL[nivelDe(nodo)];
   return (
     <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
       <dt className="text-muted-foreground">Tipo</dt>
@@ -67,7 +105,7 @@ function Resumen({ nodo }: { nodo: NodoMapa }) {
           {nivel.etiqueta}
         </span>
       </dd>
-      <dt className="text-muted-foreground">Dominio</dt>
+      <dt className="text-muted-foreground">{nodo.tipo === "laboratorio" ? "Nota" : "Dominio"}</dt>
       <dd>{formatearDominio(nodo.dominio)}</dd>
     </dl>
   );
@@ -111,10 +149,11 @@ export function PanelDetalle({ nodo, jerarquia, alCerrar, alAbrir }: PropsPanel)
       <div className="mt-3 space-y-4">
         <Resumen nodo={nodo} />
         <ListaTexto titulo="Laboratorios donde se aplicó" elementos={nodo.laboratorios} vacio="Aún no se ha aplicado en laboratorios con evaluación publicada." />
-        <ListaTexto titulo="Evidencias" elementos={nodo.evidencias} vacio="Sin evidencias registradas." />
-        <ListaTexto titulo="Aspectos por profundizar" elementos={nodo.por_profundizar} vacio="No hay aspectos pendientes registrados." />
+        <ListaEvidencias evidencias={nodo.evidencias} />
+        <ListaTexto titulo="Aspectos por profundizar" elementos={nodo.aspectos_por_profundizar} vacio="No hay aspectos pendientes registrados." />
         <Relacionados titulo="Pertenece a" ids={padre ? [padre] : []} jerarquia={jerarquia} alAbrir={alAbrir} />
         <Relacionados titulo="Contiene" ids={jerarquia.hijos.get(nodo.id) ?? []} jerarquia={jerarquia} alAbrir={alAbrir} />
+        <Relacionados titulo="Relacionado con" ids={relacionadosTransversales(jerarquia, nodo.id)} jerarquia={jerarquia} alAbrir={alAbrir} />
       </div>
     </aside>
   );

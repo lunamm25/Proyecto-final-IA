@@ -2,7 +2,7 @@
 
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { ESTILO_NIVEL, ESTILO_TIPO } from "@/components/mapa/estilos-mapa";
-import type { Jerarquia } from "@/components/mapa/grafo-mapa";
+import { nivelDe, type Jerarquia } from "@/components/mapa/grafo-mapa";
 import { cn } from "@/lib/utils";
 
 export interface ContextoLista {
@@ -38,7 +38,7 @@ function ItemLista({ id, ctx }: { id: string; ctx: ContextoLista }) {
   const abierto = !ctx.colapsados.has(id);
   const coincide = !ctx.coincidencias || ctx.coincidencias.has(id);
   const tipo = ESTILO_TIPO[nodo.tipo];
-  const nivel = ESTILO_NIVEL[nodo.nivel];
+  const nivel = ESTILO_NIVEL[nivelDe(nodo)];
   return (
     <li>
       <div className="flex items-start gap-1 py-0.5">

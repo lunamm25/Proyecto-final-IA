@@ -43,6 +43,5 @@ export function ultimaEntregaPorLaboratorio(entregas: Entrega[]): Map<IdNumerico
   return mapa;
 }
 
-export function formatearFecha(iso: string): string {
-  return new Date(iso).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
-}
+/** Fecha en hora de Bogotá (ver lib/fechas.ts). */
+export { formatearFecha } from "@/lib/fechas";

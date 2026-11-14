@@ -1,6 +1,6 @@
 // Transformación pura de la jerarquía del mapa a nodos y aristas de React Flow (solo presentación).
 import type { Edge, Node } from "@xyflow/react";
-import { ANCHO_NODO, type Jerarquia, type Posicion } from "@/components/mapa/grafo-mapa";
+import { ANCHO_NODO, claveArista, type Jerarquia, type Posicion } from "@/components/mapa/grafo-mapa";
 import type { NodoMapa } from "@/lib/tipos";
 
 export type DatosNodo = {
@@ -72,13 +72,13 @@ export function decorarNodos(nodos: NodoFlujo[], estado: EstadoVisual): NodoFluj
   });
 }
 
-/** Aristas del backend (ya validadas). Las que no siguen `padre_id` se dibujan punteadas. */
+/** Aristas del backend (ya validadas). Las que no definen el árbol (relaciones transversales) se dibujan punteadas. */
 export function crearAristas(j: Jerarquia, estado: Pick<EstadoVisual, "ocultos" | "coincidencias">): Edge[] {
   const atenuado = (id: string) => estado.coincidencias !== null && !estado.coincidencias.has(id);
   return j.aristas.map((arista) => {
     const jerarquica = j.padreDe.get(arista.destino) === arista.origen;
     return {
-      id: arista.id,
+      id: claveArista(arista),
       source: arista.origen,
       target: arista.destino,
       hidden: estado.ocultos.has(arista.origen) || estado.ocultos.has(arista.destino),

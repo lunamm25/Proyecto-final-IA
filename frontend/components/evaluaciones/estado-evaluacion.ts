@@ -1,4 +1,4 @@
-import type { CriterioRubrica, EstadoEvaluacion, Evaluacion, FuenteEvidencia, Rubrica } from "@/lib/tipos";
+import type { CriterioRubrica, EstadoEvaluacion, Evaluacion, Rubrica } from "@/lib/tipos";
 
 /** RNF-04: cada cuánto se consulta el estado mientras la evaluación se procesa. */
 export const INTERVALO_SONDEO_MS = 3000;
@@ -33,12 +33,17 @@ export const ESTADOS_EVALUACION: EstadoEvaluacion[] = [
   "error",
 ];
 
-export const TEXTO_FUENTE: Record<FuenteEvidencia, string> = {
+const TEXTO_FUENTE: Record<string, string> = {
   informe: "Informe",
   codigo: "Código",
   verificacion: "Verificación técnica",
   imagen: "Imagen",
 };
+
+/** Etiqueta de la fuente de una cita (el backend la envía como texto libre). */
+export function textoFuente(fuente: string): string {
+  return TEXTO_FUENTE[fuente] ?? fuente;
+}
 
 /** El backend marca con "procesando" la evaluación mientras corre el pipeline en segundo plano. */
 export function estaProcesando(evaluacion: Pick<Evaluacion, "estado">): boolean {
@@ -54,12 +59,5 @@ export function buscarCriterioRubrica(rubrica: Rubrica | null, criterioId: strin
   return rubrica?.criterios.find((criterio) => criterio.id === criterioId);
 }
 
-export function formatearFechaHora(iso: string): string {
-  return new Date(iso).toLocaleString("es-CO", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+/** Fecha y hora en hora de Bogotá (ver lib/fechas.ts). */
+export { formatearFechaHora } from "@/lib/fechas";

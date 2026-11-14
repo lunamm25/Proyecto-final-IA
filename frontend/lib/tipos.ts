@@ -196,245 +196,370 @@ export interface RespuestaEvaluar {
 
 // ---------- Evaluaciones (RF-05, RF-06, RF-07) ----------
 
-export type FuenteEvidencia = "informe" | "codigo" | "verificacion" | "imagen";
-
-export interface Evidencia {
+/** CitaRespuesta: evidencia citada por la IA y su verificación contra el material (RF-05 CA3). */
+export interface Cita {
   fragmento: string;
-  fuente: FuenteEvidencia;
+  /** Texto libre del backend ("informe", "codigo", "verificacion", "imagen"...). */
+  fuente: string;
   ubicacion: string | null;
   /** false = la cita no se encontró en el material (posible alucinación). */
   verificada: boolean;
+  /** Similitud con el material, de 0 a 100; la calcula el backend. */
+  similitud: number;
 }
 
-export interface EvaluacionCriterio {
-  criterio_id: string;
-  nombre: string;
-  competencia: string;
-  ponderacion: number;
-  nivel_ia: string;
-  nivel_final: string;
-  evidencias: Evidencia[];
-  justificacion: string;
+/** RetroalimentacionCriterioIA: textos originales de la IA para un criterio (solo docente/admin). */
+export interface RetroalimentacionCriterioIA {
+  justificacion: string | null;
   fortalezas: string[];
   debilidades: string[];
-  recomendacion: string;
+  recomendacion: string | null;
+}
+
+/** CriterioEvaluacionRespuesta: textos finales (editados por el docente o de la IA). */
+export interface EvaluacionCriterio {
+  criterio_id: string;
+  nivel_ia: string | null;
+  nivel_final: string | null;
+  puntaje_normalizado: number | null;
+  justificacion: string | null;
+  citas: Cita[];
+  fortalezas: string[];
+  debilidades: string[];
+  recomendacion: string | null;
   /** Motivo del último ajuste del docente; null si no hubo ajuste. */
   ajuste_docente: string | null;
+  original_ia: RetroalimentacionCriterioIA | null;
 }
 
-export interface ResultadoSintaxis {
-  archivo: string;
-  valido: boolean;
-  error: string | null;
+/** RetroalimentacionRespuesta: retroalimentación general de la evaluación. */
+export interface Retroalimentacion {
+  aprendizajes_identificados: string[];
+  como_aplico_conocimientos: string | null;
+  aspectos_a_fortalecer: string[];
+  retroalimentacion_general: string | null;
 }
 
-export interface ResultadoRuff {
-  errores: number;
-  advertencias: number;
-  mensajes: string[];
-}
-
-export interface ResultadoComplejidad {
-  promedio: number;
-  maxima: number;
-  rango: string;
-}
-
-export interface ResultadoTests {
-  ejecutados: boolean;
-  aprobados: number;
-  fallidos: number;
-  detalle: string | null;
-}
-
-export interface MetricasCodigo {
-  archivos: number;
-  lineas: number;
-  tiene_readme: boolean;
-  tiene_requirements: boolean;
-  tiene_tests: boolean;
-  lenguajes: string[];
-}
-
-export interface VerificacionCodigo {
-  sintaxis: ResultadoSintaxis[];
-  ruff: ResultadoRuff;
-  complejidad: ResultadoComplejidad;
-  tests: ResultadoTests;
-  metricas: MetricasCodigo;
-  sandbox: string;
-  limitaciones: string[];
-}
-
-/** GET /api/evaluaciones/{id} */
+/**
+ * GET /api/evaluaciones/{id} (EvaluacionRespuesta). Para el estudiante, proveedor, modelo, temperatura y
+ * prompt_version llegan en null. El backend aún no envía laboratorio ni estudiante (pedido a Rol 2): si los
+ * agrega se usan; si no, la pantalla los toma de la URL (?lab=&est=).
+ */
 export interface Evaluacion {
   id: IdNumerico;
   entrega_id: IdNumerico;
-  /** UUID. Pendiente en el backend (hoy EvaluacionRespuesta no lo trae). */
-  estudiante_id: string;
-  /** Pendiente en el backend (hoy EvaluacionRespuesta no lo trae). */
-  laboratorio_id: IdNumerico;
   estado: EstadoEvaluacion;
   /** Calculada por el backend (0,0–5,0). El frontend nunca la calcula. */
   nota: number | null;
-  proveedor: string;
-  modelo: string;
-  prompt_version: string;
-  temperatura: number;
-  rubrica_version: number;
-  criterios: EvaluacionCriterio[];
-  aprendizajes_identificados: string[];
-  como_aplico_conocimientos: string;
-  aspectos_a_fortalecer: string[];
-  retroalimentacion_general: string;
-  verificacion: VerificacionCodigo | null;
+  rubrica_version_id: IdNumerico | null;
+  rubrica_version: number | null;
+  proveedor: string | null;
+  modelo: string | null;
+  temperatura: number | null;
+  prompt_version: string | null;
   error: string | null;
+  criterios: EvaluacionCriterio[];
+  retroalimentacion: Retroalimentacion | null;
+  /** Retroalimentación original de la IA (solo docente/admin). */
+  retroalimentacion_ia: Retroalimentacion | null;
   creada_en: string;
   aprobada_en: string | null;
   publicada_en: string | null;
+  laboratorio_id?: IdNumerico;
+  estudiante_id?: string;
 }
 
-/** PATCH /api/evaluaciones/{id}/criterios/{criterio_id} */
+/** PATCH /api/evaluaciones/{id}/criterios/{criterio_id} (AjusteCriterioEntrada). */
 export interface AjusteCriterio {
   nivel_final: string;
   motivo: string;
 }
 
-export interface RegistroAuditoria {
-  id: string;
-  usuario_id: string;
-  usuario_nombre: string;
-  accion: string;
-  antes: JsonValor;
-  despues: JsonValor;
-  motivo: string | null;
-  creado_en: string;
+/** Textos de un criterio. Omitido = sin cambios; null = volver al texto de la IA. */
+export interface RetroalimentacionCriterioEntrada {
+  criterio_id: string;
+  justificacion?: string | null;
+  fortalezas?: string[] | null;
+  debilidades?: string[] | null;
+  recomendacion?: string | null;
 }
 
-/** GET /api/evaluaciones/{id}/traza */
+/** PATCH /api/evaluaciones/{id}/retroalimentacion (RetroalimentacionEntrada). Omitido = sin cambios; null = texto de la IA. */
+export interface RetroalimentacionEntrada {
+  retroalimentacion_general?: string | null;
+  como_aplico_conocimientos?: string | null;
+  aprendizajes_identificados?: string[] | null;
+  aspectos_a_fortalecer?: string[] | null;
+  criterios?: RetroalimentacionCriterioEntrada[];
+  motivo?: string;
+}
+
+/** GET /api/evaluaciones: fila del listado docente (EvaluacionResumen). */
+export interface EvaluacionResumen {
+  id: IdNumerico;
+  entrega_id: IdNumerico;
+  estudiante: { id: string; nombre: string | null };
+  laboratorio: { id: IdNumerico; codigo: string; titulo: string };
+  estado: EstadoEvaluacion;
+  nota: number | null;
+  creada_en: string;
+  aprobada_en: string | null;
+  publicada_en: string | null;
+}
+
+/** Filtros de GET /api/evaluaciones. */
+export interface FiltrosEvaluaciones {
+  estado?: EstadoEvaluacion;
+  laboratorio_id?: IdNumerico;
+  estudiante_id?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/** Respuesta paginada (ListadoEvaluacionesRespuesta). */
+export interface ListadoEvaluaciones {
+  items: EvaluacionResumen[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/** GET /api/estudiantes (docente): EstudianteListado. */
+export interface EstudianteListado {
+  id: string;
+  nombre: string | null;
+  correo: string | null;
+  /** Laboratorios distintos con al menos una evaluación publicada (lo calcula el backend). */
+  laboratorios_evaluados: number;
+}
+
+export interface ListadoEstudiantes {
+  items: EstudianteListado[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/** EventoTrazaRespuesta: `usuario` es null si la acción la hizo el sistema. Fechas en UTC. */
+export interface EventoTraza {
+  id: IdNumerico;
+  fecha: string;
+  usuario: { id: string; nombre: string | null } | null;
+  accion: string;
+  antes: JsonValor | null;
+  despues: JsonValor | null;
+  motivo: string | null;
+}
+
+/** GET /api/evaluaciones/{id}/traza (TrazaRespuesta). No incluye respuesta cruda ni verificación técnica. */
 export interface Traza {
   evaluacion_id: IdNumerico;
-  proveedor: string;
-  modelo: string;
-  prompt_version: string;
-  temperatura: number;
-  rubrica_version: number;
-  respuesta_cruda: JsonValor;
-  verificacion: VerificacionCodigo | null;
-  auditoria: RegistroAuditoria[];
+  entrega_id: IdNumerico;
+  estado: EstadoEvaluacion;
+  nota: number | null;
+  proveedor: string | null;
+  modelo: string | null;
+  temperatura: number | null;
+  prompt_version: string | null;
+  rubrica_version_id: IdNumerico | null;
+  rubrica_version: number | null;
+  eventos: EventoTraza[];
 }
 
-// ---------- Informe (RF-08, InformeNarrativoSchema §7) ----------
+// ---------- Informe (RF-08) — InformeRespuesta del backend ----------
 
-export type NivelDominio = "sin_evidencia" | "bajo" | "medio" | "alto";
+/** NivelDominio del backend; null cuando no hay datos suficientes. */
+export type NivelDominio = "bajo" | "medio" | "alto";
 
+/** Prioridades conocidas del plan; el backend envía `prioridad` como texto libre. */
 export type Prioridad = "alta" | "media" | "baja";
 
-export interface NotaLaboratorio {
+export interface EstudianteResumen {
+  /** UUID. */
+  id: string;
+  nombre: string | null;
+}
+
+/** LaboratorioInformeRespuesta: un laboratorio con evaluación publicada. */
+export interface LaboratorioInforme {
   laboratorio_id: IdNumerico;
   codigo: string;
   titulo: string;
-  cohorte: number;
+  /** Nombre de la cohorte ("Cohorte 1"). */
+  cohorte: string;
+  cohorte_numero: number;
+  nota: number | null;
   evaluacion_id: IdNumerico;
-  nota: number;
+  publicada_en: string | null;
 }
 
+/** PromedioCohorteRespuesta. */
 export interface PromedioCohorte {
-  cohorte: number;
+  cohorte: string;
+  cohorte_numero: number;
   promedio: number | null;
+  laboratorios_evaluados: number;
 }
 
-export interface DominioCompetencia {
+/** CompetenciaInformeRespuesta: `promedio` de 0 a 5. */
+export interface CompetenciaInforme {
   competencia: string;
-  /** 0 a 1, calculado por el backend. */
-  dominio: number;
-  nivel: NivelDominio;
+  promedio: number | null;
+  nivel_dominio: NivelDominio | null;
+  criterios_evaluados: number;
 }
 
+/** TematicaInformeRespuesta: `promedio` de 0 a 5. */
+export interface TematicaInforme {
+  tematica_id: IdNumerico;
+  tematica: string;
+  promedio: number | null;
+  nivel_dominio: NivelDominio | null;
+  criterios_evaluados: number;
+}
+
+/** EvolucionRespuesta (cohorte inicial → final). */
 export interface Evolucion {
-  cohorte_1: number | null;
-  cohorte_2: number | null;
+  cohorte_inicial: string;
+  cohorte_final: string;
+  promedio_inicial: number | null;
+  promedio_final: number | null;
   diferencia: number | null;
 }
 
+/** AccionPlanRespuesta. */
 export interface AccionPlan {
   accion: string;
   recurso: string;
-  prioridad: Prioridad;
+  prioridad: string;
   competencia: string;
 }
 
-export interface InformeNarrativo {
+export type EstadoNarrativa = "generada" | "sin_datos" | "no_disponible" | "error";
+
+/** NarrativaRespuesta: la redacta la IA; los números los pone el backend. */
+export interface Narrativa {
+  estado: EstadoNarrativa;
+  mensaje: string | null;
   competencias_desarrolladas: string[];
   brechas: string[];
   plan_fortalecimiento: AccionPlan[];
-  conclusion: string;
+  conclusion: string | null;
+  generada_en: string | null;
 }
 
-/** GET /api/estudiantes/{id}/informe */
+/** GET /api/estudiantes/{id}/informe (InformeRespuesta). Solo evaluaciones publicadas. */
 export interface Informe {
-  estudiante_id: string;
-  estudiante_nombre: string;
-  notas_laboratorio: NotaLaboratorio[];
+  estudiante: EstudianteResumen;
+  laboratorios_evaluados: number;
+  laboratorios: LaboratorioInforme[];
   promedios_cohorte: PromedioCohorte[];
   promedio_general: number | null;
-  dominio_competencias: DominioCompetencia[];
-  evolucion: Evolucion;
-  narrativa: InformeNarrativo | null;
-  generado_en: string;
+  competencias: CompetenciaInforme[];
+  tematicas: TematicaInforme[];
+  evolucion: Evolucion | null;
+  narrativa: Narrativa;
+  avisos: string[];
 }
 
-// ---------- Mapa mental (RF-09) ----------
+// ---------- Mapa mental (RF-09) — MapaRespuesta del backend ----------
 
-export type TipoNodo = "tematica" | "concepto" | "laboratorio";
+export type TipoNodo = "tematica" | "subtema" | "concepto" | "competencia" | "laboratorio";
 
+/** EvidenciaMapaRespuesta. */
+export interface EvidenciaMapa {
+  fragmento: string;
+  fuente: string;
+  ubicacion: string | null;
+  /** Código del laboratorio. */
+  laboratorio: string;
+  criterio_id: string;
+}
+
+/** NodoMapaRespuesta. Ids como "tematica:3", "concepto:3:perceptron", "lab:C1-01". */
 export interface NodoMapa {
   id: string;
-  etiqueta: string;
   tipo: TipoNodo;
-  padre_id: string | null;
-  nivel: NivelDominio;
-  /** 0 a 1, calculado por el backend; null si no hay evidencia. */
+  etiqueta: string;
+  /** 0 a 5; en los laboratorios es su nota. */
   dominio: number | null;
+  nivel_dominio: NivelDominio | null;
+  evidencias: EvidenciaMapa[];
+  aspectos_por_profundizar: string[];
+  /** Códigos de laboratorio. */
   laboratorios: string[];
-  evidencias: string[];
-  por_profundizar: string[];
 }
 
+/** AristaMapaRespuesta: la jerarquía y las relaciones salen solo de aquí (no hay padre_id). */
 export interface AristaMapa {
-  id: string;
   origen: string;
   destino: string;
 }
 
-/** GET /api/estudiantes/{id}/mapa */
+/** GET /api/estudiantes/{id}/mapa (MapaRespuesta). */
 export interface Mapa {
   nodos: NodoMapa[];
   aristas: AristaMapa[];
+  avisos: string[];
 }
 
 // ---------- Configuración de IA (RF-10) ----------
 
-export type ProveedorIA = "gemini" | "openai_compatible";
+/** Proveedor tal como lo nombra el backend ("gemini" u "openai_compat"); la lista válida viene en proveedores_permitidos. */
+export type ProveedorIA = string;
 
-/** GET /api/config-ia */
+/** ActorRespuesta: quién guardó la configuración. */
+export interface ActorConfigIA {
+  id: string;
+  nombre: string | null;
+}
+
+/** ClavesIARespuesta: solo dice si cada secreto está configurado en el servidor; nunca su valor. */
+export interface ClavesIA {
+  gemini_api_key_configurada: boolean;
+  openai_compat_api_key_configurada: boolean;
+  openai_compat_base_url_configurada: boolean;
+}
+
+/** ProveedorPermitido: modelos elegibles; los que no están en `modelos_probados` aún no se probaron con nuestros prompts. */
+export interface ProveedorPermitido {
+  proveedor: ProveedorIA;
+  etiqueta: string;
+  modelos: string[];
+  modelos_probados: string[];
+}
+
+/** GET/PUT /api/config-ia (ConfigIARespuesta, solo admin). */
 export interface ConfigIA {
   proveedor: ProveedorIA;
   modelo: string;
   temperatura: number;
-  actualizado_por: string | null;
+  /** "entorno" = aún no se ha guardado desde el panel (valores por defecto del servidor). */
+  origen: "base_de_datos" | "entorno";
+  /** false = el modelo vigente ya no está en la lista permitida. */
+  modelo_permitido: boolean;
+  actualizado_por: ActorConfigIA | null;
   actualizado_en: string | null;
+  temperatura_maxima: number;
+  claves: ClavesIA;
+  proveedores_permitidos: ProveedorPermitido[];
+  /** Nombre del prompt → versión (solo lectura). */
+  versiones_prompt: Record<string, string | null>;
 }
 
-/** Cuerpo de PUT /api/config-ia */
+/** Cuerpo de PUT /api/config-ia (ConfigIAEntrada): siempre los tres campos juntos. */
 export interface ConfigIAEntrada {
   proveedor: ProveedorIA;
   modelo: string;
   temperatura: number;
 }
 
-/** POST /api/config-ia/probar */
+/** POST /api/config-ia/probar (PruebaConexionRespuesta): siempre 200; el éxito lo dice `ok`. */
 export interface ResultadoPruebaIA {
   ok: boolean;
+  proveedor: ProveedorIA;
+  modelo: string;
+  /** null si no se llamó (falta la clave); igual al límite si se agotó el tiempo. */
+  latencia_ms: number | null;
   mensaje: string;
 }

@@ -1,6 +1,6 @@
 import { PlanFortalecimiento } from "@/components/informe/plan-fortalecimiento";
 import { SeccionInforme } from "@/components/informe/seccion-informe";
-import type { InformeNarrativo } from "@/lib/tipos";
+import type { EstadoNarrativa, Narrativa } from "@/lib/tipos";
 
 function ListaTextos({ textos, vacio }: { textos: string[]; vacio: string }) {
   if (textos.length === 0) return <p className="text-sm text-muted-foreground">{vacio}</p>;
@@ -13,13 +13,19 @@ function ListaTextos({ textos, vacio }: { textos: string[]; vacio: string }) {
   );
 }
 
-/** Narrativa del informe (InformeNarrativoSchema §7). Si aún no existe, lo indica sin romper la vista. */
-export function NarrativaInforme({ narrativa }: { narrativa: InformeNarrativo | null }) {
-  if (!narrativa) {
+const TEXTO_ESTADO: Record<Exclude<EstadoNarrativa, "generada">, string> = {
+  sin_datos: "Todavía no hay evaluaciones publicadas suficientes para redactar el análisis.",
+  no_disponible: "El análisis narrativo no está disponible en este momento (el servicio de IA no respondió o no está configurado).",
+  error: "No se pudo generar el análisis narrativo. Los números del informe siguen siendo válidos.",
+};
+
+/** Análisis del aprendizaje (NarrativaRespuesta). Si no está "generada", muestra el estado y el mensaje del backend. */
+export function NarrativaInforme({ narrativa }: { narrativa: Narrativa }) {
+  if (narrativa.estado !== "generada") {
     return (
       <SeccionInforme id="titulo-narrativa" titulo="Análisis del aprendizaje" sinCorte>
-        <p className="text-sm text-muted-foreground">
-          El análisis narrativo (competencias, brechas y plan de fortalecimiento) aún no está disponible.
+        <p role={narrativa.estado === "error" ? "alert" : undefined} className="text-sm text-muted-foreground">
+          {narrativa.mensaje || TEXTO_ESTADO[narrativa.estado]}
         </p>
       </SeccionInforme>
     );

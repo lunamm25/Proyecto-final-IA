@@ -10,7 +10,7 @@ export default function PaginaMapa() {
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-8">
       <Suspense fallback={<EsqueletoMapa />}>
-        <GuardaRol roles={["estudiante"]}>
+        <GuardaRol roles={["estudiante", "docente", "admin"]}>
           <VistaMapaPropio />
         </GuardaRol>
       </Suspense>

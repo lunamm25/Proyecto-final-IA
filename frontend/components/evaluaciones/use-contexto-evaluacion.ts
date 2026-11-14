@@ -1,8 +1,26 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { listarCohortes, mensajeDeError, obtenerRubricaVigenteONula } from "@/lib/api";
-import type { Cohorte, IdNumerico, Laboratorio, RubricaVersion } from "@/lib/tipos";
+import { idDesdeUrl, type Cohorte, type Evaluacion, type IdNumerico, type Laboratorio, type RubricaVersion } from "@/lib/tipos";
+
+export interface Referencias {
+  laboratorioId: IdNumerico | null;
+  estudianteId: string | null;
+}
+
+/**
+ * Laboratorio y estudiante de la evaluación: los del backend si algún día los envía; si no, los de la URL
+ * (?lab=&est=) que pone la pantalla que enlazó. Si no hay ninguno, quedan en null y la vista lo explica.
+ */
+export function useReferenciasEvaluacion(evaluacion: Pick<Evaluacion, "laboratorio_id" | "estudiante_id">): Referencias {
+  const parametros = useSearchParams();
+  return {
+    laboratorioId: evaluacion.laboratorio_id ?? idDesdeUrl(parametros.get("lab") ?? ""),
+    estudianteId: evaluacion.estudiante_id ?? (parametros.get("est") || null),
+  };
+}
 
 export interface ContextoEvaluacion {
   cargado: boolean;

@@ -1,55 +1,65 @@
-import { buscarLaboratorio } from "@/components/evaluaciones/use-contexto-evaluacion";
-import { listarCohortes, listarEntregas, listarUsuarios } from "@/lib/api";
-import type { EstadoEvaluacion, IdNumerico, Usuario } from "@/lib/tipos";
+// Bandeja de revisión: GET /api/evaluaciones con filtros y paginación (limit/offset). Los filtros los aplica el backend.
+import { ESTADOS_EVALUACION } from "@/components/evaluaciones/estado-evaluacion";
+import { LIMITE_EVALUACIONES_POR_DEFECTO, LIMITE_MAXIMO_LISTADO, listarCohortes, listarEstudiantes } from "@/lib/api";
+import { nombreVisible } from "@/lib/perfil";
+import { idDesdeUrl, type EstadoEvaluacion, type FiltrosEvaluaciones } from "@/lib/tipos";
 
 export type FiltroEstado = EstadoEvaluacion | "todas";
 
 export const FILTRO_POR_DEFECTO: FiltroEstado = "borrador";
 
-export interface FilaBandeja {
-  evaluacionId: IdNumerico;
-  estado: EstadoEvaluacion;
-  /** Nota que envía el backend en el resumen de la entrega. */
-  nota: number | null;
+export const TAMANO_PAGINA = LIMITE_EVALUACIONES_POR_DEFECTO;
+
+/** Valores del formulario de filtros ("" = sin filtrar). */
+export interface FiltrosBandeja {
+  estado: FiltroEstado;
   laboratorio: string;
   estudiante: string;
-  fecha: string;
+  pagina: number;
 }
 
-/** Los nombres son opcionales: si /usuarios falla, se muestra el id del estudiante (nunca el correo). */
-async function nombresDeEstudiantes(): Promise<Map<string, string>> {
-  try {
-    const usuarios: Usuario[] = await listarUsuarios();
-    return new Map(usuarios.flatMap((u) => (u.nombre ? [[u.id, u.nombre] as const] : [])));
-  } catch {
-    return new Map();
-  }
+export const FILTROS_INICIALES: FiltrosBandeja = { estado: FILTRO_POR_DEFECTO, laboratorio: "", estudiante: "", pagina: 0 };
+
+export function esFiltroEstado(valor: string): valor is FiltroEstado {
+  return valor === "todas" || ESTADOS_EVALUACION.some((estado) => estado === valor);
 }
 
-/**
- * El contrato §11 no tiene un listado de evaluaciones: se arma con GET /entregas (sin estudiante_id, docente),
- * que trae el resumen {id, estado, nota} de la evaluación de cada entrega.
- */
-export async function cargarBandeja(): Promise<FilaBandeja[]> {
-  const [entregas, cohortes, nombres] = await Promise.all([listarEntregas(), listarCohortes(), nombresDeEstudiantes()]);
-  return entregas
-    .flatMap((entrega) => {
-      if (!entrega.evaluacion) return [];
-      const laboratorio = buscarLaboratorio(cohortes, entrega.laboratorio_id);
-      return [
-        {
-          evaluacionId: entrega.evaluacion.id,
-          estado: entrega.evaluacion.estado,
-          nota: entrega.evaluacion.nota,
-          laboratorio: laboratorio ? `${laboratorio.codigo} · ${laboratorio.titulo}` : `Laboratorio ${entrega.laboratorio_id}`,
-          estudiante: nombres.get(entrega.estudiante_id) ?? `Estudiante ${entrega.estudiante_id}`,
-          fecha: entrega.creada_en,
-        },
-      ];
-    })
-    .sort((a, b) => b.fecha.localeCompare(a.fecha));
+/** Convierte los filtros del formulario en los parámetros de GET /evaluaciones. */
+export function aParametros(filtros: FiltrosBandeja): FiltrosEvaluaciones {
+  const laboratorio = idDesdeUrl(filtros.laboratorio);
+  return {
+    ...(filtros.estado !== "todas" ? { estado: filtros.estado } : {}),
+    ...(laboratorio !== null ? { laboratorio_id: laboratorio } : {}),
+    ...(filtros.estudiante ? { estudiante_id: filtros.estudiante } : {}),
+    limit: TAMANO_PAGINA,
+    offset: filtros.pagina * TAMANO_PAGINA,
+  };
 }
 
-export function filtrarBandeja(filas: FilaBandeja[], filtro: FiltroEstado): FilaBandeja[] {
-  return filtro === "todas" ? filas : filas.filter((fila) => fila.estado === filtro);
+export interface Opcion {
+  valor: string;
+  texto: string;
+}
+
+export interface OpcionesFiltro {
+  laboratorios: Opcion[];
+  /** null = no se pudo cargar la lista de estudiantes (el filtro se oculta). */
+  estudiantes: Opcion[] | null;
+}
+
+/** Opciones de los selectores: laboratorios de GET /cohortes y estudiantes de GET /estudiantes. */
+export async function cargarOpciones(): Promise<OpcionesFiltro> {
+  const [cohortes, estudiantes] = await Promise.allSettled([listarCohortes(), listarEstudiantes(LIMITE_MAXIMO_LISTADO, 0)]);
+  return {
+    laboratorios:
+      cohortes.status === "fulfilled"
+        ? cohortes.value
+            .flatMap((c) => c.laboratorios)
+            .map((lab) => ({ valor: String(lab.id), texto: `${lab.codigo} · ${lab.titulo}` }))
+        : [],
+    estudiantes:
+      estudiantes.status === "fulfilled"
+        ? estudiantes.value.items.map((e) => ({ valor: e.id, texto: nombreVisible(e.nombre, "Estudiante sin nombre") }))
+        : null,
+  };
 }

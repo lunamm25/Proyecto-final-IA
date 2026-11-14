@@ -15,14 +15,21 @@ import {
   estaProcesando,
   formatearFechaHora,
 } from "@/components/evaluaciones/estado-evaluacion";
-import { useContextoEvaluacion, type ContextoEvaluacion } from "@/components/evaluaciones/use-contexto-evaluacion";
+import {
+  useContextoEvaluacion,
+  useReferenciasEvaluacion,
+  type ContextoEvaluacion,
+  type Referencias,
+} from "@/components/evaluaciones/use-contexto-evaluacion";
 import { useSondeoEvaluacion } from "@/components/evaluaciones/use-sondeo-evaluacion";
 import { AccionesRevision } from "@/components/revision/acciones-revision";
 import { FormularioAjuste } from "@/components/revision/formulario-ajuste";
+import { EditorRetroCriterio, EditorRetroGeneral } from "@/components/revision/formulario-retroalimentacion";
 import { PanelTraza } from "@/components/revision/panel-traza";
 import { PanelVerificacion } from "@/components/revision/panel-verificacion";
 import { useNombreEstudiante } from "@/components/revision/use-nombre-estudiante";
 import { obtenerTraza } from "@/lib/api";
+import { nombreVisible } from "@/lib/perfil";
 import { idDesdeUrl, type Evaluacion, type IdNumerico } from "@/lib/tipos";
 import { useCarga } from "@/lib/use-carga";
 
@@ -50,23 +57,26 @@ function EnlacesEstudiante({ estudianteId }: { estudianteId: string }) {
   );
 }
 
-interface CabeceraProps {
+interface PropsRevision {
   evaluacion: Evaluacion;
   contexto: ContextoEvaluacion;
+  referencias: Referencias;
   alCambiar: (evaluacion: Evaluacion) => void;
 }
 
-function Cabecera({ evaluacion, contexto, alCambiar }: CabeceraProps) {
-  const nombre = useNombreEstudiante(evaluacion.estudiante_id);
+function Cabecera({ evaluacion, contexto, referencias, alCambiar }: PropsRevision) {
+  const nombre = useNombreEstudiante(referencias.estudianteId);
   return (
     <header className="space-y-4 rounded-xl border bg-card p-4 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="font-mono text-xs text-muted-foreground">{contexto.laboratorio?.codigo ?? evaluacion.laboratorio_id}</p>
-          <h1 className="text-2xl font-bold">{contexto.laboratorio?.titulo ?? "Revisión de la evaluación"}</h1>
-          <p className="mt-1 text-sm">Estudiante: <span className="font-medium">{nombre ?? evaluacion.estudiante_id}</span></p>
+          {contexto.laboratorio && <p className="font-mono text-xs text-muted-foreground">{contexto.laboratorio.codigo}</p>}
+          <h1 className="text-2xl font-bold">{contexto.laboratorio?.titulo ?? `Revisión de la evaluación ${evaluacion.id}`}</h1>
+          <p className="mt-1 text-sm">
+            Estudiante: <span className="font-medium">{referencias.estudianteId ? nombreVisible(nombre, "Estudiante") : "No identificado"}</span>
+          </p>
           <p className="text-sm text-muted-foreground">Generada el {formatearFechaHora(evaluacion.creada_en)}</p>
-          <EnlacesEstudiante estudianteId={evaluacion.estudiante_id} />
+          {referencias.estudianteId && <EnlacesEstudiante estudianteId={referencias.estudianteId} />}
         </div>
         <div className="flex flex-col items-start gap-2 sm:items-end">
           <EtiquetaEstadoEvaluacion estado={evaluacion.estado} />
@@ -78,12 +88,20 @@ function Cabecera({ evaluacion, contexto, alCambiar }: CabeceraProps) {
   );
 }
 
-function bloqueoAjuste(evaluacion: Evaluacion): string | null {
+function bloqueoEdicion(evaluacion: Evaluacion): string | null {
   if (admiteAjustes(evaluacion)) return null;
-  return `La evaluación está ${TEXTO_ESTADO_EVALUACION[evaluacion.estado].toLowerCase()}: ya no se pueden ajustar los niveles.`;
+  return `La evaluación está ${TEXTO_ESTADO_EVALUACION[evaluacion.estado].toLowerCase()}: ya no se pueden ajustar niveles ni editar textos.`;
 }
 
-function AvisoVersionRubrica({ evaluacion, contexto }: { evaluacion: Evaluacion; contexto: ContextoEvaluacion }) {
+function AvisoRubrica({ evaluacion, contexto, referencias }: Omit<PropsRevision, "alCambiar">) {
+  if (referencias.laboratorioId === null) {
+    return (
+      <p role="note" className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+        No se pudo identificar el laboratorio (abre la evaluación desde la bandeja). Sin la rúbrica, los criterios se
+        muestran por su código y no se pueden ajustar niveles; sí puedes editar los textos.
+      </p>
+    );
+  }
   if (!contexto.cargado) return null;
   if (!contexto.rubrica) {
     return (
@@ -93,7 +111,7 @@ function AvisoVersionRubrica({ evaluacion, contexto }: { evaluacion: Evaluacion;
       </p>
     );
   }
-  if (contexto.rubrica.version === evaluacion.rubrica_version) return null;
+  if (evaluacion.rubrica_version === null || contexto.rubrica.version === evaluacion.rubrica_version) return null;
   return (
     <p role="note" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
       La evaluación se hizo con la rúbrica v{evaluacion.rubrica_version}, pero la vigente es la v{contexto.rubrica.version}.
@@ -103,33 +121,30 @@ function AvisoVersionRubrica({ evaluacion, contexto }: { evaluacion: Evaluacion;
   );
 }
 
-function SeccionCriterios({ evaluacion, contexto, alCambiar }: CabeceraProps) {
-  const bloqueo = bloqueoAjuste(evaluacion);
+function SeccionCriterios({ evaluacion, contexto, referencias, alCambiar }: PropsRevision) {
+  const bloqueo = bloqueoEdicion(evaluacion);
+  const puedeAjustar = referencias.laboratorioId !== null && contexto.cargado;
   return (
     <section aria-labelledby="titulo-criterios" className="space-y-4">
       <h2 id="titulo-criterios" className="text-lg font-semibold">Criterios</h2>
-      <AvisoVersionRubrica evaluacion={evaluacion} contexto={contexto} />
+      <AvisoRubrica evaluacion={evaluacion} contexto={contexto} referencias={referencias} />
+      {bloqueo && <p className="text-sm text-muted-foreground">{bloqueo}</p>}
       {evaluacion.criterios.length === 0 ? (
         <EstadoVacio titulo="Sin criterios" mensaje="Esta evaluación no tiene resultados por criterio." />
       ) : (
         evaluacion.criterios.map((criterio) => {
           const criterioRubrica = buscarCriterioRubrica(contexto.rubrica?.contenido ?? null, criterio.criterio_id);
           return (
-            <BloqueCriterio
-              key={criterio.criterio_id}
-              criterio={criterio}
-              criterioRubrica={criterioRubrica}
-              modoNivelIa="siempre"
-              mostrarAjuste
-            >
-              {contexto.cargado && (
-                <FormularioAjuste
-                  evaluacionId={evaluacion.id}
-                  criterio={criterio}
-                  niveles={criterioRubrica?.niveles ?? null}
-                  bloqueo={bloqueo}
-                  alAjustar={alCambiar}
-                />
+            <BloqueCriterio key={criterio.criterio_id} criterio={criterio} criterioRubrica={criterioRubrica}
+              modoNivelIa="siempre" mostrarAjuste>
+              {!bloqueo && (
+                <div className="space-y-3">
+                  {puedeAjustar && (
+                    <FormularioAjuste evaluacionId={evaluacion.id} criterio={criterio}
+                      niveles={criterioRubrica?.niveles ?? null} bloqueo={null} alAjustar={alCambiar} />
+                  )}
+                  <EditorRetroCriterio evaluacionId={evaluacion.id} criterio={criterio} bloqueo={null} alGuardar={alCambiar} />
+                </div>
               )}
             </BloqueCriterio>
           );
@@ -154,30 +169,35 @@ function SeccionTraza({ evaluacion }: { evaluacion: Evaluacion }) {
   );
 }
 
-/** Huella de la evaluación: cambia con cada ajuste o cambio de estado y se usa como key para recargar la traza. */
+/** Huella de la evaluación: cambia con cada ajuste, edición o cambio de estado y recarga la traza. */
 function versionDe(evaluacion: Evaluacion): string {
-  const niveles = evaluacion.criterios.map((c) => `${c.criterio_id}:${c.nivel_final}:${c.ajuste_docente ?? ""}`);
-  return [evaluacion.estado, evaluacion.nota ?? "", ...niveles].join("|");
+  return JSON.stringify([evaluacion.estado, evaluacion.nota, evaluacion.criterios, evaluacion.retroalimentacion]);
 }
 
 function ContenidoRevision({ evaluacion, fallos, alCambiar }: { evaluacion: Evaluacion; fallos: number; alCambiar: (e: Evaluacion) => void }) {
-  const contexto = useContextoEvaluacion(evaluacion.laboratorio_id);
+  const referencias = useReferenciasEvaluacion(evaluacion);
+  const contexto = useContextoEvaluacion(referencias.laboratorioId);
+  const props = { evaluacion, contexto, referencias, alCambiar };
 
   return (
     <div className="space-y-8">
       {ENLACE_BANDEJA}
-      <Cabecera evaluacion={evaluacion} contexto={contexto} alCambiar={alCambiar} />
+      <Cabecera {...props} />
       {estaProcesando(evaluacion) ? (
         <ProgresoEvaluacion fallos={fallos} />
       ) : evaluacion.estado === "error" ? (
         <ErrorEvaluacion detalle={evaluacion.error} esEstudiante={false} />
       ) : (
         <>
-          <ResumenResultado evaluacion={evaluacion} />
-          <SeccionCriterios evaluacion={evaluacion} contexto={contexto} alCambiar={alCambiar} />
+          <div className="space-y-3">
+            <ResumenResultado evaluacion={evaluacion} />
+            <EditorRetroGeneral key={versionDe(evaluacion)} evaluacion={evaluacion} bloqueo={bloqueoEdicion(evaluacion)}
+              alGuardar={alCambiar} />
+          </div>
+          <SeccionCriterios {...props} />
           <section aria-labelledby="titulo-verificacion" className="space-y-3">
             <h2 id="titulo-verificacion" className="text-lg font-semibold">Verificación técnica del código</h2>
-            <PanelVerificacion verificacion={evaluacion.verificacion} />
+            <PanelVerificacion />
           </section>
         </>
       )}

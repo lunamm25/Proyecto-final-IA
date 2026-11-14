@@ -40,7 +40,7 @@ const TARJETAS: TarjetaPanel[] = [
     titulo: "Configuración de IA",
     descripcion: "Elige el proveedor, el modelo y la temperatura, y prueba la conexión.",
     Icono: Bot,
-    roles: ["docente", "admin"],
+    roles: ["admin"],
   },
   {
     href: "/admin/usuarios",

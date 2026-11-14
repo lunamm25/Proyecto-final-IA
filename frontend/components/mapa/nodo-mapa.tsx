@@ -5,10 +5,11 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Minus, Plus } from "lucide-react";
 import { ESTILO_NIVEL, ESTILO_TIPO } from "@/components/mapa/estilos-mapa";
 import type { NodoFlujo } from "@/components/mapa/flujo-mapa";
+import { nivelDe } from "@/components/mapa/grafo-mapa";
 import { cn } from "@/lib/utils";
 
 function InsigniaNivel({ nodo }: { nodo: NodoFlujo["data"]["nodo"] }) {
-  const estilo = ESTILO_NIVEL[nodo.nivel];
+  const estilo = ESTILO_NIVEL[nivelDe(nodo)];
   return (
     <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold", estilo.claseInsignia)}>
       <estilo.Icono className="size-3" aria-hidden="true" />
@@ -47,7 +48,7 @@ function BotonAlternar({ id, etiqueta, numHijos, colapsado, alAlternar }: PropsA
 function NodoMapaBase({ id, data }: NodeProps<NodoFlujo>) {
   const { nodo, numHijos, colapsado, atenuado, resaltado, seleccionado } = data;
   const tipo = ESTILO_TIPO[nodo.tipo];
-  const nivel = ESTILO_NIVEL[nodo.nivel];
+  const nivel = ESTILO_NIVEL[nivelDe(nodo)];
   // El clic con mouse lo maneja onNodeClick (no se dispara tras arrastrar); aquí solo teclado (detail === 0).
   const alActivar = (evento: MouseEvent) => {
     if (evento.detail === 0) data.alAbrir(id);

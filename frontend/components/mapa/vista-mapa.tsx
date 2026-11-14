@@ -4,10 +4,16 @@ import Link from "next/link";
 import { useCallback } from "react";
 import { Inbox } from "lucide-react";
 import { MensajeError } from "@/components/estados";
-import { EsqueletoMapa } from "@/components/mapa/esqueleto-mapa";
+import { EsqueletoMapa, MENSAJE_GENERANDO_MAPA } from "@/components/mapa/esqueleto-mapa";
 import { ExploradorMapa } from "@/components/mapa/explorador-mapa";
 import { useSesion } from "@/components/proveedor-sesion";
-import { useNombreEstudiante } from "@/components/revision/use-nombre-estudiante";
+import {
+  ElegirEstudiante,
+  ListaAvisos,
+  SelectorEstudiante,
+  nombreEnLista,
+  useListaEstudiantes,
+} from "@/components/selector-estudiante";
 import { ErrorApi, obtenerMapa } from "@/lib/api";
 import type { Mapa } from "@/lib/tipos";
 import { useCarga } from "@/lib/use-carga";
@@ -19,7 +25,7 @@ type ResultadoMapa =
   | { tipo: "denegado"; mensaje: string }
   | { tipo: "no_encontrado"; mensaje: string };
 
-/** Pide el mapa y separa 403/404 (mensajes propios) del resto de errores (con Reintentar). */
+/** Pide el mapa y separa 403/404 (mensajes propios) del resto de errores, incluido el tiempo agotado (con Reintentar). */
 async function cargarMapa(estudianteId: string): Promise<ResultadoMapa> {
   try {
     return { tipo: "ok", mapa: await obtenerMapa(estudianteId) };
@@ -50,7 +56,13 @@ function NoEncontrado({ mensaje }: { mensaje: string }) {
   );
 }
 
-function SinEvaluaciones({ nombre, esEstudiante }: { nombre: string | null; esEstudiante: boolean }) {
+interface PropsSinEvaluaciones {
+  nombre: string | null;
+  esEstudiante: boolean;
+  avisos: string[];
+}
+
+function SinEvaluaciones({ nombre, esEstudiante, avisos }: PropsSinEvaluaciones) {
   return (
     <div className="mx-auto my-12 max-w-lg rounded-xl border border-dashed p-6 text-center">
       <Inbox className="mx-auto size-8 text-muted-foreground" aria-hidden="true" />
@@ -61,6 +73,9 @@ function SinEvaluaciones({ nombre, esEstudiante }: { nombre: string | null; esEs
         El mapa mental se construye solo con evaluaciones publicadas y validadas por el docente.
         {esEstudiante && " Sube tus laboratorios y, cuando el docente publique su revisión, aquí verás tus competencias."}
       </p>
+      <div className="mt-4 text-left">
+        <ListaAvisos avisos={avisos} />
+      </div>
       <Link href={esEstudiante ? "/portafolio" : "/docente/revision"} className={CLASE_ENLACE}>
         {esEstudiante ? "Ir a mi portafolio" : "Ir a la bandeja de revisión"}
       </Link>
@@ -95,26 +110,34 @@ function ContenidoMapa({ estudianteId, esEstudiante, nombre }: PropsContenido) {
   const cargar = useCallback(() => cargarMapa(estudianteId), [estudianteId]);
   const { estado, recargar } = useCarga(cargar);
 
-  if (estado.tipo === "cargando") return <EsqueletoMapa />;
+  if (estado.tipo === "cargando") return <EsqueletoMapa mensaje={MENSAJE_GENERANDO_MAPA} />;
   if (estado.tipo === "error") {
     return <MensajeError titulo="No se pudo cargar el mapa mental" mensaje={estado.mensaje} alReintentar={recargar} />;
   }
   const resultado = estado.datos;
   if (resultado.tipo === "denegado") return <SinPermiso mensaje={resultado.mensaje} />;
   if (resultado.tipo === "no_encontrado") return <NoEncontrado mensaje={resultado.mensaje} />;
-  if (resultado.mapa.nodos.length === 0) return <SinEvaluaciones nombre={nombre} esEstudiante={esEstudiante} />;
+  if (resultado.mapa.nodos.length === 0) {
+    return <SinEvaluaciones nombre={nombre} esEstudiante={esEstudiante} avisos={resultado.mapa.avisos} />;
+  }
   return (
     <div className="space-y-4">
       <Cabecera nombre={nombre} estudianteId={estudianteId} esEstudiante={esEstudiante} />
+      <ListaAvisos avisos={resultado.mapa.avisos} />
       <ExploradorMapa mapa={resultado.mapa} nombre={nombre ?? estudianteId} />
     </div>
   );
 }
 
-/** Docente/admin: el nombre sale de GET /usuarios (si no está disponible se usa el id). */
+/** Docente/admin: selector de estudiante y nombre tomado de GET /estudiantes (GET /usuarios es solo para admin). */
 function ContenidoMapaDocente({ estudianteId }: { estudianteId: string }) {
-  const nombre = useNombreEstudiante(estudianteId);
-  return <ContenidoMapa estudianteId={estudianteId} esEstudiante={false} nombre={nombre} />;
+  const { estado } = useListaEstudiantes();
+  return (
+    <div className="space-y-6">
+      <SelectorEstudiante destino="mapa" actual={estudianteId} />
+      <ContenidoMapa estudianteId={estudianteId} esEstudiante={false} nombre={nombreEnLista(estado, estudianteId)} />
+    </div>
+  );
 }
 
 /**
@@ -129,9 +152,10 @@ export function VistaMapa({ estudianteId }: { estudianteId: string }) {
   return <ContenidoMapa estudianteId={estudianteId} esEstudiante nombre={perfil.nombre} />;
 }
 
-/** Mapa del estudiante que tiene la sesión abierta (/mapa). */
+/** /mapa: el estudiante ve el suyo; docente y admin eligen un estudiante. */
 export function VistaMapaPropio() {
   const { perfil } = useSesion();
   if (!perfil) return null;
+  if (perfil.rol !== "estudiante") return <ElegirEstudiante destino="mapa" />;
   return <ContenidoMapa estudianteId={perfil.id} esEstudiante nombre={perfil.nombre} />;
 }

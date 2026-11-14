@@ -11,7 +11,7 @@ import {
   type Filtro,
   type Jerarquia,
 } from "@/components/mapa/grafo-mapa";
-import type { NivelDominio } from "@/lib/tipos";
+import type { NivelMapa } from "@/components/mapa/grafo-mapa";
 
 /** Quita de `colapsados` los ancestros de los ids dados para que queden visibles. */
 function expandirAncestros(j: Jerarquia, colapsados: Set<string>, ids: string[]): Set<string> {
@@ -31,7 +31,7 @@ function alternarEnConjunto<T>(conjunto: Set<T>, valor: T): Set<T> {
 export function useEstadoMapa(j: Jerarquia) {
   const [colapsados, setColapsados] = useState<Set<string>>(() => new Set());
   const [consulta, setConsulta] = useState("");
-  const [niveles, setNiveles] = useState<Set<NivelDominio>>(() => new Set(NIVELES));
+  const [niveles, setNiveles] = useState<Set<NivelMapa>>(() => new Set(NIVELES));
   const [seleccionadoId, setSeleccionadoId] = useState<string | null>(null);
 
   const filtro = useMemo<Filtro>(() => ({ consulta, niveles }), [consulta, niveles]);
@@ -46,7 +46,7 @@ export function useEstadoMapa(j: Jerarquia) {
   const alternarRama = useCallback((id: string) => setColapsados((previo) => alternarEnConjunto(previo, id)), []);
   const expandirTodo = useCallback(() => setColapsados(new Set()), []);
   const colapsarTodo = useCallback(() => setColapsados(new Set(idsConHijos(j))), [j]);
-  const alternarNivel = useCallback((nivel: NivelDominio) => setNiveles((previo) => alternarEnConjunto(previo, nivel)), []);
+  const alternarNivel = useCallback((nivel: NivelMapa) => setNiveles((previo) => alternarEnConjunto(previo, nivel)), []);
 
   /** Actualiza la búsqueda, expande las ramas con coincidencias y devuelve la primera (o null). */
   const buscar = useCallback(

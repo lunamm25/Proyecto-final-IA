@@ -15,9 +15,9 @@ function descargarUrl(url: string, nombre: string): void {
   enlace.remove();
 }
 
-/** Descarga exactamente los datos {nodos, aristas} del backend (sin posiciones ni estado de la interfaz). */
+/** Descarga exactamente los datos {nodos, aristas, avisos} del backend (sin posiciones ni estado de la interfaz). */
 export function descargarJson(mapa: Mapa, nombre: string): void {
-  const datos: Mapa = { nodos: mapa.nodos, aristas: mapa.aristas };
+  const datos: Mapa = { nodos: mapa.nodos, aristas: mapa.aristas, avisos: mapa.avisos };
   const url = URL.createObjectURL(new Blob([JSON.stringify(datos, null, 2)], { type: "application/json" }));
   descargarUrl(url, nombre);
   setTimeout(() => URL.revokeObjectURL(url), 1000);

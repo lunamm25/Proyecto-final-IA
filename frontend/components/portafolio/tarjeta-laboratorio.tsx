@@ -8,13 +8,14 @@ import {
   formatearNota,
   type EstadoLaboratorio,
 } from "@/components/portafolio/estado-entrega";
+import { rutaEvaluacion } from "@/lib/rutas-evaluacion";
 import type { Entrega, IdNumerico, Laboratorio } from "@/lib/tipos";
 
 interface TarjetaLaboratorioProps {
   laboratorio: Laboratorio;
   entrega: Entrega | undefined;
   evaluando: boolean;
-  alEvaluar: (entregaId: IdNumerico) => void;
+  alEvaluar: (entregaId: IdNumerico, laboratorioId: IdNumerico) => void;
 }
 
 const CLASE_ENLACE_BOTON =
@@ -25,7 +26,7 @@ interface AccionesProps {
   laboratorio: Laboratorio;
   entrega: Entrega | undefined;
   evaluando: boolean;
-  alEvaluar: (entregaId: IdNumerico) => void;
+  alEvaluar: (entregaId: IdNumerico, laboratorioId: IdNumerico) => void;
 }
 
 function Acciones({ estado, laboratorio, entrega, evaluando, alEvaluar }: AccionesProps) {
@@ -42,7 +43,7 @@ function Acciones({ estado, laboratorio, entrega, evaluando, alEvaluar }: Accion
   if (estado === "sin_evaluar" || estado === "error") {
     return (
       <>
-        <Button onClick={() => alEvaluar(entrega.id)} disabled={evaluando} aria-busy={evaluando}>
+        <Button onClick={() => alEvaluar(entrega.id, laboratorio.id)} disabled={evaluando} aria-busy={evaluando}>
           {evaluando && <Loader2 className="animate-spin" aria-hidden="true" />}
           {estado === "error" ? "Evaluar de nuevo" : "Evaluar"}
         </Button>
@@ -56,7 +57,7 @@ function Acciones({ estado, laboratorio, entrega, evaluando, alEvaluar }: Accion
   if (estado === "publicada" && entrega.evaluacion) {
     return (
       <Link
-        href={`/evaluaciones/${entrega.evaluacion.id}`}
+        href={rutaEvaluacion(entrega.evaluacion.id, { laboratorioId: laboratorio.id })}
         className={`${CLASE_ENLACE_BOTON} border hover:bg-muted`}
       >
         Ver evaluación
@@ -69,7 +70,7 @@ function Acciones({ estado, laboratorio, entrega, evaluando, alEvaluar }: Accion
       <p className="text-xs text-muted-foreground">El docente revisará la evaluación antes de publicarla.</p>
       {entrega.evaluacion && (
         <Link
-          href={`/evaluaciones/${entrega.evaluacion.id}`}
+          href={rutaEvaluacion(entrega.evaluacion.id, { laboratorioId: laboratorio.id })}
           className={`${CLASE_ENLACE_BOTON} border hover:bg-muted`}
         >
           Ver progreso

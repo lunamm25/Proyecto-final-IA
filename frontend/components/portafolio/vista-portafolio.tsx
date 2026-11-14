@@ -9,6 +9,7 @@ import { TarjetaLaboratorio } from "@/components/portafolio/tarjeta-laboratorio"
 import { ultimaEntregaPorLaboratorio } from "@/components/portafolio/estado-entrega";
 import { evaluarEntrega, listarCohortes, listarEntregas, mensajeDeError } from "@/lib/api";
 import type { Cohorte, Entrega, IdNumerico } from "@/lib/tipos";
+import { rutaEvaluacion } from "@/lib/rutas-evaluacion";
 import { useCarga } from "@/lib/use-carga";
 
 interface DatosPortafolio {
@@ -16,7 +17,7 @@ interface DatosPortafolio {
   entregas: Map<IdNumerico, Entrega>;
 }
 
-type Aviso = { tipo: "exito" | "error"; mensaje: string; evaluacionId?: IdNumerico };
+type Aviso = { tipo: "exito" | "error"; mensaje: string; evaluacionId?: IdNumerico; laboratorioId?: IdNumerico };
 
 function EsqueletoPortafolio() {
   return (
@@ -50,7 +51,7 @@ function AvisoAccion({ aviso }: { aviso: Aviso }) {
           <>
             {" "}
             <Link
-              href={`/evaluaciones/${aviso.evaluacionId}`}
+              href={rutaEvaluacion(aviso.evaluacionId, { laboratorioId: aviso.laboratorioId })}
               className="font-medium underline underline-offset-4"
             >
               Ver progreso
@@ -66,7 +67,7 @@ interface SeccionCohorteProps {
   cohorte: Cohorte;
   entregas: Map<IdNumerico, Entrega>;
   evaluandoId: IdNumerico | null;
-  alEvaluar: (entregaId: IdNumerico) => void;
+  alEvaluar: (entregaId: IdNumerico, laboratorioId: IdNumerico) => void;
 }
 
 function SeccionCohorte({ cohorte, entregas, evaluandoId, alEvaluar }: SeccionCohorteProps) {
@@ -114,7 +115,7 @@ export function VistaPortafolio() {
   const { estado, recargar, refrescar } = useCarga(cargar);
 
   const alEvaluar = useCallback(
-    async (entregaId: IdNumerico) => {
+    async (entregaId: IdNumerico, laboratorioId: IdNumerico) => {
       setEvaluandoId(entregaId);
       setAviso(null);
       try {
@@ -123,6 +124,7 @@ export function VistaPortafolio() {
           tipo: "exito",
           mensaje: "Tu entrega se envió a evaluación. Quedó pendiente de revisión docente: verás la nota cuando se publique.",
           evaluacionId,
+          laboratorioId,
         });
         refrescar();
       } catch (causa) {
@@ -159,7 +161,7 @@ export function VistaPortafolio() {
             cohorte={cohorte}
             entregas={entregas}
             evaluandoId={evaluandoId}
-            alEvaluar={(id) => void alEvaluar(id)}
+            alEvaluar={(id, laboratorioId) => void alEvaluar(id, laboratorioId)}
           />
         ))}
       </div>

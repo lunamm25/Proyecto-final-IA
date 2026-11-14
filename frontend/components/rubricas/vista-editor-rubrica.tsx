@@ -7,6 +7,7 @@ import { Cargando, MensajeError } from "@/components/estados";
 import { EditorRubrica } from "@/components/rubricas/editor-rubrica";
 import { listarCohortes, obtenerRubricaVigenteONula } from "@/lib/api";
 import { idDesdeUrl, type Cohorte, type IdNumerico, type Laboratorio, type RubricaVersion } from "@/lib/tipos";
+import { ZONA_HORARIA } from "@/lib/fechas";
 import { useCarga } from "@/lib/use-carga";
 
 interface DatosRubrica {
@@ -24,7 +25,7 @@ async function cargarDatos(labId: IdNumerico): Promise<DatosRubrica | null> {
   return null;
 }
 
-const formatoFecha = new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeStyle: "short" });
+const formatoFecha = new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeStyle: "short", timeZone: ZONA_HORARIA });
 
 function EnlaceVolver() {
   return (

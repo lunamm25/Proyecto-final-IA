@@ -8,10 +8,13 @@ import {
   entregasMock,
   evaluacionesMock,
   informeMock,
+  informeNarrativaErrorMock,
   informeSinPublicadasMock,
   laboratoriosSinRubricaMock,
+  mapaConAvisosMock,
   mapaMock,
   mapaVacioMock,
+  MODELO_FALLA_MOCK,
   perfilesMock,
   rubricaExtraidaMock,
   resultadoSimuladoMock,
@@ -20,11 +23,11 @@ import {
   usuariosMock,
 } from "@/lib/mocks";
 import { calcularInconsistencias } from "@/lib/inconsistencias-rubrica";
-import { nombreVisible } from "@/lib/perfil";
 import { leerSesionMock } from "@/lib/sesion-mock";
 import { obtenerSupabaseNavegador } from "@/lib/supabase/cliente";
 import type {
   AjusteCriterio,
+  CambioRol,
   Cohorte,
   ConfigIA,
   ConfigIAEntrada,
@@ -32,11 +35,15 @@ import type {
   ErrorRespuesta,
   Evaluacion,
   EstadoEvaluacion,
+  EvaluacionResumen,
+  FiltrosEvaluaciones,
   IdNumerico,
   Informe,
   JsonValor,
   Laboratorio,
   LaboratorioEntrada,
+  ListadoEstudiantes,
+  ListadoEvaluaciones,
   Mapa,
   NuevaEntrega,
   Perfil,
@@ -44,6 +51,9 @@ import type {
   ResultadoExtraccion,
   ResultadoPruebaIA,
   ResultadoValidacion,
+  Retroalimentacion,
+  RetroalimentacionCriterioEntrada,
+  RetroalimentacionEntrada,
   Rol,
   Rubrica,
   RubricaVersion,
@@ -123,7 +133,36 @@ async function obtenerToken(): Promise<string | null> {
 
 type Metodo = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
-async function enviar(metodo: Metodo, ruta: string, cuerpo?: unknown): Promise<Response> {
+/** Límite de espera de las peticiones que generan IA en el momento (informe y mapa). */
+export const TIEMPO_ESPERA_GENERACION_MS = 60_000;
+
+export const MENSAJE_TIEMPO_AGOTADO =
+  "La generación tardó más de un minuto y se canceló. Puede que el servidor siga trabajando: intenta de nuevo.";
+
+/** Límite de espera de una petición y el mensaje que se muestra si se agota. */
+interface LimiteEspera {
+  ms: number;
+  mensaje: string;
+}
+
+const LIMITE_GENERACION: LimiteEspera = { ms: TIEMPO_ESPERA_GENERACION_MS, mensaje: MENSAJE_TIEMPO_AGOTADO };
+
+/** Ejecuta `fetch` con límite de tiempo opcional: si se agota, aborta y lanza un 408 con mensaje claro. */
+async function fetchConLimite(url: string, opciones: RequestInit, limite?: LimiteEspera): Promise<Response> {
+  if (limite === undefined) return fetch(url, opciones);
+  const controlador = new AbortController();
+  const temporizador = setTimeout(() => controlador.abort(), limite.ms);
+  try {
+    return await fetch(url, { ...opciones, signal: controlador.signal });
+  } catch (causa) {
+    if (controlador.signal.aborted) throw new ErrorApi(408, limite.mensaje);
+    throw causa;
+  } finally {
+    clearTimeout(temporizador);
+  }
+}
+
+async function enviar(metodo: Metodo, ruta: string, cuerpo?: unknown, limite?: LimiteEspera): Promise<Response> {
   const cabeceras = new Headers({ Accept: "application/json" });
   const token = await obtenerToken();
   if (token) cabeceras.set("Authorization", `Bearer ${token}`);
@@ -138,8 +177,9 @@ async function enviar(metodo: Metodo, ruta: string, cuerpo?: unknown): Promise<R
 
   let respuesta: Response;
   try {
-    respuesta = await fetch(`${API_URL}/api${ruta}`, { method: metodo, headers: cabeceras, body });
-  } catch {
+    respuesta = await fetchConLimite(`${API_URL}/api${ruta}`, { method: metodo, headers: cabeceras, body }, limite);
+  } catch (causa) {
+    if (causa instanceof ErrorApi) throw causa;
     throw new ErrorApi(0, "No se pudo conectar con el servidor. Revisa tu conexión a internet.");
   }
 
@@ -166,8 +206,8 @@ function cerrarSesionExpirada(): void {
   manejadorSesionExpirada?.();
 }
 
-async function peticion<T>(metodo: Metodo, ruta: string, cuerpo?: unknown): Promise<T> {
-  const respuesta = await enviar(metodo, ruta, cuerpo);
+async function peticion<T>(metodo: Metodo, ruta: string, cuerpo?: unknown, limite?: LimiteEspera): Promise<T> {
+  const respuesta = await enviar(metodo, ruta, cuerpo, limite);
   return (await respuesta.json()) as T;
 }
 
@@ -298,14 +338,16 @@ function validarEntregaMock(datos: NuevaEntrega): void {
 // ---------- Evaluaciones en modo mock ----------
 // Simula el pipeline (RNF-04): tras evaluarEntrega la evaluación queda en estado "procesando"
 // durante DURACION_PROCESO_MOCK_MS y luego pasa a "borrador" con `resultadoSimuladoMock`.
-// La nota NUNCA se calcula aquí: es un valor fijo del mock y no cambia con los ajustes (la recalcula el backend).
+// Las transiciones imitan services/revision.py del backend: revisar (borrador → en_revision),
+// aprobar (en_revision → aprobada), publicar (aprobada → publicada); ajustes y retroalimentación solo en
+// borrador o en_revision. La nota NUNCA se calcula aquí: es un valor fijo del mock (la recalcula el backend).
 
 const DURACION_PROCESO_MOCK_MS = 9000;
 
 /** Momento (ms) en que termina el procesamiento simulado de cada evaluación en curso. */
 const finProcesoMock: Record<IdNumerico, number> = {};
 
-const trazasMock: Record<IdNumerico, Traza> ={ [trazaMock.evaluacion_id]: structuredClone(trazaMock) };
+const trazasMock: Record<IdNumerico, Traza> = { [trazaMock.evaluacion_id]: structuredClone(trazaMock) };
 
 async function perfilMockActual(): Promise<Perfil> {
   return perfilesMock[rolSimuladoPorEmail((await emailDeSesion()) ?? "")];
@@ -318,8 +360,13 @@ function buscarEvaluacionMock(id: IdNumerico): Evaluacion {
   return evaluacion;
 }
 
+/** La evaluación del backend no trae laboratorio ni estudiante: el mock los saca de su entrega. */
+function entregaDeEvaluacionMock(evaluacion: Evaluacion): Entrega | undefined {
+  return estadoMock.entregas.find((e) => e.id === evaluacion.entrega_id);
+}
+
 function sincronizarResumenMock(evaluacion: Evaluacion): void {
-  const entrega = estadoMock.entregas.find((e) => e.id === evaluacion.entrega_id);
+  const entrega = entregaDeEvaluacionMock(evaluacion);
   if (entrega?.evaluacion?.id !== evaluacion.id) return;
   entrega.evaluacion = { id: evaluacion.id, estado: evaluacion.estado, nota: evaluacion.nota };
 }
@@ -329,120 +376,135 @@ function avanzarProcesoMock(evaluacion: Evaluacion): void {
   if (fin === undefined || Date.now() < fin) return;
   Object.assign(evaluacion, structuredClone(resultadoSimuladoMock), { estado: "borrador" });
   delete finProcesoMock[evaluacion.id];
-  delete trazasMock[evaluacion.id];
+  registrarEventoMock(evaluacion, null, {
+    accion: "evaluacion_completada",
+    antes: { estado: "procesando" },
+    despues: { estado: "borrador" },
+    motivo: null,
+  });
   sincronizarResumenMock(evaluacion);
 }
 
-function crearEvaluacionEnProcesoMock(entrega: Entrega): Evaluacion {
+function crearEvaluacionEnProcesoMock(entrega: Entrega, perfil: Perfil): Evaluacion {
   const { config } = estadoMock;
+  const version = estadoMock.rubricas[entrega.laboratorio_id];
   const evaluacion: Evaluacion = {
     id: nuevoIdMock(),
     entrega_id: entrega.id,
-    estudiante_id: entrega.estudiante_id,
-    laboratorio_id: entrega.laboratorio_id,
     estado: "procesando",
     nota: null,
+    rubrica_version_id: version?.id ?? null,
+    rubrica_version: version?.version ?? null,
     proveedor: config.proveedor,
     modelo: config.modelo,
-    prompt_version: "evaluacion-v1",
     temperatura: config.temperatura,
-    rubrica_version: estadoMock.rubricas[entrega.laboratorio_id]?.version ?? 1,
-    criterios: [],
-    aprendizajes_identificados: [],
-    como_aplico_conocimientos: "",
-    aspectos_a_fortalecer: [],
-    retroalimentacion_general: "",
-    verificacion: null,
+    prompt_version: "evaluacion-v1",
     error: null,
+    criterios: [],
+    retroalimentacion: null,
+    retroalimentacion_ia: null,
     creada_en: new Date().toISOString(),
     aprobada_en: null,
     publicada_en: null,
   };
   estadoMock.evaluaciones.push(evaluacion);
   finProcesoMock[evaluacion.id] = Date.now() + DURACION_PROCESO_MOCK_MS;
+  registrarEventoMock(evaluacion, perfil, {
+    accion: "lanzar_evaluacion",
+    antes: null,
+    despues: { estado: "procesando" },
+    motivo: null,
+  });
   return evaluacion;
 }
 
-/** Simula el permiso del backend: el estudiante ve lo suyo publicado, en proceso o con error. */
+/** Como el backend: el estudiante solo ve sus evaluaciones publicadas (404 si no es suya o no está publicada). */
 function verificarAccesoEstudianteMock(evaluacion: Evaluacion, estudianteId: string): void {
-  if (evaluacion.estudiante_id !== estudianteId) throw noEncontrado();
-  const visible =
-    evaluacion.estado === "publicada" || evaluacion.estado === "error" || evaluacion.id in finProcesoMock;
-  if (!visible) throw new ErrorApi(403, "Esta evaluación está pendiente de revisión docente.");
+  if (entregaDeEvaluacionMock(evaluacion)?.estudiante_id !== estudianteId) throw noEncontrado();
+  if (evaluacion.estado !== "publicada") throw noEncontrado();
 }
 
-function respuestaCrudaMock(evaluacion: Evaluacion): JsonValor {
+/**
+ * Lo que el backend oculta al estudiante: datos del modelo, nivel original de la IA, textos originales
+ * (original_ia, retroalimentacion_ia) y el motivo del ajuste docente.
+ */
+function vistaEstudianteMock(evaluacion: Evaluacion): Evaluacion {
   return {
-    criterios: evaluacion.criterios.map((c) => ({
-      criterio_id: c.criterio_id,
-      nivel_elegido: c.nivel_ia,
-      evidencias: c.evidencias.map((e) => ({ fragmento: e.fragmento, fuente: e.fuente, ubicacion: e.ubicacion })),
-      justificacion: c.justificacion,
+    ...evaluacion,
+    proveedor: null,
+    modelo: null,
+    temperatura: null,
+    prompt_version: null,
+    retroalimentacion_ia: null,
+    criterios: evaluacion.criterios.map((criterio) => ({
+      ...criterio,
+      nivel_ia: null,
+      original_ia: null,
+      ajuste_docente: null,
     })),
-    retroalimentacion_general: evaluacion.retroalimentacion_general,
   };
 }
 
 function trazaDeEvaluacionMock(evaluacion: Evaluacion): Traza {
-  const existente = trazasMock[evaluacion.id];
-  if (existente) return existente;
-  const nueva: Traza = {
+  const existente = trazasMock[evaluacion.id] ?? { eventos: [] };
+  const traza: Traza = {
     evaluacion_id: evaluacion.id,
+    entrega_id: evaluacion.entrega_id,
+    estado: evaluacion.estado,
+    nota: evaluacion.nota,
     proveedor: evaluacion.proveedor,
     modelo: evaluacion.modelo,
-    prompt_version: evaluacion.prompt_version,
     temperatura: evaluacion.temperatura,
+    prompt_version: evaluacion.prompt_version,
+    rubrica_version_id: evaluacion.rubrica_version_id,
     rubrica_version: evaluacion.rubrica_version,
-    respuesta_cruda: respuestaCrudaMock(evaluacion),
-    verificacion: evaluacion.verificacion,
-    auditoria: [],
+    eventos: existente.eventos,
   };
-  trazasMock[evaluacion.id] = nueva;
-  return nueva;
+  trazasMock[evaluacion.id] = traza;
+  return traza;
 }
 
 interface CambioAuditado {
   accion: string;
-  antes: JsonValor;
-  despues: JsonValor;
+  antes: JsonValor | null;
+  despues: JsonValor | null;
   motivo: string | null;
 }
 
-function registrarAuditoriaMock(evaluacion: Evaluacion, perfil: Perfil, cambio: CambioAuditado): void {
-  trazaDeEvaluacionMock(evaluacion).auditoria.push({
-    id: `aud-${Date.now()}`,
-    usuario_id: perfil.id,
-    usuario_nombre: nombreVisible(perfil.nombre),
-    creado_en: new Date().toISOString(),
+/** `perfil` null = acción del sistema (como `usuario: null` en el backend). */
+function registrarEventoMock(evaluacion: Evaluacion, perfil: Perfil | null, cambio: CambioAuditado): void {
+  trazaDeEvaluacionMock(evaluacion).eventos.push({
+    id: nuevoIdMock(),
+    fecha: new Date().toISOString(),
+    usuario: perfil ? { id: perfil.id, nombre: perfil.nombre } : null,
     ...cambio,
   });
 }
 
-function exigirNoEnProcesoMock(evaluacion: Evaluacion): void {
-  if (evaluacion.id in finProcesoMock) throw new ErrorApi(409, "La evaluación todavía se está procesando.");
+function exigirEditableMock(evaluacion: Evaluacion, que: string): void {
+  if (evaluacion.estado !== "borrador" && evaluacion.estado !== "en_revision") {
+    throw new ErrorApi(409, `No se puede ${que} una evaluación en estado '${evaluacion.estado}'.`);
+  }
 }
 
-/** Ajuste del modo mock: actualiza el nivel y la auditoría. La nota queda igual (el recálculo es del backend). */
+/** Ajuste del modo mock: actualiza el nivel y la traza. La nota queda igual (el recálculo es del backend). */
 function ajustarCriterioMock(id: IdNumerico, criterioId: string, ajuste: AjusteCriterio, perfil: Perfil): Evaluacion {
   if (ajuste.motivo.trim() === "") throw new ErrorApi(422, "El motivo del ajuste es obligatorio.");
   const evaluacion = buscarEvaluacionMock(id);
-  exigirNoEnProcesoMock(evaluacion);
-  if (evaluacion.estado !== "borrador" && evaluacion.estado !== "en_revision") {
-    throw new ErrorApi(409, "Solo se pueden ajustar evaluaciones en borrador o en revisión.");
-  }
+  exigirEditableMock(evaluacion, "ajustar");
   const criterio = evaluacion.criterios.find((c) => c.criterio_id === criterioId);
-  if (!criterio) throw noEncontrado();
-  const niveles = estadoMock.rubricas[evaluacion.laboratorio_id]?.contenido.criterios.find((c) => c.id === criterioId)
-    ?.niveles;
+  if (!criterio) throw new ErrorApi(404, `El criterio '${criterioId}' no existe en esta evaluación.`);
+  const laboratorioId = entregaDeEvaluacionMock(evaluacion)?.laboratorio_id;
+  const niveles = laboratorioId === undefined ? undefined
+    : estadoMock.rubricas[laboratorioId]?.contenido.criterios.find((c) => c.id === criterioId)?.niveles;
   if (!niveles?.some((n) => n.nombre === ajuste.nivel_final)) {
-    throw new ErrorApi(422, "El nivel elegido no pertenece a los niveles de este criterio.");
+    throw new ErrorApi(422, `El nivel '${ajuste.nivel_final}' no existe en el criterio '${criterioId}'.`);
   }
   const antes = { criterio_id: criterioId, nivel_final: criterio.nivel_final };
   criterio.nivel_final = ajuste.nivel_final;
   criterio.ajuste_docente = ajuste.motivo.trim();
-  if (evaluacion.estado === "borrador") evaluacion.estado = "en_revision";
-  registrarAuditoriaMock(evaluacion, perfil, {
-    accion: "ajuste_criterio",
+  registrarEventoMock(evaluacion, perfil, {
+    accion: "ajustar_criterio",
     antes,
     despues: { criterio_id: criterioId, nivel_final: ajuste.nivel_final },
     motivo: criterio.ajuste_docente,
@@ -451,41 +513,157 @@ function ajustarCriterioMock(id: IdNumerico, criterioId: string, ajuste: AjusteC
   return evaluacion;
 }
 
-const ORIGENES_PERMITIDOS: Record<"aprobada" | "publicada", EstadoEvaluacion[]> = {
-  aprobada: ["borrador", "en_revision"],
-  publicada: ["aprobada"],
+const CAMPOS_RETRO_CRITERIO = ["justificacion", "fortalezas", "debilidades", "recomendacion"] as const;
+const CAMPOS_RETRO_GENERAL = [
+  "retroalimentacion_general",
+  "como_aplico_conocimientos",
+  "aprendizajes_identificados",
+  "aspectos_a_fortalecer",
+] as const;
+
+const RETRO_VACIA: Retroalimentacion = {
+  aprendizajes_identificados: [],
+  como_aplico_conocimientos: null,
+  aspectos_a_fortalecer: [],
+  retroalimentacion_general: null,
 };
 
-function cambiarEstadoMock(id: IdNumerico, estado: "aprobada" | "publicada", perfil: Perfil): Evaluacion {
-  const evaluacion = buscarEvaluacionMock(id);
-  exigirNoEnProcesoMock(evaluacion);
-  if (!ORIGENES_PERMITIDOS[estado].includes(evaluacion.estado)) {
-    throw new ErrorApi(
-      409,
-      estado === "aprobada"
-        ? "Solo se pueden aprobar evaluaciones en borrador o en revisión."
-        : "Solo se pueden publicar evaluaciones aprobadas.",
-    );
+/** Campos cambiados de una edición, separados en editados (texto nuevo) y restablecidos (null = texto de la IA). */
+interface ResumenEdicion {
+  editados: string[];
+  restablecidos: string[];
+}
+
+/** Aplica la edición de un criterio: valor = texto nuevo; null = vuelve a `original_ia`; omitido = sin cambios. */
+function aplicarRetroCriterioMock(evaluacion: Evaluacion, edicion: RetroalimentacionCriterioEntrada, resumen: ResumenEdicion): void {
+  const criterio = evaluacion.criterios.find((c) => c.criterio_id === edicion.criterio_id);
+  if (!criterio) throw new ErrorApi(404, `El criterio '${edicion.criterio_id}' no existe en esta evaluación.`);
+  const original = criterio.original_ia;
+  for (const campo of CAMPOS_RETRO_CRITERIO) {
+    const valor = edicion[campo];
+    if (valor === undefined) continue;
+    const etiqueta = `${edicion.criterio_id}.${campo}`;
+    if (valor === null) resumen.restablecidos.push(etiqueta);
+    else resumen.editados.push(etiqueta);
+    if (campo === "fortalezas" || campo === "debilidades") {
+      criterio[campo] = valor === null ? (original?.[campo] ?? []) : (valor as string[]);
+    } else {
+      criterio[campo] = valor === null ? (original?.[campo] ?? null) : (valor as string);
+    }
   }
-  const antes = { estado: evaluacion.estado };
-  evaluacion.estado = estado;
-  const ahora = new Date().toISOString();
-  if (estado === "aprobada") evaluacion.aprobada_en = ahora;
-  if (estado === "publicada") evaluacion.publicada_en = ahora;
-  registrarAuditoriaMock(evaluacion, perfil, {
-    accion: estado === "aprobada" ? "aprobar" : "publicar",
-    antes,
-    despues: { estado },
-    motivo: null,
+}
+
+/** Aplica la edición general: valor = texto nuevo; null = vuelve a `retroalimentacion_ia`; omitido = sin cambios. */
+function aplicarRetroGeneralMock(evaluacion: Evaluacion, entrada: RetroalimentacionEntrada, resumen: ResumenEdicion): void {
+  const original = evaluacion.retroalimentacion_ia ?? RETRO_VACIA;
+  const nueva: Retroalimentacion = { ...(evaluacion.retroalimentacion ?? RETRO_VACIA) };
+  for (const campo of CAMPOS_RETRO_GENERAL) {
+    const valor = entrada[campo];
+    if (valor === undefined) continue;
+    if (valor === null) resumen.restablecidos.push(campo);
+    else resumen.editados.push(campo);
+    if (campo === "aprendizajes_identificados" || campo === "aspectos_a_fortalecer") {
+      nueva[campo] = valor === null ? original[campo] : (valor as string[]);
+    } else {
+      nueva[campo] = valor === null ? original[campo] : (valor as string);
+    }
+  }
+  evaluacion.retroalimentacion = nueva;
+}
+
+/** Edición de textos del modo mock: cambia los textos finales; los originales de la IA se conservan y se pueden restablecer. */
+function editarRetroalimentacionMock(id: IdNumerico, entrada: RetroalimentacionEntrada, perfil: Perfil): Evaluacion {
+  const criterios = entrada.criterios ?? [];
+  const hayGeneral = CAMPOS_RETRO_GENERAL.some((campo) => entrada[campo] !== undefined);
+  if (!hayGeneral && criterios.length === 0) {
+    throw new ErrorApi(422, "Indica al menos un texto de retroalimentación para editar.");
+  }
+  const evaluacion = buscarEvaluacionMock(id);
+  exigirEditableMock(evaluacion, "editar la retroalimentación de");
+  const resumen: ResumenEdicion = { editados: [], restablecidos: [] };
+  if (hayGeneral) aplicarRetroGeneralMock(evaluacion, entrada, resumen);
+  criterios.forEach((edicion) => aplicarRetroCriterioMock(evaluacion, edicion, resumen));
+  registrarEventoMock(evaluacion, perfil, {
+    accion: resumen.editados.length === 0 ? "restablecer_retroalimentacion" : "editar_retroalimentacion",
+    antes: null,
+    despues: { editados: resumen.editados, restablecidos_a_la_ia: resumen.restablecidos },
+    motivo: entrada.motivo ?? null,
   });
+  return evaluacion;
+}
+
+type AccionEstado = "revisar" | "aprobar" | "publicar";
+
+const TRANSICIONES_MOCK: Record<AccionEstado, { desde: EstadoEvaluacion; hasta: EstadoEvaluacion; verbo: string }> = {
+  revisar: { desde: "borrador", hasta: "en_revision", verbo: "pasar a revisión" },
+  aprobar: { desde: "en_revision", hasta: "aprobada", verbo: "aprobar" },
+  publicar: { desde: "aprobada", hasta: "publicada", verbo: "publicar" },
+};
+
+function cambiarEstadoMock(id: IdNumerico, accion: AccionEstado, perfil: Perfil): Evaluacion {
+  const evaluacion = buscarEvaluacionMock(id);
+  const { desde, hasta, verbo } = TRANSICIONES_MOCK[accion];
+  if (evaluacion.estado !== desde) {
+    throw new ErrorApi(409, `No se puede ${verbo} una evaluación en estado '${evaluacion.estado}'.`);
+  }
+  evaluacion.estado = hasta;
+  const ahora = new Date().toISOString();
+  if (hasta === "aprobada") evaluacion.aprobada_en = ahora;
+  if (hasta === "publicada") evaluacion.publicada_en = ahora;
+  registrarEventoMock(evaluacion, perfil, { accion, antes: { estado: desde }, despues: { estado: hasta }, motivo: null });
   sincronizarResumenMock(evaluacion);
   return evaluacion;
 }
 
+/** GET /evaluaciones del modo mock: arma EvaluacionResumen con la entrega, el laboratorio y el estudiante. */
+function resumenEvaluacionMock(evaluacion: Evaluacion): EvaluacionResumen {
+  const entrega = entregaDeEvaluacionMock(evaluacion);
+  const laboratorio = estadoMock.cohortes.flatMap((c) => c.laboratorios).find((l) => l.id === entrega?.laboratorio_id);
+  const estudiante = estadoMock.usuarios.find((u) => u.id === entrega?.estudiante_id);
+  return {
+    id: evaluacion.id,
+    entrega_id: evaluacion.entrega_id,
+    estudiante: { id: entrega?.estudiante_id ?? "", nombre: estudiante?.nombre ?? null },
+    laboratorio: { id: laboratorio?.id ?? 0, codigo: laboratorio?.codigo ?? "", titulo: laboratorio?.titulo ?? "" },
+    estado: evaluacion.estado,
+    nota: evaluacion.nota,
+    creada_en: evaluacion.creada_en,
+    aprobada_en: evaluacion.aprobada_en,
+    publicada_en: evaluacion.publicada_en,
+  };
+}
+
+/** GET /estudiantes del modo mock: `laboratorios_evaluados` lo calcularía el backend; aquí se simula igual. */
+function listarEstudiantesMock(limit: number, offset: number): ListadoEstudiantes {
+  const filas = estadoMock.usuarios
+    .filter((u) => u.rol === "estudiante")
+    .map((u) => {
+      const publicadas = estadoMock.entregas.filter((e) => e.estudiante_id === u.id && e.evaluacion?.estado === "publicada");
+      return { id: u.id, nombre: u.nombre, correo: u.correo, laboratorios_evaluados: new Set(publicadas.map((e) => e.laboratorio_id)).size };
+    })
+    .sort((a, b) => (a.nombre ?? "").localeCompare(b.nombre ?? ""));
+  return { items: filas.slice(offset, offset + limit), total: filas.length, limit, offset };
+}
+
+function listarEvaluacionesMock(filtros: FiltrosEvaluaciones): ListadoEvaluaciones {
+  const limit = filtros.limit ?? LIMITE_EVALUACIONES_POR_DEFECTO;
+  const offset = filtros.offset ?? 0;
+  estadoMock.evaluaciones.forEach(avanzarProcesoMock);
+  const filas = estadoMock.evaluaciones
+    .map(resumenEvaluacionMock)
+    .filter((fila) => !filtros.estado || fila.estado === filtros.estado)
+    .filter((fila) => filtros.laboratorio_id === undefined || fila.laboratorio.id === filtros.laboratorio_id)
+    .filter((fila) => !filtros.estudiante_id || fila.estudiante.id === filtros.estudiante_id)
+    .sort((a, b) => b.creada_en.localeCompare(a.creada_en));
+  return { items: filas.slice(offset, offset + limit), total: filas.length, limit, offset };
+}
 // ---------- Usuarios y configuración de IA en modo mock ----------
 // Reglas aproximadas solo para el modo mock; la seguridad real la aplica el backend.
 
 const ROLES_GESTION_MOCK: Rol[] = ["docente", "admin"];
+/** Usuarios y configuración de IA: solo admin (como requiere_rol("admin") en el backend). */
+const ROLES_SOLO_ADMIN_MOCK: Rol[] = ["admin"];
+const ROLES_CONFIG_IA_MOCK = ROLES_SOLO_ADMIN_MOCK;
 const ROLES_VALIDOS_MOCK: Rol[] = ["estudiante", "docente", "admin"];
 const TEMPERATURA_MAXIMA_MOCK = 0.2;
 
@@ -497,46 +675,80 @@ async function exigirRolMock(roles: Rol[]): Promise<Perfil> {
   return perfil;
 }
 
-function validarCambioRolMock(usuario: Usuario, rol: Rol, perfil: Perfil): void {
-  if (!ROLES_VALIDOS_MOCK.includes(rol)) throw new ErrorApi(422, "El rol indicado no es válido.");
-  if (usuario.id === perfil.id) throw new ErrorApi(403, "No puedes cambiar tu propio rol.");
-  if (perfil.rol !== "admin" && (rol === "admin" || usuario.rol === "admin")) {
-    throw new ErrorApi(403, "Solo un administrador puede asignar o quitar el rol de administrador.");
-  }
+/** Como services/usuarios.py: lista ordenada por nombre (sin distinguir mayúsculas), los sin nombre al final. */
+function usuariosOrdenadosMock(): Usuario[] {
+  return [...estadoMock.usuarios].sort((a, b) => {
+    if (a.nombre === null || b.nombre === null) return a.nombre === null ? (b.nombre === null ? 0 : 1) : -1;
+    return a.nombre.toLowerCase().localeCompare(b.nombre.toLowerCase());
+  });
 }
 
-function cambiarRolMock(usuarioId: string, rol: Rol, perfil: Perfil): Usuario {
+/**
+ * Cambio de rol del modo mock con las mismas reglas y mensajes del backend:
+ * 422 rol no válido, 404 usuario inexistente, mismo rol → sin cambios (200), 409 si un admin se quita su propio
+ * rol de administrador o si el sistema quedaría sin administradores.
+ */
+function cambiarRolMock(usuarioId: string, rol: string, perfil: Perfil): Usuario {
+  if (!ROLES_VALIDOS_MOCK.some((valido) => valido === rol)) {
+    throw new ErrorApi(422, "Rol no válido. Usa: estudiante, docente o admin.");
+  }
   const usuario = estadoMock.usuarios.find((u) => u.id === usuarioId);
-  if (!usuario) throw noEncontrado();
-  validarCambioRolMock(usuario, rol, perfil);
-  usuario.rol = rol;
+  if (!usuario) throw new ErrorApi(404, "El usuario no existe.");
+  if (usuario.rol === rol) return usuario;
+  if (usuario.rol === "admin") {
+    if (usuario.id === perfil.id) {
+      throw new ErrorApi(409, "No puedes quitarte tu propio rol de administrador. Pide a otro administrador que lo haga.");
+    }
+    if (estadoMock.usuarios.filter((u) => u.rol === "admin").length <= 1) {
+      throw new ErrorApi(409, "No se puede cambiar el rol: el sistema debe tener al menos un administrador.");
+    }
+  }
+  usuario.rol = rol as Rol;
   return usuario;
 }
 
+/** Como el backend: proveedor y modelo de la lista permitida, temperatura 0–0,2; si no cambia nada, 200 sin auditar. */
 function guardarConfigMock(datos: ConfigIAEntrada, perfil: Perfil): ConfigIA {
-  const modelo = datos.modelo.trim();
-  if (modelo === "") throw new ErrorApi(422, "El modelo es obligatorio.");
+  const { config } = estadoMock;
+  const permitido = config.proveedores_permitidos.find((p) => p.proveedor === datos.proveedor);
+  if (!permitido) throw new ErrorApi(422, "Proveedor de IA no válido. Usa: gemini u openai_compat.");
+  if (!permitido.modelos.includes(datos.modelo)) {
+    throw new ErrorApi(422, `El modelo '${datos.modelo}' no está permitido para ${permitido.etiqueta}.`);
+  }
   if (!(datos.temperatura >= 0 && datos.temperatura <= TEMPERATURA_MAXIMA_MOCK)) {
     throw new ErrorApi(422, "La temperatura debe estar entre 0 y 0,2.");
   }
+  const igual = config.proveedor === datos.proveedor && config.modelo === datos.modelo && config.temperatura === datos.temperatura;
+  if (igual) return config;
   estadoMock.config = {
+    ...config,
     proveedor: datos.proveedor,
-    modelo,
+    modelo: datos.modelo,
     temperatura: datos.temperatura,
-    actualizado_por: perfil.id,
+    origen: "base_de_datos",
+    modelo_permitido: true,
+    actualizado_por: { id: perfil.id, nombre: perfil.nombre },
     actualizado_en: new Date().toISOString(),
   };
   return estadoMock.config;
 }
 
-/** Simula la prueba con la configuración guardada: falla si el modelo contiene "falla". */
+/** Demora simulada de la prueba (el backend tarda hasta ~10 s). */
+const DEMORA_PRUEBA_MOCK_MS = 2500;
+
+/** Simula POST /config-ia/probar sobre la configuración guardada: siempre "200"; falla con MODELO_FALLA_MOCK. */
 function probarConfigMock(): ResultadoPruebaIA {
   const { proveedor, modelo } = estadoMock.config;
-  if (modelo.toLowerCase().includes("falla")) {
-    return { ok: false, mensaje: `No se pudo conectar con el modelo "${modelo}" (fallo simulado en modo mock).` };
+  if (modelo === MODELO_FALLA_MOCK) {
+    return {
+      ok: false,
+      proveedor,
+      modelo,
+      latencia_ms: null,
+      mensaje: "No se pudo conectar con el proveedor de IA. Revisa que el servicio esté disponible y que la clave esté configurada.",
+    };
   }
-  const destino = proveedor === "gemini" ? "Gemini" : "el servidor OpenAI-compatible";
-  return { ok: true, mensaje: `Conexión correcta con ${destino} usando el modelo "${modelo}" (modo mock).` };
+  return { ok: true, proveedor, modelo, latencia_ms: 842, mensaje: "Conexión correcta con el proveedor de IA." };
 }
 
 /**
@@ -559,20 +771,24 @@ export async function obtenerYo(): Promise<Perfil> {
   return peticion<Perfil>("GET", "/yo");
 }
 
+/** GET /usuarios (solo admin): id, nombre, correo y rol, ordenados por nombre. */
 export async function listarUsuarios(): Promise<Usuario[]> {
   if (MODO_MOCK) {
-    await exigirRolMock(ROLES_GESTION_MOCK);
-    return simulado(() => estadoMock.usuarios);
+    await exigirRolMock(ROLES_SOLO_ADMIN_MOCK);
+    return simulado(usuariosOrdenadosMock);
   }
   return peticion<Usuario[]>("GET", "/usuarios");
 }
 
-export async function cambiarRol(usuarioId: string, rol: Rol): Promise<Usuario> {
+/** PATCH /usuarios/{id}/rol (solo admin) con motivo opcional, que queda en la auditoría. */
+export async function cambiarRol(usuarioId: string, rol: Rol, motivo?: string): Promise<Usuario> {
+  const motivoLimpio = motivo?.trim();
+  const cuerpo: CambioRol = motivoLimpio ? { rol, motivo: motivoLimpio } : { rol };
   if (MODO_MOCK) {
-    const perfil = await exigirRolMock(ROLES_GESTION_MOCK);
-    return simulado(() => cambiarRolMock(usuarioId, rol, perfil));
+    const perfil = await exigirRolMock(ROLES_SOLO_ADMIN_MOCK);
+    return simulado(() => cambiarRolMock(usuarioId, cuerpo.rol, perfil));
   }
-  return peticion<Usuario>("PATCH", `/usuarios/${encodeURIComponent(usuarioId)}/rol`, { rol });
+  return peticion<Usuario>("PATCH", `/usuarios/${encodeURIComponent(usuarioId)}/rol`, cuerpo);
 }
 
 // ---------- Cohortes y laboratorios ----------
@@ -719,13 +935,14 @@ export async function crearEntrega(datos: NuevaEntrega): Promise<Entrega> {
 
 export async function evaluarEntrega(entregaId: IdNumerico): Promise<RespuestaEvaluar> {
   if (MODO_MOCK) {
+    const perfil = await perfilMockActual();
     return simulado(() => {
       const entrega = estadoMock.entregas.find((e) => e.id === entregaId);
       if (!entrega) throw noEncontrado();
       if (entrega.evaluacion && entrega.evaluacion.estado !== "error") {
         throw new ErrorApi(409, "Esta entrega ya fue enviada a evaluación.");
       }
-      const evaluacion = crearEvaluacionEnProcesoMock(entrega);
+      const evaluacion = crearEvaluacionEnProcesoMock(entrega, perfil);
       entrega.evaluacion = { id: evaluacion.id, estado: evaluacion.estado, nota: null };
       const respuesta: RespuestaEvaluar = { evaluacion_id: evaluacion.id, estado: evaluacion.estado };
       return respuesta;
@@ -736,16 +953,34 @@ export async function evaluarEntrega(entregaId: IdNumerico): Promise<RespuestaEv
 
 // ---------- Evaluaciones ----------
 
+/** Tamaño de página por defecto del listado docente (el backend acepta limit 1–LIMIT_MAXIMO). */
+export const LIMITE_EVALUACIONES_POR_DEFECTO = 20;
+
 export async function obtenerEvaluacion(id: IdNumerico): Promise<Evaluacion> {
   if (MODO_MOCK) {
     const perfil = await perfilMockActual();
     return simulado(() => {
       const evaluacion = buscarEvaluacionMock(id);
-      if (perfil.rol === "estudiante") verificarAccesoEstudianteMock(evaluacion, perfil.id);
-      return evaluacion;
+      if (perfil.rol !== "estudiante") return evaluacion;
+      verificarAccesoEstudianteMock(evaluacion, perfil.id);
+      return vistaEstudianteMock(evaluacion);
     });
   }
-  return peticion<Evaluacion>("GET", `/evaluaciones/${encodeURIComponent(id)}`);
+  return peticion<Evaluacion>("GET", `/evaluaciones/${id}`);
+}
+
+/** GET /evaluaciones (docente): filtros + paginación con limit/offset. */
+export async function listarEvaluaciones(filtros: FiltrosEvaluaciones = {}): Promise<ListadoEvaluaciones> {
+  if (MODO_MOCK) {
+    await exigirRolMock(ROLES_GESTION_MOCK);
+    return simulado(() => listarEvaluacionesMock(filtros));
+  }
+  const consulta = new URLSearchParams();
+  Object.entries(filtros).forEach(([clave, valor]) => {
+    if (valor !== undefined && valor !== "") consulta.set(clave, String(valor));
+  });
+  const texto = consulta.toString();
+  return peticion<ListadoEvaluaciones>("GET", `/evaluaciones${texto ? `?${texto}` : ""}`);
 }
 
 export async function ajustarCriterio(
@@ -757,102 +992,167 @@ export async function ajustarCriterio(
     const perfil = await perfilMockActual();
     return simulado(() => ajustarCriterioMock(evaluacionId, criterioId, ajuste, perfil));
   }
-  return peticion<Evaluacion>(
-    "PATCH",
-    `/evaluaciones/${encodeURIComponent(evaluacionId)}/criterios/${encodeURIComponent(criterioId)}`,
-    ajuste,
-  );
+  return peticion<Evaluacion>("PATCH", `/evaluaciones/${evaluacionId}/criterios/${encodeURIComponent(criterioId)}`, ajuste);
 }
 
+/** PATCH /evaluaciones/{id}/retroalimentacion: textos generales y/o por criterio (motivo opcional). */
+export async function editarRetroalimentacion(id: IdNumerico, entrada: RetroalimentacionEntrada): Promise<Evaluacion> {
+  if (MODO_MOCK) {
+    const perfil = await perfilMockActual();
+    return simulado(() => editarRetroalimentacionMock(id, entrada, perfil));
+  }
+  return peticion<Evaluacion>("PATCH", `/evaluaciones/${id}/retroalimentacion`, entrada);
+}
+
+/** POST /evaluaciones/{id}/revisar: borrador → en_revision. */
+export async function pasarARevision(id: IdNumerico): Promise<Evaluacion> {
+  if (MODO_MOCK) {
+    const perfil = await perfilMockActual();
+    return simulado(() => cambiarEstadoMock(id, "revisar", perfil));
+  }
+  return peticion<Evaluacion>("POST", `/evaluaciones/${id}/revisar`);
+}
+
+/** POST /evaluaciones/{id}/aprobar: en_revision → aprobada. */
 export async function aprobarEvaluacion(id: IdNumerico): Promise<Evaluacion> {
   if (MODO_MOCK) {
     const perfil = await perfilMockActual();
-    return simulado(() => cambiarEstadoMock(id, "aprobada", perfil));
+    return simulado(() => cambiarEstadoMock(id, "aprobar", perfil));
   }
-  return peticion<Evaluacion>("POST", `/evaluaciones/${encodeURIComponent(id)}/aprobar`);
+  return peticion<Evaluacion>("POST", `/evaluaciones/${id}/aprobar`);
 }
 
+/** POST /evaluaciones/{id}/publicar: aprobada → publicada. */
 export async function publicarEvaluacion(id: IdNumerico): Promise<Evaluacion> {
   if (MODO_MOCK) {
     const perfil = await perfilMockActual();
-    return simulado(() => cambiarEstadoMock(id, "publicada", perfil));
+    return simulado(() => cambiarEstadoMock(id, "publicar", perfil));
   }
-  return peticion<Evaluacion>("POST", `/evaluaciones/${encodeURIComponent(id)}/publicar`);
+  return peticion<Evaluacion>("POST", `/evaluaciones/${id}/publicar`);
+}
+
+/** Máximo de `limit` que aceptan los listados paginados del backend. */
+export const LIMITE_MAXIMO_LISTADO = 100;
+
+/** GET /estudiantes (docente): estudiantes por nombre con sus laboratorios evaluados (paginado). */
+export async function listarEstudiantes(limit = LIMITE_MAXIMO_LISTADO, offset = 0): Promise<ListadoEstudiantes> {
+  if (MODO_MOCK) {
+    await exigirRolMock(ROLES_GESTION_MOCK);
+    return simulado(() => listarEstudiantesMock(limit, offset));
+  }
+  return peticion<ListadoEstudiantes>("GET", `/estudiantes?limit=${limit}&offset=${offset}`);
 }
 
 export async function obtenerTraza(id: IdNumerico): Promise<Traza> {
   if (MODO_MOCK) return simulado(() => trazaDeEvaluacionMock(buscarEvaluacionMock(id)));
-  return peticion<Traza>("GET", `/evaluaciones/${encodeURIComponent(id)}/traza`);
+  return peticion<Traza>("GET", `/evaluaciones/${id}/traza`);
 }
 
 // ---------- Informe y mapa ----------
+// La primera consulta puede tardar hasta ~60 s porque el backend genera la narrativa y el mapeo con IA en la
+// misma petición. Por eso solo estas dos peticiones usan TIEMPO_ESPERA_GENERACION_MS.
 
 const informesMock: Record<string, Informe> = {
-  [informeMock.estudiante_id]: informeMock,
-  [informeSinPublicadasMock.estudiante_id]: informeSinPublicadasMock,
+  [informeMock.estudiante.id]: informeMock,
+  [informeSinPublicadasMock.estudiante.id]: informeSinPublicadasMock,
+  [informeNarrativaErrorMock.estudiante.id]: informeNarrativaErrorMock,
 };
 
-/** Simula el permiso del backend: el estudiante solo ve su informe; docente y admin, cualquiera. */
-async function informeMockPara(estudianteId: string): Promise<Informe> {
-  const perfil = await perfilMockActual();
-  if (perfil.rol === "estudiante" && perfil.id !== estudianteId) {
-    throw new ErrorApi(403, "Solo puedes ver tu propio informe.");
+const mapasMock: Record<string, Mapa> = {
+  [informeMock.estudiante.id]: mapaMock,
+  [informeSinPublicadasMock.estudiante.id]: mapaVacioMock,
+  [informeNarrativaErrorMock.estudiante.id]: mapaConAvisosMock,
+};
+
+/** Demora simulada de la primera generación (después queda "en caché", como en el backend). */
+const DEMORA_GENERACION_MOCK_MS = 6000;
+const generadosMock = new Set<string>();
+
+/** Simula la generación con IA respetando el mismo límite de espera que la petición real. */
+async function generarMock<T>(clave: string, producir: () => T): Promise<T> {
+  const demora = generadosMock.has(clave) ? 300 : DEMORA_GENERACION_MOCK_MS;
+  if (demora >= TIEMPO_ESPERA_GENERACION_MS) {
+    await esperar(TIEMPO_ESPERA_GENERACION_MS);
+    throw new ErrorApi(408, MENSAJE_TIEMPO_AGOTADO);
   }
-  const informe = informesMock[estudianteId];
-  if (!informe) throw new ErrorApi(404, "No encontramos un estudiante con ese identificador.");
-  return simulado(() => informe);
+  await esperar(demora);
+  generadosMock.add(clave);
+  return structuredClone(producir());
+}
+
+/** Simula el permiso del backend: el estudiante solo ve lo suyo (si pide otro, 404); docente y admin, cualquiera. */
+async function exigirAccesoEstudianteMock(estudianteId: string): Promise<void> {
+  const perfil = await perfilMockActual();
+  if (perfil.rol === "estudiante" && perfil.id !== estudianteId) throw noEncontrado();
+}
+
+/** Estudiante del mock (404 si no existe, como el backend). */
+function estudianteMock(estudianteId: string): Usuario {
+  const estudiante = estadoMock.usuarios.find((u) => u.id === estudianteId && u.rol === "estudiante");
+  if (!estudiante) throw new ErrorApi(404, "No encontramos un estudiante con ese identificador.");
+  return estudiante;
+}
+
+/** Estudiante sin evaluaciones publicadas: el backend responde números vacíos y narrativa "sin_datos". */
+function informeSinDatosMock(estudianteId: string): Informe {
+  const { id, nombre } = estudianteMock(estudianteId);
+  return { ...informeSinPublicadasMock, estudiante: { id, nombre } };
 }
 
 export async function obtenerInforme(estudianteId: string): Promise<Informe> {
-  if (MODO_MOCK) return informeMockPara(estudianteId);
-  return peticion<Informe>("GET", `/estudiantes/${encodeURIComponent(estudianteId)}/informe`);
-}
-
-const mapasMock: Record<string, Mapa> = {
-  [informeMock.estudiante_id]: mapaMock,
-  [informeSinPublicadasMock.estudiante_id]: mapaVacioMock,
-};
-
-/** Simula el permiso del backend: el estudiante solo ve su mapa; docente y admin, cualquiera. */
-async function mapaMockPara(estudianteId: string): Promise<Mapa> {
-  const perfil = await perfilMockActual();
-  if (perfil.rol === "estudiante" && perfil.id !== estudianteId) {
-    throw new ErrorApi(403, "Solo puedes ver tu propio mapa mental.");
+  if (MODO_MOCK) {
+    await exigirAccesoEstudianteMock(estudianteId);
+    const informe = informesMock[estudianteId] ?? informeSinDatosMock(estudianteId);
+    return generarMock(`informe:${estudianteId}`, () => informe);
   }
-  const mapa = mapasMock[estudianteId];
-  if (!mapa) throw new ErrorApi(404, "No encontramos un estudiante con ese identificador.");
-  return simulado(() => mapa);
+  return peticion<Informe>("GET", `/estudiantes/${encodeURIComponent(estudianteId)}/informe`, undefined, LIMITE_GENERACION);
 }
 
 export async function obtenerMapa(estudianteId: string): Promise<Mapa> {
-  if (MODO_MOCK) return mapaMockPara(estudianteId);
-  return peticion<Mapa>("GET", `/estudiantes/${encodeURIComponent(estudianteId)}/mapa`);
+  if (MODO_MOCK) {
+    await exigirAccesoEstudianteMock(estudianteId);
+    const mapa = mapasMock[estudianteId] ?? (estudianteMock(estudianteId) && mapaVacioMock);
+    return generarMock(`mapa:${estudianteId}`, () => mapa);
+  }
+  return peticion<Mapa>("GET", `/estudiantes/${encodeURIComponent(estudianteId)}/mapa`, undefined, LIMITE_GENERACION);
 }
 
 // ---------- Configuración de IA ----------
 
+/** GET /config-ia (solo admin). */
 export async function obtenerConfigIA(): Promise<ConfigIA> {
   if (MODO_MOCK) {
-    await exigirRolMock(ROLES_GESTION_MOCK);
+    await exigirRolMock(ROLES_CONFIG_IA_MOCK);
     return simulado(() => estadoMock.config);
   }
   return peticion<ConfigIA>("GET", "/config-ia");
 }
 
+/** PUT /config-ia (solo admin): siempre {proveedor, modelo, temperatura}. Si no cambia nada responde 200 igual. */
 export async function guardarConfigIA(datos: ConfigIAEntrada): Promise<ConfigIA> {
+  const cuerpo: ConfigIAEntrada = { proveedor: datos.proveedor, modelo: datos.modelo, temperatura: datos.temperatura };
   if (MODO_MOCK) {
-    const perfil = await exigirRolMock(ROLES_GESTION_MOCK);
-    return simulado(() => guardarConfigMock(datos, perfil));
+    const perfil = await exigirRolMock(ROLES_CONFIG_IA_MOCK);
+    return simulado(() => guardarConfigMock(cuerpo, perfil));
   }
-  return peticion<ConfigIA>("PUT", "/config-ia", datos);
+  return peticion<ConfigIA>("PUT", "/config-ia", cuerpo);
 }
 
-/** El contrato no recibe cuerpo: el backend prueba la configuración guardada. */
+/** Límite de espera de "Probar conexión" (el backend corta a los ~10 s). */
+export const TIEMPO_ESPERA_PRUEBA_MS = 15_000;
+
+const MENSAJE_PRUEBA_AGOTADA =
+  "La prueba de conexión tardó más de 15 segundos y se canceló. Revisa el proveedor e intenta de nuevo.";
+
+/** POST /config-ia/probar (solo admin): sin cuerpo; prueba la configuración guardada y responde siempre 200. */
 export async function probarConfigIA(): Promise<ResultadoPruebaIA> {
   if (MODO_MOCK) {
-    await exigirRolMock(ROLES_GESTION_MOCK);
-    await esperar(900);
+    await exigirRolMock(ROLES_CONFIG_IA_MOCK);
+    await esperar(DEMORA_PRUEBA_MOCK_MS);
     return simulado(probarConfigMock);
   }
-  return peticion<ResultadoPruebaIA>("POST", "/config-ia/probar");
+  return peticion<ResultadoPruebaIA>("POST", "/config-ia/probar", undefined, {
+    ms: TIEMPO_ESPERA_PRUEBA_MS,
+    mensaje: MENSAJE_PRUEBA_AGOTADA,
+  });
 }

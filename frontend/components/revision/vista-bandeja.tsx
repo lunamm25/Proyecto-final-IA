@@ -2,57 +2,97 @@
 
 import Link from "next/link";
 import { useCallback, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { EstadoVacio, MensajeError } from "@/components/estados";
 import { EtiquetaEstadoEvaluacion } from "@/components/evaluaciones/etiqueta-estado-evaluacion";
 import { ESTADOS_EVALUACION, TEXTO_ESTADO_EVALUACION } from "@/components/evaluaciones/estado-evaluacion";
 import { formatearFecha, formatearNota } from "@/components/portafolio/estado-entrega";
 import {
-  FILTRO_POR_DEFECTO,
-  cargarBandeja,
-  filtrarBandeja,
-  type FilaBandeja,
-  type FiltroEstado,
+  FILTROS_INICIALES,
+  aParametros,
+  cargarOpciones,
+  esFiltroEstado,
+  type FiltrosBandeja,
+  type Opcion,
+  type OpcionesFiltro,
 } from "@/components/revision/datos-bandeja";
+import { listarEvaluaciones } from "@/lib/api";
+import { nombreVisible } from "@/lib/perfil";
+import { rutaRevision } from "@/lib/rutas-evaluacion";
+import type { EvaluacionResumen, ListadoEvaluaciones } from "@/lib/tipos";
 import { useCarga } from "@/lib/use-carga";
 
-function rutaRevision(id: number): string {
-  return `/docente/revision/${id}`;
-}
+const CLASE_SELECT = "h-9 w-full rounded-lg border bg-background px-3 text-sm sm:w-auto";
 
 function textoNota(nota: number | null): string {
   return nota === null ? "—" : formatearNota(nota);
 }
 
-function esFiltro(valor: string): valor is FiltroEstado {
-  return valor === "todas" || ESTADOS_EVALUACION.some((estado) => estado === valor);
+function enlace(fila: EvaluacionResumen): string {
+  return rutaRevision(fila.id, { laboratorioId: fila.laboratorio.id, estudianteId: fila.estudiante.id });
 }
 
-function SelectorEstado({ valor, alCambiar }: { valor: FiltroEstado; alCambiar: (valor: FiltroEstado) => void }) {
+function textoLaboratorio(fila: EvaluacionResumen): string {
+  return `${fila.laboratorio.codigo} · ${fila.laboratorio.titulo}`;
+}
+
+function textoEstudiante(fila: EvaluacionResumen): string {
+  return nombreVisible(fila.estudiante.nombre, "Estudiante sin nombre");
+}
+
+interface SelectorProps {
+  id: string;
+  etiqueta: string;
+  valor: string;
+  opciones: Opcion[];
+  alCambiar: (valor: string) => void;
+}
+
+function Selector({ id, etiqueta, valor, opciones, alCambiar }: SelectorProps) {
   return (
-    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
-      <label htmlFor="filtro-estado" className="text-sm font-medium">
-        Estado
-      </label>
-      <select
-        id="filtro-estado"
-        value={valor}
-        onChange={(evento) => {
-          if (esFiltro(evento.target.value)) alCambiar(evento.target.value);
-        }}
-        className="h-9 rounded-lg border bg-background px-3 text-sm"
-      >
-        {ESTADOS_EVALUACION.map((estado) => (
-          <option key={estado} value={estado}>
-            {TEXTO_ESTADO_EVALUACION[estado]}
-          </option>
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-sm font-medium">{etiqueta}</label>
+      <select id={id} value={valor} onChange={(e) => alCambiar(e.target.value)} className={CLASE_SELECT}>
+        {opciones.map((opcion) => (
+          <option key={opcion.valor} value={opcion.valor}>{opcion.texto}</option>
         ))}
-        <option value="todas">Todas</option>
       </select>
     </div>
   );
 }
 
-function TablaBandeja({ filas }: { filas: FilaBandeja[] }) {
+const OPCIONES_ESTADO: Opcion[] = [
+  ...ESTADOS_EVALUACION.map((estado) => ({ valor: estado, texto: TEXTO_ESTADO_EVALUACION[estado] })),
+  { valor: "todas", texto: "Todas" },
+];
+
+interface FiltrosProps {
+  filtros: FiltrosBandeja;
+  opciones: OpcionesFiltro | null;
+  alCambiar: (cambios: Partial<FiltrosBandeja>) => void;
+}
+
+/** Cambiar cualquier filtro vuelve a la primera página. */
+function Filtros({ filtros, opciones, alCambiar }: FiltrosProps) {
+  return (
+    <fieldset className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+      <legend className="sr-only">Filtros de la bandeja</legend>
+      <Selector id="filtro-estado" etiqueta="Estado" valor={filtros.estado} opciones={OPCIONES_ESTADO}
+        alCambiar={(valor) => esFiltroEstado(valor) && alCambiar({ estado: valor, pagina: 0 })} />
+      <Selector id="filtro-laboratorio" etiqueta="Laboratorio" valor={filtros.laboratorio}
+        opciones={[{ valor: "", texto: "Todos" }, ...(opciones?.laboratorios ?? [])]}
+        alCambiar={(valor) => alCambiar({ laboratorio: valor, pagina: 0 })} />
+      {opciones?.estudiantes && (
+        <Selector id="filtro-estudiante" etiqueta="Estudiante" valor={filtros.estudiante}
+          opciones={[{ valor: "", texto: "Todos" }, ...opciones.estudiantes]}
+          alCambiar={(valor) => alCambiar({ estudiante: valor, pagina: 0 })} />
+      )}
+    </fieldset>
+  );
+}
+
+function TablaBandeja({ filas }: { filas: EvaluacionResumen[] }) {
   return (
     <div className="hidden overflow-x-auto rounded-xl border md:block">
       <table className="w-full text-left text-sm">
@@ -61,7 +101,7 @@ function TablaBandeja({ filas }: { filas: FilaBandeja[] }) {
           <tr>
             <th scope="col" className="px-4 py-3">Laboratorio</th>
             <th scope="col" className="px-4 py-3">Estudiante</th>
-            <th scope="col" className="px-4 py-3">Entregado</th>
+            <th scope="col" className="px-4 py-3">Generada</th>
             <th scope="col" className="px-4 py-3">Estado</th>
             <th scope="col" className="px-4 py-3 text-right">Nota</th>
             <th scope="col" className="px-4 py-3"><span className="sr-only">Acción</span></th>
@@ -69,15 +109,15 @@ function TablaBandeja({ filas }: { filas: FilaBandeja[] }) {
         </thead>
         <tbody>
           {filas.map((fila) => (
-            <tr key={fila.evaluacionId} className="border-t">
-              <td className="px-4 py-3 font-medium">{fila.laboratorio}</td>
-              <td className="px-4 py-3">{fila.estudiante}</td>
-              <td className="px-4 py-3 whitespace-nowrap">{formatearFecha(fila.fecha)}</td>
+            <tr key={fila.id} className="border-t">
+              <td className="px-4 py-3 font-medium">{textoLaboratorio(fila)}</td>
+              <td className="px-4 py-3">{textoEstudiante(fila)}</td>
+              <td className="px-4 py-3 whitespace-nowrap">{formatearFecha(fila.creada_en)}</td>
               <td className="px-4 py-3"><EtiquetaEstadoEvaluacion estado={fila.estado} /></td>
               <td className="px-4 py-3 text-right font-mono">{textoNota(fila.nota)}</td>
               <td className="px-4 py-3 text-right">
-                <Link href={rutaRevision(fila.evaluacionId)} className="font-medium underline underline-offset-4">
-                  Revisar<span className="sr-only"> la evaluación de {fila.estudiante} en {fila.laboratorio}</span>
+                <Link href={enlace(fila)} className="font-medium underline underline-offset-4">
+                  Revisar<span className="sr-only"> la evaluación de {textoEstudiante(fila)} en {textoLaboratorio(fila)}</span>
                 </Link>
               </td>
             </tr>
@@ -88,21 +128,19 @@ function TablaBandeja({ filas }: { filas: FilaBandeja[] }) {
   );
 }
 
-function TarjetasBandeja({ filas }: { filas: FilaBandeja[] }) {
+function TarjetasBandeja({ filas }: { filas: EvaluacionResumen[] }) {
   return (
     <ul className="space-y-3 md:hidden">
       {filas.map((fila) => (
-        <li key={fila.evaluacionId}>
-          <Link
-            href={rutaRevision(fila.evaluacionId)}
-            className="block rounded-xl border bg-card p-4 hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
-          >
-            <p className="font-semibold">{fila.laboratorio}</p>
-            <p className="text-sm">{fila.estudiante}</p>
+        <li key={fila.id}>
+          <Link href={enlace(fila)}
+            className="block rounded-xl border bg-card p-4 hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50 outline-none">
+            <p className="font-semibold">{textoLaboratorio(fila)}</p>
+            <p className="text-sm">{textoEstudiante(fila)}</p>
             <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
               <EtiquetaEstadoEvaluacion estado={fila.estado} />
               <span>Nota: <strong>{textoNota(fila.nota)}</strong></span>
-              <span className="text-muted-foreground">{formatearFecha(fila.fecha)}</span>
+              <span className="text-muted-foreground">{formatearFecha(fila.creada_en)}</span>
             </div>
           </Link>
         </li>
@@ -122,41 +160,62 @@ function EsqueletoBandeja() {
   );
 }
 
-/** /docente/revision: bandeja de evaluaciones filtrada por estado (por defecto, borradores). */
+function Paginacion({ listado, alCambiarPagina }: { listado: ListadoEvaluaciones; alCambiarPagina: (pagina: number) => void }) {
+  const pagina = Math.floor(listado.offset / listado.limit);
+  const paginas = Math.max(1, Math.ceil(listado.total / listado.limit));
+  if (paginas <= 1) return null;
+  return (
+    <nav aria-label="Paginación de la bandeja" className="flex items-center justify-between gap-3">
+      <Button variant="outline" size="sm" disabled={pagina === 0} onClick={() => alCambiarPagina(pagina - 1)}>
+        <ChevronLeft aria-hidden="true" />
+        Anterior
+      </Button>
+      <span className="text-sm text-muted-foreground">Página {pagina + 1} de {paginas}</span>
+      <Button variant="outline" size="sm" disabled={pagina + 1 >= paginas} onClick={() => alCambiarPagina(pagina + 1)}>
+        Siguiente
+        <ChevronRight aria-hidden="true" />
+      </Button>
+    </nav>
+  );
+}
+
+function ResultadoBandeja({ listado, filtros, alCambiarPagina }: { listado: ListadoEvaluaciones; filtros: FiltrosBandeja; alCambiarPagina: (p: number) => void }) {
+  if (listado.items.length === 0) {
+    const detalle = filtros.estado === "todas" ? "" : ` en estado “${TEXTO_ESTADO_EVALUACION[filtros.estado]}”`;
+    return <EstadoVacio titulo="No hay evaluaciones para mostrar" mensaje={`No hay evaluaciones${detalle} con estos filtros.`} />;
+  }
+  const desde = listado.offset + 1;
+  const hasta = listado.offset + listado.items.length;
+  return (
+    <>
+      <p aria-live="polite" className="text-sm text-muted-foreground">
+        {listado.total === 1 ? "1 evaluación" : `Mostrando ${desde}–${hasta} de ${listado.total} evaluaciones`}
+      </p>
+      <TablaBandeja filas={listado.items} />
+      <TarjetasBandeja filas={listado.items} />
+      <Paginacion listado={listado} alCambiarPagina={alCambiarPagina} />
+    </>
+  );
+}
+
+/** /docente/revision: bandeja de evaluaciones (GET /evaluaciones) con filtros y paginación. */
 export function VistaBandeja() {
-  const [filtro, setFiltro] = useState<FiltroEstado>(FILTRO_POR_DEFECTO);
-  const cargar = useCallback(() => cargarBandeja(), []);
+  const [filtros, setFiltros] = useState<FiltrosBandeja>(FILTROS_INICIALES);
+  const opciones = useCarga(cargarOpciones);
+  const cargar = useCallback(() => listarEvaluaciones(aParametros(filtros)), [filtros]);
   const { estado, recargar } = useCarga(cargar);
+  const cambiar = (cambios: Partial<FiltrosBandeja>) => setFiltros((previos) => ({ ...previos, ...cambios }));
 
   return (
     <div className="mt-6 space-y-4">
-      <SelectorEstado valor={filtro} alCambiar={setFiltro} />
+      <Filtros filtros={filtros} opciones={opciones.estado.tipo === "listo" ? opciones.estado.datos : null} alCambiar={cambiar} />
       {estado.tipo === "cargando" && <EsqueletoBandeja />}
       {estado.tipo === "error" && (
         <MensajeError titulo="No se pudo cargar la bandeja" mensaje={estado.mensaje} alReintentar={recargar} />
       )}
-      {estado.tipo === "listo" && <ResultadoBandeja filas={filtrarBandeja(estado.datos, filtro)} filtro={filtro} />}
+      {estado.tipo === "listo" && (
+        <ResultadoBandeja listado={estado.datos} filtros={filtros} alCambiarPagina={(pagina) => cambiar({ pagina })} />
+      )}
     </div>
-  );
-}
-
-function ResultadoBandeja({ filas, filtro }: { filas: FilaBandeja[]; filtro: FiltroEstado }) {
-  if (filas.length === 0) {
-    const detalle = filtro === "todas" ? "" : ` en estado “${TEXTO_ESTADO_EVALUACION[filtro]}”`;
-    return (
-      <EstadoVacio
-        titulo="No hay evaluaciones para mostrar"
-        mensaje={`No hay evaluaciones${detalle}. Prueba con otro filtro.`}
-      />
-    );
-  }
-  return (
-    <>
-      <p aria-live="polite" className="text-sm text-muted-foreground">
-        {filas.length === 1 ? "1 evaluación" : `${filas.length} evaluaciones`}
-      </p>
-      <TablaBandeja filas={filas} />
-      <TarjetasBandeja filas={filas} />
-    </>
   );
 }

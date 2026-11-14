@@ -1,10 +1,10 @@
-import { CLASES_PRIORIDAD, TEXTO_PRIORIDAD } from "@/components/informe/formato-informe";
-import type { AccionPlan, Prioridad } from "@/lib/tipos";
+import { clasesPrioridad, textoPrioridad } from "@/components/informe/formato-informe";
+import type { AccionPlan } from "@/lib/tipos";
 
-function EtiquetaPrioridad({ prioridad }: { prioridad: Prioridad }) {
+function EtiquetaPrioridad({ prioridad }: { prioridad: string }) {
   return (
-    <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${CLASES_PRIORIDAD[prioridad]}`}>
-      {TEXTO_PRIORIDAD[prioridad]}
+    <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${clasesPrioridad(prioridad)}`}>
+      {textoPrioridad(prioridad)}
     </span>
   );
 }

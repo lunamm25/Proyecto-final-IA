@@ -4,12 +4,17 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { estaProcesando, formatearFechaHora } from "@/components/evaluaciones/estado-evaluacion";
-import { aprobarEvaluacion, mensajeDeError, publicarEvaluacion } from "@/lib/api";
+import { aprobarEvaluacion, mensajeDeError, pasarARevision, publicarEvaluacion } from "@/lib/api";
 import type { Evaluacion, IdNumerico } from "@/lib/tipos";
 
-type Accion = "aprobar" | "publicar";
+type Accion = "revisar" | "aprobar" | "publicar";
 
 const CONFIG_ACCION: Record<Accion, { boton: string; pregunta: string; ejecutar: (id: IdNumerico) => Promise<Evaluacion> }> = {
+  revisar: {
+    boton: "Iniciar revisión",
+    pregunta: "¿Pasar esta evaluación a revisión? Podrás seguir ajustando niveles y textos, y después aprobarla.",
+    ejecutar: pasarARevision,
+  },
   aprobar: {
     boton: "Aprobar",
     pregunta: "¿Aprobar esta evaluación? Después ya no podrás ajustar los niveles.",
@@ -22,10 +27,14 @@ const CONFIG_ACCION: Record<Accion, { boton: string; pregunta: string; ejecutar:
   },
 };
 
-/** Acción disponible según el estado (RF-07 CA3). Se permite aprobar desde borrador o en revisión. */
+/**
+ * Acción disponible según el estado (RF-07 CA3), igual que el backend:
+ * borrador → revisar → en_revision → aprobar → aprobada → publicar → publicada.
+ */
 function accionDisponible(evaluacion: Evaluacion): Accion | null {
   if (estaProcesando(evaluacion)) return null;
-  if (evaluacion.estado === "borrador" || evaluacion.estado === "en_revision") return "aprobar";
+  if (evaluacion.estado === "borrador") return "revisar";
+  if (evaluacion.estado === "en_revision") return "aprobar";
   if (evaluacion.estado === "aprobada") return "publicar";
   return null;
 }

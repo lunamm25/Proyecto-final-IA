@@ -32,22 +32,17 @@ export function filtrarUsuarios(usuarios: Usuario[], busqueda: string, filtro: F
   });
 }
 
+/** Máximo del motivo opcional (CambioRolEntrada del backend). */
+export const MAX_MOTIVO_ROL = 500;
+
 /**
- * Motivo por el que el usuario actual no puede cambiar el rol de `usuario` (solo UX; el backend decide).
- * - Nadie se cambia su propio rol: así no se quita por error el acceso de docente/admin.
- * - Solo un admin modifica a otro admin.
+ * Motivo por el que no se ofrece cambiar el rol (solo UX; el backend decide y responde 409 con el detalle).
+ * La gestión es solo de admin, y el backend no deja que un admin se quite su propio rol de administrador.
+ * El caso "sería el último administrador" lo resuelve el backend (409) y se muestra su mensaje tal cual.
  */
 export function motivoBloqueo(usuario: Usuario, actual: Perfil): string | null {
-  if (usuario.id === actual.id) {
-    return "No puedes cambiar tu propio rol: perderías el acceso a esta gestión. Pídeselo a otro administrador.";
-  }
-  if (usuario.rol === "admin" && actual.rol !== "admin") {
-    return "Solo un administrador puede cambiar el rol de otro administrador.";
+  if (usuario.id === actual.id && usuario.rol === "admin") {
+    return "No puedes quitarte tu propio rol de administrador. Pide a otro administrador que lo haga.";
   }
   return null;
-}
-
-/** El contrato no dice quién asigna "admin": por precaución solo lo ofrece a un admin. */
-export function puedeAsignar(rol: Rol, actual: Perfil): boolean {
-  return rol !== "admin" || actual.rol === "admin";
 }

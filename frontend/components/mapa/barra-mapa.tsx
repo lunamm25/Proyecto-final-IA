@@ -3,16 +3,15 @@
 import { ChevronsDownUp, ChevronsUpDown, FileJson, ImageDown, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ESTILO_NIVEL } from "@/components/mapa/estilos-mapa";
-import { NIVELES } from "@/components/mapa/grafo-mapa";
-import type { NivelDominio } from "@/lib/tipos";
+import { NIVELES, type NivelMapa } from "@/components/mapa/grafo-mapa";
 
 export type Descarga = "png" | "json";
 
 interface PropsBarra {
   consulta: string;
   alBuscar: (texto: string) => void;
-  niveles: ReadonlySet<NivelDominio>;
-  alAlternarNivel: (nivel: NivelDominio) => void;
+  niveles: ReadonlySet<NivelMapa>;
+  alAlternarNivel: (nivel: NivelMapa) => void;
   alExpandirTodo: () => void;
   alColapsarTodo: () => void;
   alDescargar: (tipo: Descarga) => void;

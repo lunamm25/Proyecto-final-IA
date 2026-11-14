@@ -9,24 +9,37 @@ import { EtiquetaEstadoEvaluacion } from "@/components/evaluaciones/etiqueta-est
 import { ProgresoEvaluacion } from "@/components/evaluaciones/progreso-evaluacion";
 import { ResumenResultado } from "@/components/evaluaciones/resumen-resultado";
 import { buscarCriterioRubrica, estaProcesando, formatearFechaHora } from "@/components/evaluaciones/estado-evaluacion";
-import { useContextoEvaluacion, type ContextoEvaluacion } from "@/components/evaluaciones/use-contexto-evaluacion";
+import {
+  useContextoEvaluacion,
+  useReferenciasEvaluacion,
+  type ContextoEvaluacion,
+  type Referencias,
+} from "@/components/evaluaciones/use-contexto-evaluacion";
+import { rutaRevision } from "@/lib/rutas-evaluacion";
 import { useSondeoEvaluacion } from "@/components/evaluaciones/use-sondeo-evaluacion";
 import { idDesdeUrl, type Evaluacion, type IdNumerico } from "@/lib/tipos";
 
 const CLASE_ENLACE_BOTON =
   "inline-flex h-8 items-center justify-center rounded-lg border px-3 text-sm font-medium hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 outline-none";
 
-function rutaRevision(id: IdNumerico): string {
-  return `/docente/revision/${id}`;
-}
-
 interface DetalleProps {
   evaluacion: Evaluacion;
   contexto: ContextoEvaluacion;
+  referencias: Referencias;
   esDocente: boolean;
 }
 
-function Cabecera({ evaluacion, contexto, esDocente }: DetalleProps) {
+/** Sin laboratorio no hay rúbrica: los criterios se muestran por su id. */
+function AvisoSinLaboratorio() {
+  return (
+    <p role="note" className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+      No se pudo identificar el laboratorio de esta evaluación, así que los criterios se muestran por su código. Ábrela
+      desde el portafolio o la bandeja de revisión para ver sus nombres.
+    </p>
+  );
+}
+
+function Cabecera({ evaluacion, contexto, referencias, esDocente }: DetalleProps) {
   const fecha = evaluacion.publicada_en ?? evaluacion.creada_en;
   return (
     <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -43,7 +56,7 @@ function Cabecera({ evaluacion, contexto, esDocente }: DetalleProps) {
       <div className="flex flex-wrap items-center gap-2">
         <EtiquetaEstadoEvaluacion estado={evaluacion.estado} />
         {esDocente && (
-          <Link href={rutaRevision(evaluacion.id)} className={CLASE_ENLACE_BOTON}>
+          <Link href={rutaRevision(evaluacion.id, referencias)} className={CLASE_ENLACE_BOTON}>
             Revisar
           </Link>
         )}
@@ -52,10 +65,11 @@ function Cabecera({ evaluacion, contexto, esDocente }: DetalleProps) {
   );
 }
 
-function DetalleEvaluacion({ evaluacion, contexto, esDocente }: DetalleProps) {
+function DetalleEvaluacion({ evaluacion, contexto, referencias, esDocente }: DetalleProps) {
   return (
     <div className="space-y-6">
-      <Cabecera evaluacion={evaluacion} contexto={contexto} esDocente={esDocente} />
+      <Cabecera evaluacion={evaluacion} contexto={contexto} referencias={referencias} esDocente={esDocente} />
+      {referencias.laboratorioId === null && <AvisoSinLaboratorio />}
       {esDocente && evaluacion.estado !== "publicada" && (
         <p role="note" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
           Esta evaluación aún no está publicada: el estudiante solo ve “Pendiente de revisión docente”.
@@ -84,16 +98,17 @@ function DetalleEvaluacion({ evaluacion, contexto, esDocente }: DetalleProps) {
 
 function ContenidoListo({ evaluacion, esEstudiante, fallos }: { evaluacion: Evaluacion; esEstudiante: boolean; fallos: number }) {
   const publicadaOVisible = !esEstudiante || evaluacion.estado === "publicada";
-  const contexto = useContextoEvaluacion(publicadaOVisible ? evaluacion.laboratorio_id : null);
+  const referencias = useReferenciasEvaluacion(evaluacion);
+  const contexto = useContextoEvaluacion(publicadaOVisible ? referencias.laboratorioId : null);
 
   if (estaProcesando(evaluacion)) return <ProgresoEvaluacion fallos={fallos} />;
   if (evaluacion.estado === "error") {
     return (
-      <ErrorEvaluacion detalle={evaluacion.error} esEstudiante={esEstudiante} enlaceRevision={rutaRevision(evaluacion.id)} />
+      <ErrorEvaluacion detalle={evaluacion.error} esEstudiante={esEstudiante} enlaceRevision={rutaRevision(evaluacion.id, referencias)} />
     );
   }
   if (!publicadaOVisible) return <PendienteRevision />;
-  return <DetalleEvaluacion evaluacion={evaluacion} contexto={contexto} esDocente={!esEstudiante} />;
+  return <DetalleEvaluacion evaluacion={evaluacion} contexto={contexto} referencias={referencias} esDocente={!esEstudiante} />;
 }
 
 /** /evaluaciones/[id]: progreso, resultado publicado (estudiante) o resultado completo (docente/admin). */

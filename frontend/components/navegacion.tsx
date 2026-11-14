@@ -28,9 +28,12 @@ function enlacesPorRol(rol: Rol | null): EnlaceNav[] {
       { href: "/docente", etiqueta: "Panel" },
       { href: "/docente/laboratorios", etiqueta: "Laboratorios y rúbricas" },
       { href: "/docente/revision", etiqueta: "Evaluaciones" },
-      { href: "/docente/config-ia", etiqueta: "Configuración IA" },
     ];
-    if (rol === "admin") enlaces.push({ href: "/admin/usuarios", etiqueta: "Usuarios" });
+    // La configuración de IA y los usuarios son solo para admin (el backend responde 403 al docente).
+    if (rol === "admin") {
+      enlaces.push({ href: "/docente/config-ia", etiqueta: "Configuración IA" });
+      enlaces.push({ href: "/admin/usuarios", etiqueta: "Usuarios" });
+    }
     return enlaces;
   }
   return [

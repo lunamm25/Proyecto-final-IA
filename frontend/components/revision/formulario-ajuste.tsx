@@ -10,6 +10,9 @@ import type { EvaluacionCriterio, Evaluacion, IdNumerico, NivelDesempeno } from 
 /** Longitud mínima del motivo de un ajuste (RF-07 CA2: la justificación es obligatoria). */
 export const MIN_CARACTERES_MOTIVO = 10;
 
+/** Máximo del motivo según AjusteCriterioEntrada del backend. */
+export const MAX_CARACTERES_MOTIVO = 1000;
+
 interface FormularioAjusteProps {
   evaluacionId: IdNumerico;
   criterio: EvaluacionCriterio;
@@ -25,7 +28,7 @@ interface Errores {
   motivo?: string;
 }
 
-function validar(nivel: string, motivo: string, nivelActual: string): Errores {
+function validar(nivel: string, motivo: string, nivelActual: string | null): Errores {
   const errores: Errores = {};
   if (nivel === "") errores.nivel = "Elige un nivel.";
   else if (nivel === nivelActual) errores.nivel = "Elige un nivel distinto al nivel final actual.";
@@ -33,6 +36,8 @@ function validar(nivel: string, motivo: string, nivelActual: string): Errores {
   if (largo === 0) errores.motivo = "El motivo del ajuste es obligatorio.";
   else if (largo < MIN_CARACTERES_MOTIVO) {
     errores.motivo = `Explica el motivo con al menos ${MIN_CARACTERES_MOTIVO} caracteres (llevas ${largo}).`;
+  } else if (largo > MAX_CARACTERES_MOTIVO) {
+    errores.motivo = `El motivo admite máximo ${MAX_CARACTERES_MOTIVO} caracteres (llevas ${largo}).`;
   }
   return errores;
 }
@@ -47,7 +52,7 @@ function mensajeExito(evaluacion: Evaluacion): string {
 /** Cambia el nivel de un criterio con motivo obligatorio. La nota la recalcula el backend. */
 export function FormularioAjuste({ evaluacionId, criterio, niveles, bloqueo, alAjustar }: FormularioAjusteProps) {
   const base = useId();
-  const [nivel, setNivel] = useState(criterio.nivel_final);
+  const [nivel, setNivel] = useState(criterio.nivel_final ?? "");
   const [motivo, setMotivo] = useState("");
   const [errores, setErrores] = useState<Errores>({});
   const [envio, setEnvio] = useState<Envio>({ tipo: "inactivo" });
@@ -94,6 +99,7 @@ export function FormularioAjuste({ evaluacionId, criterio, niveles, bloqueo, alA
           aria-describedby={errores.nivel ? `${idNivel}-error` : undefined}
           className="h-9 rounded-lg border bg-background px-3 text-sm aria-invalid:border-destructive sm:max-w-xs"
         >
+          {criterio.nivel_final === null && <option value="">Elige un nivel…</option>}
           {niveles.map((n) => (
             <option key={n.nombre} value={n.nombre}>
               {n.nombre} ({n.puntaje} pts){n.nombre === criterio.nivel_final ? " — actual" : ""}
@@ -115,7 +121,7 @@ export function FormularioAjuste({ evaluacionId, criterio, niveles, bloqueo, alA
           className="rounded-lg border bg-background p-2 text-sm aria-invalid:border-destructive"
         />
         <p id={`${idMotivo}-ayuda`} className="text-xs text-muted-foreground">
-          Queda registrado en la auditoría. Mínimo {MIN_CARACTERES_MOTIVO} caracteres.
+          Queda registrado en la auditoría. Entre {MIN_CARACTERES_MOTIVO} y {MAX_CARACTERES_MOTIVO} caracteres.
         </p>
         {errores.motivo && <p id={`${idMotivo}-error`} className="text-xs text-destructive">{errores.motivo}</p>}
       </div>

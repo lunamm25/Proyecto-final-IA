@@ -5,90 +5,109 @@ import { Button } from "@/components/ui/button";
 import { Aviso, type DatosAviso } from "@/components/docente/aviso";
 import { Campo, CLASE_CONTROL } from "@/components/docente/campo";
 import {
-  MAX_MODELO,
-  OPCIONES_PROVEEDOR,
   PASO_TEMPERATURA,
-  SUGERENCIAS_MODELO,
-  TEMPERATURA_MAXIMA,
   TEMPERATURA_MINIMA,
+  estaProbado,
+  formatearTemperatura,
+  proveedorPermitido,
+  temperaturaMaxima,
   type ErroresConfig,
   type FormularioConfig,
 } from "@/components/docente/modelo-config-ia";
-import type { ProveedorIA } from "@/lib/tipos";
+import type { ConfigIA, ProveedorIA } from "@/lib/tipos";
 
 interface FormularioConfigIAProps {
+  /** Configuración del backend: de aquí salen proveedores, modelos y temperatura máxima. */
+  config: ConfigIA;
   formulario: FormularioConfig;
   errores: ErroresConfig;
   cambios: boolean;
   guardando: boolean;
   aviso: DatosAviso | null;
+  alCambiarProveedor: (proveedor: ProveedorIA) => void;
   alCambiar: (cambio: Partial<FormularioConfig>) => void;
   alGuardar: () => void;
   alDescartar: () => void;
 }
 
-function SelectorProveedor({ valor, deshabilitado, alCambiar }: {
+function SelectorProveedor({ config, valor, error, deshabilitado, alCambiar }: {
+  config: ConfigIA;
   valor: ProveedorIA;
+  error?: string;
   deshabilitado: boolean;
   alCambiar: (proveedor: ProveedorIA) => void;
 }) {
   return (
-    <fieldset className="space-y-2" disabled={deshabilitado}>
+    <fieldset className="space-y-2" disabled={deshabilitado} aria-describedby={error ? "proveedor-error" : undefined}>
       <legend className="text-sm font-medium">Proveedor <span className="text-destructive">*</span></legend>
-      {OPCIONES_PROVEEDOR.map((opcion) => (
-        <label key={opcion.valor}
+      {config.proveedores_permitidos.map((opcion) => (
+        <label key={opcion.proveedor}
           className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 has-checked:border-primary has-checked:bg-primary/5 has-focus-visible:ring-3 has-focus-visible:ring-ring/50">
-          <input type="radio" name="proveedor" value={opcion.valor} checked={valor === opcion.valor}
-            aria-describedby={`proveedor-${opcion.valor}-desc`} className="mt-1"
-            onChange={() => alCambiar(opcion.valor)} />
+          <input type="radio" name="proveedor" value={opcion.proveedor} checked={valor === opcion.proveedor}
+            className="mt-1" onChange={() => alCambiar(opcion.proveedor)} />
           <span>
             <span className="block text-sm font-medium">{opcion.etiqueta}</span>
-            <span id={`proveedor-${opcion.valor}-desc`} className="block text-xs text-muted-foreground">
-              {opcion.descripcion}
+            <span className="block text-xs text-muted-foreground">
+              {opcion.modelos.length === 0
+                ? "El servidor no tiene modelos permitidos para este proveedor."
+                : `${opcion.modelos.length} ${opcion.modelos.length === 1 ? "modelo permitido" : "modelos permitidos"}`}
             </span>
           </span>
         </label>
       ))}
+      {error && <p id="proveedor-error" className="text-sm text-destructive">{error}</p>}
     </fieldset>
   );
 }
 
-function CampoModelo({ formulario, error, deshabilitado, alCambiar }: {
+function CampoModelo({ config, formulario, error, deshabilitado, alCambiar }: {
+  config: ConfigIA;
   formulario: FormularioConfig;
   error?: string;
   deshabilitado: boolean;
   alCambiar: (modelo: string) => void;
 }) {
+  const permitido = proveedorPermitido(config, formulario.proveedor);
+  const modelos = permitido?.modelos ?? [];
+  const sinProbar = formulario.modelo !== "" && modelos.includes(formulario.modelo) && !estaProbado(permitido, formulario.modelo);
   return (
     <Campo id="config-modelo" etiqueta="Modelo" obligatorio error={error}
-      ayuda="Elige una sugerencia o escribe el nombre exacto del modelo que ofrece tu proveedor.">
+      ayuda="Solo se pueden elegir los modelos que permite el servidor. «Sin probar»: aún no se ha validado con nuestros prompts.">
       {(a11y) => (
-        <>
-          <input {...a11y} list="sugerencias-modelo" value={formulario.modelo} maxLength={MAX_MODELO}
-            disabled={deshabilitado} autoComplete="off" spellCheck={false} className={CLASE_CONTROL}
-            onChange={(e) => alCambiar(e.target.value)} />
-          <datalist id="sugerencias-modelo">
-            {SUGERENCIAS_MODELO[formulario.proveedor].map((modelo) => (
-              <option key={modelo} value={modelo} />
+        <div className="space-y-2">
+          <select {...a11y} value={modelos.includes(formulario.modelo) ? formulario.modelo : ""}
+            disabled={deshabilitado || modelos.length === 0} className={CLASE_CONTROL}
+            onChange={(e) => alCambiar(e.target.value)}>
+            <option value="" disabled>{modelos.length === 0 ? "No hay modelos disponibles" : "Elige un modelo…"}</option>
+            {modelos.map((modelo) => (
+              <option key={modelo} value={modelo}>
+                {modelo}{estaProbado(permitido, modelo) ? "" : " (sin probar)"}
+              </option>
             ))}
-          </datalist>
-        </>
+          </select>
+          {sinProbar && (
+            <p className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-900">
+              Este modelo está sin probar: puede que sus respuestas no siempre cumplan el formato esperado.
+            </p>
+          )}
+        </div>
       )}
     </Campo>
   );
 }
 
-function CampoTemperatura({ valor, error, deshabilitado, alCambiar }: {
+function CampoTemperatura({ valor, maxima, error, deshabilitado, alCambiar }: {
   valor: string;
+  maxima: number;
   error?: string;
   deshabilitado: boolean;
   alCambiar: (temperatura: string) => void;
 }) {
   return (
     <Campo id="config-temperatura" etiqueta="Temperatura" obligatorio error={error}
-      ayuda="Cualquier valor entre 0 y 0,2. Un valor bajo hace que las evaluaciones sean reproducibles.">
+      ayuda={`Cualquier valor entre 0 y ${formatearTemperatura(maxima)}. Un valor bajo hace que las evaluaciones sean reproducibles.`}>
       {(a11y) => (
-        <input {...a11y} type="number" inputMode="decimal" min={TEMPERATURA_MINIMA} max={TEMPERATURA_MAXIMA}
+        <input {...a11y} type="number" inputMode="decimal" min={TEMPERATURA_MINIMA} max={maxima}
           step={PASO_TEMPERATURA} value={valor} disabled={deshabilitado} className={`${CLASE_CONTROL} sm:max-w-40`}
           onChange={(e) => alCambiar(e.target.value)} />
       )}
@@ -98,7 +117,7 @@ function CampoTemperatura({ valor, error, deshabilitado, alCambiar }: {
 
 /** Formulario de RF-10: proveedor, modelo y temperatura. No hay campos de URL ni de clave. */
 export function FormularioConfigIA(props: FormularioConfigIAProps) {
-  const { formulario, errores, cambios, guardando, aviso, alCambiar, alGuardar, alDescartar } = props;
+  const { config, formulario, errores, cambios, guardando, aviso, alCambiarProveedor, alCambiar, alGuardar, alDescartar } = props;
 
   function enviar(evento: React.FormEvent<HTMLFormElement>) {
     evento.preventDefault();
@@ -108,24 +127,29 @@ export function FormularioConfigIA(props: FormularioConfigIAProps) {
   return (
     <form onSubmit={enviar} noValidate aria-labelledby="titulo-form-config" className="space-y-5">
       <h2 id="titulo-form-config" className="text-lg font-semibold">Cambiar configuración</h2>
-      <SelectorProveedor valor={formulario.proveedor} deshabilitado={guardando}
-        alCambiar={(proveedor) => alCambiar({ proveedor })} />
-      <CampoModelo formulario={formulario} error={errores.modelo} deshabilitado={guardando}
+      <SelectorProveedor config={config} valor={formulario.proveedor} error={errores.proveedor} deshabilitado={guardando}
+        alCambiar={alCambiarProveedor} />
+      <CampoModelo config={config} formulario={formulario} error={errores.modelo} deshabilitado={guardando}
         alCambiar={(modelo) => alCambiar({ modelo })} />
-      <CampoTemperatura valor={formulario.temperatura} error={errores.temperatura} deshabilitado={guardando}
-        alCambiar={(temperatura) => alCambiar({ temperatura })} />
+      <CampoTemperatura valor={formulario.temperatura} maxima={temperaturaMaxima(config)} error={errores.temperatura}
+        deshabilitado={guardando} alCambiar={(temperatura) => alCambiar({ temperatura })} />
       <p aria-live="polite" className="text-sm text-amber-800">
         {cambios ? "Tienes cambios sin guardar." : ""}
       </p>
       {aviso && <Aviso tipo={aviso.tipo} mensaje={aviso.mensaje} />}
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button type="button" variant="outline" disabled={!cambios || guardando} onClick={alDescartar}>
-          Descartar cambios
-        </Button>
-        <Button type="submit" disabled={!cambios || guardando} aria-busy={guardando}>
-          {guardando && <Loader2 className="animate-spin" aria-hidden="true" />}
-          {guardando ? "Guardando…" : "Guardar"}
-        </Button>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+        <p id="ayuda-guardar-config" className="text-xs text-muted-foreground sm:mr-auto">
+          El cambio solo afecta a las evaluaciones nuevas; las anteriores conservan su configuración.
+        </p>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row">
+          <Button type="button" variant="outline" disabled={!cambios || guardando} onClick={alDescartar}>
+            Descartar cambios
+          </Button>
+          <Button type="submit" disabled={!cambios || guardando} aria-busy={guardando} aria-describedby="ayuda-guardar-config">
+            {guardando && <Loader2 className="animate-spin" aria-hidden="true" />}
+            {guardando ? "Guardando…" : "Guardar"}
+          </Button>
+        </div>
       </div>
     </form>
   );
