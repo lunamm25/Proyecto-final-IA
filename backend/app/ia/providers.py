@@ -51,6 +51,14 @@ class LLMProvider(ABC):
     def _llamar(self, prompt: str, schema: type[BaseModel], imagenes: list[bytes] | None) -> str:
         """Hace la llamada al modelo y devuelve el texto crudo."""
 
+    def generar_texto(
+        self, prompt: str, schema: type[BaseModel], imagenes: list[bytes] | None = None
+    ) -> str:
+        """Hace una sola llamada al modelo y devuelve el texto crudo, sin validar."""
+        crudo = self._llamar(prompt, schema, imagenes)
+        self.ultima_respuesta_cruda = crudo
+        return crudo
+
     def generar_json(
         self, prompt: str, schema: type[T], imagenes: list[bytes] | None = None
     ) -> T:
