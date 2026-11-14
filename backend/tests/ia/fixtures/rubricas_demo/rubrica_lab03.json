@@ -1,0 +1,120 @@
+{
+  "titulo": "Laboratorio 03 — Agente Python con modelo local (Ollama)",
+  "criterios": [
+    {
+      "id": "c1",
+      "competencia": "Ejecución del agente con modelo local (solo lectura y con aprobación humana)",
+      "nombre": "Ejecución del agente con modelo local (solo lectura y con aprobación humana)",
+      "ponderacion": 25.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 5.0,
+          "descriptor": "Cumple todos los aspectos que pide el documento: ejecución con Ollama local en modo solo lectura que inspecciona los archivos y propone un plan; segunda ejecución con --permitir-escritura y aprobación humana (APROBAR) tras revisar el plan; verificación de resultados con los 12 archivos ficticios y SHA-256."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.5,
+          "descriptor": "Cumple algunos de los aspectos que pide el documento, pero falta o está incompleto al menos uno: ejecución con Ollama local en modo solo lectura que inspecciona los archivos y propone un plan; segunda ejecución con --permitir-escritura y aprobación humana (APROBAR) tras revisar el plan; verificación de resultados con los 12 archivos ficticios y SHA-256."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 0.0,
+          "descriptor": "No cumple los aspectos que pide el documento o no hay evidencia de ellos: ejecución con Ollama local en modo solo lectura que inspecciona los archivos y propone un plan; segunda ejecución con --permitir-escritura y aprobación humana (APROBAR) tras revisar el plan; verificación de resultados con los 12 archivos ficticios y SHA-256."
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "competencia": "Trazas de ejecución nube y local",
+      "nombre": "Trazas de ejecución nube y local",
+      "ponderacion": 20.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 5.0,
+          "descriptor": "Cumple todos los aspectos que pide el documento: evidencias de las dos trazas (nube y local); eventos observables como SOLICITUD_LLM, MODELO_SOLICITA_HERRAMIENTA y PYTHON_DEVUELVE_RESULTADO; bloqueo BLOQUEADO_MODO_LECTURA sin --permitir-escritura."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.5,
+          "descriptor": "Cumple algunos de los aspectos que pide el documento, pero falta o está incompleto al menos uno: evidencias de las dos trazas (nube y local); eventos observables como SOLICITUD_LLM, MODELO_SOLICITA_HERRAMIENTA y PYTHON_DEVUELVE_RESULTADO; bloqueo BLOQUEADO_MODO_LECTURA sin --permitir-escritura."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 0.0,
+          "descriptor": "No cumple los aspectos que pide el documento o no hay evidencia de ellos: evidencias de las dos trazas (nube y local); eventos observables como SOLICITUD_LLM, MODELO_SOLICITA_HERRAMIENTA y PYTHON_DEVUELVE_RESULTADO; bloqueo BLOQUEADO_MODO_LECTURA sin --permitir-escritura."
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "competencia": "Tabla comparativa nube/local",
+      "nombre": "Tabla comparativa nube/local",
+      "ponderacion": 20.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 5.0,
+          "descriptor": "Cumple todos los aspectos que pide el documento: tabla comparativa nube/local; número de llamadas al LLM; número de herramientas; organización completada; conflictos gestionados; tiempo medido de principio a fin; autorizaciones y necesidad de reintentar."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.5,
+          "descriptor": "Cumple algunos de los aspectos que pide el documento, pero falta o está incompleto al menos uno: tabla comparativa nube/local; número de llamadas al LLM; número de herramientas; organización completada; conflictos gestionados; tiempo medido de principio a fin; autorizaciones y necesidad de reintentar."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 0.0,
+          "descriptor": "No cumple los aspectos que pide el documento o no hay evidencia de ellos: tabla comparativa nube/local; número de llamadas al LLM; número de herramientas; organización completada; conflictos gestionados; tiempo medido de principio a fin; autorizaciones y necesidad de reintentar."
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "competencia": "Pruebas automatizadas (unittest)",
+      "nombre": "Pruebas automatizadas (unittest)",
+      "ponderacion": 15.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 5.0,
+          "descriptor": "Cumple todos los aspectos que pide el documento: resultados de unittest; 23 pruebas, OK; ejecución desde la carpeta raíz del laboratorio."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.5,
+          "descriptor": "Cumple algunos de los aspectos que pide el documento, pero falta o está incompleto al menos uno: resultados de unittest; 23 pruebas, OK; ejecución desde la carpeta raíz del laboratorio."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 0.0,
+          "descriptor": "No cumple los aspectos que pide el documento o no hay evidencia de ellos: resultados de unittest; 23 pruebas, OK; ejecución desde la carpeta raíz del laboratorio."
+        }
+      ]
+    },
+    {
+      "id": "c5",
+      "competencia": "Reflexión técnica",
+      "nombre": "Reflexión técnica",
+      "ponderacion": 20.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 5.0,
+          "descriptor": "Cumple todos los aspectos que pide el documento: reflexión técnica de 200–300 palabras; diferencia entre ubicación de inferencia e infraestructura agéntica; por qué la autorización y la integridad SHA-256 deben continuar en Python."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.5,
+          "descriptor": "Cumple algunos de los aspectos que pide el documento, pero falta o está incompleto al menos uno: reflexión técnica de 200–300 palabras; diferencia entre ubicación de inferencia e infraestructura agéntica; por qué la autorización y la integridad SHA-256 deben continuar en Python."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 0.0,
+          "descriptor": "No cumple los aspectos que pide el documento o no hay evidencia de ellos: reflexión técnica de 200–300 palabras; diferencia entre ubicación de inferencia e infraestructura agéntica; por qué la autorización y la integridad SHA-256 deben continuar en Python."
+        }
+      ]
+    }
+  ]
+}
