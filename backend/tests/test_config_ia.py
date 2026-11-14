@@ -172,7 +172,16 @@ def test_get_clave_solo_espacios_no_cuenta(cliente_api):
 
 def test_versiones_prompt_reales(cliente_api):
     versiones = cliente_api.get(RUTA, headers=ADM).json()["versiones_prompt"]
-    assert versiones["extraer_rubrica"] == "1.0"
+    assert set(versiones) == {
+        "extraer_rubrica",
+        "evaluar_laboratorio",
+        "informe_narrativo",
+        "mapear_tematicas",
+    }
+    for nombre, version in versiones.items():
+        archivo = servicio.CARPETA_PROMPTS / f"{nombre}.md"
+        primera = archivo.read_text(encoding="utf-8").splitlines()[0]
+        assert primera == f"version: {version}"
 
 
 def test_versiones_prompt_leen_solo_la_primera_linea(cliente_api, tmp_path, monkeypatch):
@@ -806,21 +815,22 @@ def test_probador_real_hace_una_sola_llamada(monkeypatch, clase, metodo):
     proveedor = clase()
     recibidos = {}
 
-    def construir(config, settings, timeout=None):
+    def construir(config, settings, timeout=None, max_retries=None):
         recibidos["timeout"] = timeout
+        recibidos["max_retries"] = max_retries
         return proveedor
 
     monkeypatch.setattr(evaluador_ia, "construir_proveedor", construir)
     config = ConfigEvaluacion("gemini", "gemini-3.5-flash-lite", 0.1)
     evaluador_ia.probar_conexion_ia(config, ajustes(), 7.0)
     assert proveedor.llamadas == [metodo]
-    assert recibidos["timeout"] == 7.0
+    assert recibidos == {"timeout": 7.0, "max_retries": 0}
 
 
 def test_probador_real_traduce_error_de_configuracion(monkeypatch):
     from app.ia.providers import ErrorConfiguracionLLM
 
-    def construir(config, settings, timeout=None):
+    def construir(config, settings, timeout=None, max_retries=None):
         raise ErrorConfiguracionLLM("Falta GEMINI_API_KEY para usar el proveedor Gemini.")
 
     monkeypatch.setattr(evaluador_ia, "construir_proveedor", construir)
@@ -854,3 +864,15 @@ def test_construir_proveedor_timeout_opcional(monkeypatch):
     assert "timeout" not in modulo.argumentos
     evaluador_ia.construir_proveedor(config, ajustes(gemini_api_key="x"), timeout=10.0)
     assert modulo.argumentos["timeout"] == 10.0
+
+
+def test_construir_proveedor_sin_max_retries_no_lo_pasa(monkeypatch):
+    modulo = ModuloProveedores()
+    monkeypatch.setattr(evaluador_ia, "_importar", lambda _nombre: modulo)
+    config = ConfigEvaluacion("gemini", "gemini-3.5-flash-lite", 0.1)
+    evaluador_ia.construir_proveedor(config, ajustes(gemini_api_key="x"), timeout=10.0)
+    assert "max_retries" not in modulo.argumentos
+    evaluador_ia.construir_proveedor(config, ajustes(gemini_api_key="x"), max_retries=0)
+    assert modulo.argumentos["max_retries"] == 0
+    assert "timeout" not in modulo.argumentos
+
