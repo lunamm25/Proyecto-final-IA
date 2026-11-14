@@ -11,9 +11,10 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Auditoria, Entrega, Evaluacion, Perfil, RubricaVersion
+from app.models import Auditoria, Entrega, Evaluacion, Perfil, RubricaVersion, VerificacionCodigo
 from app.services.errores import NoEncontradoError
 from app.services.evaluaciones import MSG_EVALUACION_NO_EXISTE
+from app.services.material import resumen_verificacion
 
 PATRONES_SECRETOS = (
     "api_key",
@@ -45,6 +46,7 @@ class Traza:
     evaluacion: Evaluacion
     rubrica_version: RubricaVersion | None
     eventos: list[EventoTraza]
+    verificacion: dict[str, Any] | None = None
 
 
 def a_utc(fecha: datetime | None) -> datetime | None:
@@ -87,4 +89,8 @@ def obtener_traza(db: Session, evaluacion_id: int) -> Traza:
         .order_by(Auditoria.creado_en, Auditoria.id)
     )
     eventos = [EventoTraza(fila, perfil) for fila, perfil in db.execute(consulta).all()]
-    return Traza(evaluacion, version, eventos)
+    fila_verificacion = db.scalar(
+        select(VerificacionCodigo).where(VerificacionCodigo.evaluacion_id == evaluacion.id)
+    )
+    verificacion = resumen_verificacion(fila_verificacion.metricas) if fila_verificacion else None
+    return Traza(evaluacion, version, eventos, verificacion)

@@ -24,6 +24,7 @@ from app.api.esquemas import (
     RetroalimentacionRespuesta,
     TrazaRespuesta,
     UsuarioTraza,
+    VerificacionResumen,
 )
 from app.db import get_db
 from app.models import EvaluacionCriterio, Perfil
@@ -85,9 +86,15 @@ def _respuesta(detalle: servicio.DetalleEvaluacion) -> EvaluacionRespuesta:
     version = detalle.rubrica_version
     final = revision.retro_general_final(ev)
     original = revision.retro_general_ia(ev)
+    entrega, perfil_estudiante = detalle.entrega, detalle.estudiante
     return EvaluacionRespuesta(
         id=ev.id,
         entrega_id=ev.entrega_id,
+        laboratorio_id=entrega.laboratorio_id if entrega else None,
+        estudiante_id=entrega.estudiante_id if entrega else None,
+        estudiante_nombre=None
+        if estudiante or perfil_estudiante is None
+        else perfil_estudiante.nombre,
         estado=ev.estado,
         nota=_numero(ev.nota),
         rubrica_version_id=version.id if version else None,
@@ -238,6 +245,9 @@ def ver_traza(evaluacion_id: int, _docente: Docente, db: BaseDatos) -> TrazaResp
         prompt_version=ev.prompt_version,
         rubrica_version_id=version.id if version else None,
         rubrica_version=version.version if version else None,
+        verificacion=VerificacionResumen.model_validate(datos.verificacion)
+        if datos.verificacion
+        else None,
         eventos=[
             EventoTrazaRespuesta(
                 id=e.auditoria.id,

@@ -26,6 +26,7 @@ from app.models import (
     Laboratorio,
     Perfil,
     RubricaVersion,
+    VerificacionCodigo,
 )
 from app.models.tipos import ESTADOS_EVALUACION
 from app.services.errores import (
@@ -36,7 +37,7 @@ from app.services.errores import (
     ProhibidoError,
 )
 from app.services.evaluador_ia import Evaluador, ResultadoIA, SolicitudEvaluacion
-from app.services.material import CargadorMaterial, sanear_verificacion
+from app.services.material import CargadorMaterial, resumen_verificacion, sanear_verificacion
 from app.services.nota import calcular_nota
 from app.services.rubricas import validar_rubrica
 
@@ -56,7 +57,8 @@ MSG_PENDIENTE = "La evaluación está pendiente de revisión docente."
 MSG_ERROR_GENERICO = (
     "No se pudo completar la evaluación automática. Intenta de nuevo o contacta al docente."
 )
-MSG_SIN_TEXTO = "La entrega no tiene texto de informe disponible para evaluar."
+MSG_SIN_TEXTO = "La entrega no tiene texto de informe ni código legible para evaluar."
+TIPO_SANDBOX = "subprocess"
 MSG_ESTADO_INVALIDO = "El estado '{}' no es válido. Valores permitidos: {}."
 
 
@@ -85,6 +87,8 @@ class DetalleEvaluacion:
     criterios: list[EvaluacionCriterio]
     rubrica_version: RubricaVersion | None
     vista_estudiante: bool
+    entrega: Entrega | None = None
+    estudiante: Perfil | None = None
 
 
 @dataclass(frozen=True)
@@ -245,8 +249,9 @@ def _guardar_exito(
     version: RubricaVersion,
     resultado: ResultadoIA,
     usuario_id: uuid.UUID | None,
+    verificacion: dict[str, Any] | None = None,
 ) -> None:
-    """Calcula la nota con nota.py y guarda criterios, resultado y auditoría."""
+    """Calcula la nota con nota.py y guarda criterios, resultado, verificación y auditoría."""
     criterios = version.contenido["criterios"]
     elegidos = _validar_resultado(criterios, resultado)
     nota = calcular_nota(criterios, elegidos)
@@ -270,6 +275,12 @@ def _guardar_exito(
     evaluacion.prompt_version = resultado.version_prompt
     evaluacion.resultado = _resultado_json(resultado)
     evaluacion.error = None
+    if verificacion is not None:
+        db.add(
+            VerificacionCodigo(
+                evaluacion_id=evaluacion.id, metricas=verificacion, sandbox=TIPO_SANDBOX
+            )
+        )
     db.add(
         Auditoria(
             usuario_id=usuario_id,
@@ -286,16 +297,17 @@ def _guardar_exito(
 
 def _solicitud(
     db: Session, evaluacion: Evaluacion, entrega: Entrega, cargar_material: CargadorMaterial
-) -> tuple[RubricaVersion, SolicitudEvaluacion]:
-    """Arma la solicitud con la versión de rúbrica DE LA ENTREGA y el material saneado."""
+) -> tuple[RubricaVersion, SolicitudEvaluacion, dict[str, Any] | None]:
+    """Solicitud con la versión de rúbrica DE LA ENTREGA, el material saneado y la verificación."""
     version = db.get(RubricaVersion, entrega.rubrica_version_id)
     laboratorio = db.get(Laboratorio, entrega.laboratorio_id)
     if version is None or laboratorio is None:
         raise ResultadoIncoherenteError("Falta la versión de rúbrica o el laboratorio.")
     material = cargar_material(db, entrega)
-    if not material.texto_informe.strip():
+    if not material.texto_informe.strip() and not (material.resumen_codigo or "").strip():
         raise DominioError(MSG_SIN_TEXTO)
-    return version, SolicitudEvaluacion(
+    verificacion = resumen_verificacion(material.resultados_verificacion)
+    solicitud = SolicitudEvaluacion(
         rubrica=version.contenido,
         descripcion=laboratorio.descripcion or "",
         objetivos=laboratorio.objetivos or "",
@@ -306,6 +318,7 @@ def _solicitud(
         modelo=evaluacion.modelo or "",
         temperatura=evaluacion.temperatura or 0.0,
     )
+    return version, solicitud, verificacion
 
 
 def _evaluar(
@@ -322,9 +335,9 @@ def _evaluar(
     entrega = db.get(Entrega, evaluacion.entrega_id)
     if entrega is None:
         raise ResultadoIncoherenteError("La entrega de la evaluación ya no existe.")
-    version, solicitud = _solicitud(db, evaluacion, entrega, cargar_material)
+    version, solicitud, verificacion = _solicitud(db, evaluacion, entrega, cargar_material)
     resultado = evaluador(solicitud)
-    _guardar_exito(db, evaluacion, version, resultado, usuario_id)
+    _guardar_exito(db, evaluacion, version, resultado, usuario_id, verificacion)
     db.commit()
 
 
@@ -418,8 +431,15 @@ def obtener_detalle(db: Session, evaluacion_id: int, perfil: Perfil) -> DetalleE
         )
     )
     version = db.get(RubricaVersion, entrega.rubrica_version_id)
-    return DetalleEvaluacion(evaluacion, criterios, version, vista_estudiante=not es_docente)
-
+    estudiante = db.get(Perfil, entrega.estudiante_id)
+    return DetalleEvaluacion(
+        evaluacion,
+        criterios,
+        version,
+        vista_estudiante=not es_docente,
+        entrega=entrega,
+        estudiante=estudiante,
+    )
 
 
 def listar_evaluaciones(

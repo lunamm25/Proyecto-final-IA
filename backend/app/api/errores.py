@@ -7,12 +7,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.services.errores import (
+    ArchivoDemasiadoGrandeError,
     ConflictoError,
     DatosInvalidosError,
     DominioError,
     NoEncontradoError,
     ProhibidoError,
     RubricaConInconsistenciasError,
+    ServicioNoDisponibleError,
 )
 
 CODIGOS: dict[type[DominioError], int] = {
@@ -20,6 +22,8 @@ CODIGOS: dict[type[DominioError], int] = {
     ProhibidoError: status.HTTP_403_FORBIDDEN,
     ConflictoError: status.HTTP_409_CONFLICT,
     DatosInvalidosError: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    ArchivoDemasiadoGrandeError: status.HTTP_413_CONTENT_TOO_LARGE,
+    ServicioNoDisponibleError: status.HTTP_503_SERVICE_UNAVAILABLE,
 }
 
 MENSAJES_VALIDACION = {

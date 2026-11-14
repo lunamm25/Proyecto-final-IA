@@ -79,6 +79,7 @@ Cada RF tiene criterios de aceptación (CA). Un RF está **terminado** solo si t
 ### RF-04 Portafolio académico
 - CA1: el estudiante crea una entrega por laboratorio: PDF del informe (obligatorio, texto extraíble), código (ZIP ≤ 20 MB **o** URL pública de GitHub), imágenes/video/presentación (opcionales).
 - CA2: si el PDF no tiene texto extraíble, se rechaza con un mensaje claro.
+- **Decisión del equipo, 14 nov 2026:** el PDF deja de ser obligatorio. Una entrega necesita **al menos uno** de: PDF del informe, ZIP del código o URL pública de GitHub. Si se adjunta un PDF, debe tener texto extraíble (CA2 sigue vigente: 422). Migración `0006_entregas_pdf_opcional.sql` (`entregas.pdf_path` admite null). Una entrega solo con URL de GitHub se guarda, pero aún no se puede evaluar (el backend no clona repositorios): su evaluación termina en `error`.
 - CA3: la entrega queda asociada a su laboratorio y a la **versión de rúbrica vigente** en ese momento.
 - CA4: vista del portafolio agrupada por cohorte → laboratorio, con el estado de cada entrega (sin evaluar, evaluada-borrador, en revisión, publicada).
 - CA5: los archivos se guardan en un bucket privado; solo se accede con URL firmada temporal.
@@ -217,7 +218,10 @@ cohortes(id, nombre, numero)                                 -- 1 y 2
 laboratorios(id, cohorte_id FK, codigo, titulo, descripcion, objetivos)
 rubricas(id, laboratorio_id FK UNIQUE)
 rubrica_versiones(id, rubrica_id FK, version int, contenido jsonb, estado[borrador|aprobada], creada_por, creada_en)
-entregas(id, estudiante_id FK, laboratorio_id FK, rubrica_version_id FK, pdf_path, codigo_zip_path, github_url, extras jsonb, creada_en)
+entregas(id, estudiante_id FK, laboratorio_id FK, rubrica_version_id FK, pdf_path NULL, codigo_zip_path, github_url, extras jsonb, creada_en)
+-- pdf_path opcional desde la migración 0006 (al menos uno de PDF, ZIP o GitHub, lo valida el backend).
+-- pdf_path y codigo_zip_path son rutas dentro del bucket privado `entregas` que genera el backend:
+-- `{estudiante_id}/{entrega_id}/informe.pdf` y `.../codigo.zip` (nunca el nombre del archivo del usuario).
 evaluaciones(id, entrega_id FK, estado, nota numeric(2,1), proveedor, modelo, prompt_version, temperatura,
              respuesta_cruda jsonb, resultado jsonb, retroalimentacion_docente jsonb, error text, creada_en, aprobada_por,
              aprobada_en, publicada_en)
@@ -226,6 +230,8 @@ evaluacion_criterios(id, evaluacion_id FK, criterio_id, nivel_ia, nivel_final, p
 -- retroalimentacion_docente: solo los textos editados por el docente; lo generado por la IA
 -- (resultado, justificacion) nunca se modifica, para conservar la traza (migración 0004).
 verificaciones_codigo(id, evaluacion_id FK, sintaxis jsonb, ruff jsonb, complejidad jsonb, tests jsonb, metricas jsonb, sandbox text)
+-- Hoy solo se llena si VERIFICACION_ACTIVA=true: metricas = {codigo_salida, tiene_error, ejecucion_exitosa}
+-- (nunca stdout ni stderr), sandbox = 'subprocess'. Se guarda junto con la evaluación exitosa.
 auditoria(id, usuario_id, entidad, entidad_id, accion, antes jsonb, despues jsonb, motivo, creado_en)
 tematicas(id, nombre, padre_id NULL, descripcion)            -- taxonomía del mapa mental
 config_ia(id=1, proveedor, modelo, temperatura, actualizado_por, actualizado_en)
@@ -251,16 +257,16 @@ Prefijo `/api`. Autenticación: `Authorization: Bearer <JWT de Supabase>`. Error
 | POST | /api/rubricas/validar | docente | Valida JSON de rúbrica → lista de inconsistencias |
 | POST | /api/laboratorios/{id}/rubrica/versiones | docente | Guarda y aprueba nueva versión |
 | GET | /api/laboratorios/{id}/rubrica | todos | Versión vigente |
-| POST | /api/entregas | estudiante | multipart: laboratorio_id, pdf, zip? , github_url?, extras? |
-| GET | /api/entregas?estudiante_id= | est(propias)/docente | Portafolio |
+| POST | /api/entregas | estudiante | multipart: `laboratorio_id`, `pdf?`, `zip?`, `github_url?`, `extras?`; **al menos uno** de pdf, zip o github_url (decisión del equipo, ver RF-04). PDF real (cabecera `%PDF-`) con texto extraíble, ≤ 20 MB; ZIP real (`PK\x03\x04`), ≤ 20 MB, ≤ 2 000 archivos y ≤ 100 MB descomprimido; `github_url` solo `https://github.com/<usuario>/<repo>[/...]` sin credenciales, parámetros ni espacios (máx. 300 caracteres; no se clona); `extras`: objeto JSON plano (máx. 20 claves `[a-z0-9_]`, textos ≤ 500, total ≤ 4 000 caracteres). La versión de rúbrica es la vigente. Archivos al bucket privado `SUPABASE_BUCKET` con rutas generadas por el backend. 201 con la entrega (como un item del GET) · 403 docente/admin · 413 archivo demasiado grande · 422 faltan archivos, tipo inválido, PDF sin texto, URL inválida, laboratorio inexistente o sin rúbrica aprobada · 503 fallo del almacén (no queda nada a medias). Auditoría `crear_entrega` en la misma transacción |
+| GET | /api/entregas?estudiante_id=&laboratorio_id=&limit=&offset= | est(propias)/docente | Portafolio paginado `{items, total, limit, offset}` (limit 1–100, por defecto 20), orden por fecha descendente. Estudiante: solo las suyas (estudiante_id de otro → 404). Cada item: id, laboratorio {id, codigo, titulo}, estudiante {id, nombre}, rubrica_version_id, rubrica_version, tiene_pdf, tiene_zip, github_url, creada_en y `ultima_evaluacion` {id, estado, nota} o null. Docente/admin ven estado y nota reales; el estudiante ve `procesando`, `error` o `publicada` (con nota) y, en borrador/en_revision/aprobada, `pendiente_revision` sin nota. Nunca rutas del bucket ni URLs firmadas |
 | POST | /api/entregas/{id}/evaluar | estudiante (solo sus entregas)/docente | Lanza evaluación en segundo plano: 202 `{evaluacion_id, estado: "procesando"}` · 404 si la entrega no existe o es ajena (estudiante) · 409 si ya hay una evaluación `procesando` o la rúbrica de la entrega tiene inconsistencias. Al terminar queda `borrador` (nota calculada por el backend) o `error` (mensaje genérico; detalle solo en auditoría) |
 | GET | /api/evaluaciones?laboratorio_id=&estado=&estudiante_id=&limit=&offset= | docente | Listado paginado `{items, total, limit, offset}` (limit 1–100, por defecto 20), orden por fecha descendente; cada item con estudiante {id, nombre}, laboratorio {id, codigo, titulo}, estado, nota y fechas. Nunca respuestas crudas |
-| GET | /api/evaluaciones/{id} | según estado/rol | Detalle: estado, nota, criterios, citas (`similitud` de 0 a 100, `verificada`), versión de rúbrica. Docente/admin: todo (nunca respuestas crudas). Estudiante: solo sus evaluaciones `publicada`, sin datos internos del modelo; propia no publicada → 403 "La evaluación está pendiente de revisión docente."; ajena o inexistente → 404 |
+| GET | /api/evaluaciones/{id} | según estado/rol | Detalle: estado, nota, `laboratorio_id`, `estudiante_id`, `estudiante_nombre` (null para el estudiante), criterios, citas (`similitud` de 0 a 100, `verificada`), versión de rúbrica. Docente/admin: todo (nunca respuestas crudas). Estudiante: solo sus evaluaciones `publicada`, sin datos internos del modelo; propia no publicada → 403 "La evaluación está pendiente de revisión docente."; ajena o inexistente → 404 |
 | POST | /api/evaluaciones/{id}/revisar | docente | `borrador → en_revision` (otra transición → 409 indicando el estado actual) |
 | PATCH | /api/evaluaciones/{id}/criterios/{criterio_id} | docente | Ajuste {nivel_final, motivo} (motivo obligatorio) → recalcula nota en el backend; solo en borrador/en_revision (409 si no); nivel inexistente → 422; mismo nivel → 200 sin cambios ni auditoría |
 | PATCH | /api/evaluaciones/{id}/retroalimentacion | docente | Edita la retroalimentación general y la de cada criterio (se conserva el original de la IA); campo omitido = sin cambio, `null` = volver al texto de la IA, `""` → 422; motivo opcional; solo en borrador/en_revision |
 | POST | /api/evaluaciones/{id}/aprobar · /publicar | docente | `en_revision → aprobada` (409 si falta un nivel final o la rúbrica ya no es válida) · `aprobada → publicada`. Después de aprobada no se ajusta ni se edita |
-| GET | /api/evaluaciones/{id}/traza | docente | Trazabilidad completa: eventos en orden cronológico (fecha UTC), usuario, acción, antes/después y motivo; proveedor, modelo, temperatura, versión de prompt y de rúbrica; respuestas crudas. Se filtran claves que parezcan secretos |
+| GET | /api/evaluaciones/{id}/traza | docente | Trazabilidad completa: eventos en orden cronológico (fecha UTC), usuario, acción, antes/después y motivo; proveedor, modelo, temperatura, versión de prompt y de rúbrica; respuestas crudas; `verificacion` {codigo_salida, tiene_error, ejecucion_exitosa} o null. Se filtran claves que parezcan secretos |
 | GET | /api/estudiantes?limit=&offset= | docente | Listado paginado `{items, total, limit, offset}` de estudiantes con id, nombre, correo y `laboratorios_evaluados` (laboratorios distintos con evaluación publicada), ordenado por nombre |
 | GET | /api/estudiantes/{id}/informe | est(propio)/docente | Informe integral (JSON). Solo evaluaciones `publicada` (por laboratorio, la más reciente). Números calculados por el backend (notas por laboratorio en orden C1-01…C2-02, promedios por cohorte, general, por competencia y por temática, evolución; ROUND_HALF_UP; `promedio_general` null sin datos). `narrativa` de la IA en campo aparte con `estado`: `generada` · `sin_datos` · `no_disponible` · `error` (mensaje genérico). Incluye `avisos`. Otro estudiante → 404 |
 | GET | /api/estudiantes/{id}/mapa | est(propio)/docente | Grafo `{nodos, aristas, avisos}`: temática → subtema → concepto → laboratorio; cada nodo con dominio (0–5), nivel (bajo <3,0 · medio 3,0–3,9 · alto ≥4,0), evidencias verificadas y aspectos por profundizar. Si el mapeo de la IA no está disponible, se agrupa por competencia y se informa en `avisos`. Sin datos → `{nodos: [], aristas: []}` |

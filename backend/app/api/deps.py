@@ -1,6 +1,7 @@
 """Dependencias de FastAPI: usuario autenticado y control de acceso por rol."""
 
 from collections.abc import Callable
+from functools import partial
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -11,6 +12,8 @@ from app.config import Settings, get_settings
 from app.db import SessionLocal, get_db
 from app.models import Perfil
 from app.models.tipos import ROLES
+from app.sandbox.runner import SandboxRunner
+from app.services.almacen import AlmacenArchivos, AlmacenSupabase
 from app.services.auth import TokenInvalidoError, validar_token
 from app.services.config_ia import LIMITE_PRUEBA_SEGUNDOS
 from app.services.evaluador_ia import (
@@ -20,7 +23,7 @@ from app.services.evaluador_ia import (
     probar_conexion_ia,
 )
 from app.services.informe_ia import IAInforme, IAInformeReal
-from app.services.material import CargadorMaterial, obtener_material
+from app.services.material import CargadorMaterial, EjecutorCodigo, obtener_material
 
 esquema_bearer = HTTPBearer(
     auto_error=False,
@@ -94,9 +97,28 @@ def obtener_limite_prueba_ia() -> float:
     return LIMITE_PRUEBA_SEGUNDOS
 
 
-def obtener_cargador_material() -> CargadorMaterial:
-    """Función que obtiene el material de una entrega (provisional, ver services/material)."""
-    return obtener_material
+def obtener_almacen(settings: Annotated[Settings, Depends(get_settings)]) -> AlmacenArchivos:
+    """Almacén de archivos (bucket privado de Supabase Storage); los tests usan uno en memoria."""
+    return AlmacenSupabase(settings)
+
+
+def obtener_ejecutor_codigo() -> EjecutorCodigo:
+    """Ejecución del ZIP en el sandbox de Rol 4 (solo si VERIFICACION_ACTIVA=true)."""
+    return SandboxRunner().ejecutar_zip
+
+
+def obtener_cargador_material(
+    settings: Annotated[Settings, Depends(get_settings)],
+    almacen: Annotated[AlmacenArchivos, Depends(obtener_almacen)],
+    ejecutar: Annotated[EjecutorCodigo, Depends(obtener_ejecutor_codigo)],
+) -> CargadorMaterial:
+    """Función que obtiene el material real de una entrega (PDF y ZIP desde el almacén)."""
+    return partial(
+        obtener_material,
+        almacen=almacen,
+        verificacion_activa=settings.verificacion_activa,
+        ejecutar=ejecutar,
+    )
 
 
 def obtener_fabrica_sesiones() -> Callable[[], Session]:

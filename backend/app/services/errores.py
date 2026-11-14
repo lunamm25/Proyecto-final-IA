@@ -25,6 +25,14 @@ class DatosInvalidosError(DominioError):
     """Los datos recibidos no son válidos (HTTP 422)."""
 
 
+class ArchivoDemasiadoGrandeError(DominioError):
+    """El archivo subido supera el tamaño máximo (HTTP 413)."""
+
+
+class ServicioNoDisponibleError(DominioError):
+    """Un servicio externo (p. ej. el almacén de archivos) falló; reintentar luego (HTTP 503)."""
+
+
 class RubricaConInconsistenciasError(DatosInvalidosError):
     """La rúbrica tiene inconsistencias y no se puede guardar (HTTP 422)."""
 

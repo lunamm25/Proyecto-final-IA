@@ -176,6 +176,11 @@ class EvaluacionRespuesta(BaseModel):
 
     id: int
     entrega_id: int
+    laboratorio_id: int | None = None
+    estudiante_id: uuid.UUID | None = None
+    estudiante_nombre: str | None = Field(
+        default=None, description="Nombre del estudiante (solo docente/admin)."
+    )
     estado: EstadoEvaluacion
     nota: float | None
     rubrica_version_id: int | None
@@ -287,6 +292,14 @@ class EventoTrazaRespuesta(BaseModel):
     motivo: str | None
 
 
+class VerificacionResumen(BaseModel):
+    """Resumen de la ejecución del código en el sandbox (nunca stdout ni stderr)."""
+
+    codigo_salida: int
+    tiene_error: bool
+    ejecucion_exitosa: bool
+
+
 class TrazaRespuesta(BaseModel):
     """Trazabilidad completa de una evaluación (solo docente/admin)."""
 
@@ -300,7 +313,56 @@ class TrazaRespuesta(BaseModel):
     prompt_version: str | None
     rubrica_version_id: int | None
     rubrica_version: int | None
+    verificacion: VerificacionResumen | None = Field(
+        default=None, description="Resumen de la ejecución en sandbox (null si no se ejecutó)."
+    )
     eventos: list[EventoTrazaRespuesta]
+
+
+# ---------- Entregas (RF-04) ----------
+
+EstadoVisible = Literal[
+    "procesando",
+    "borrador",
+    "en_revision",
+    "aprobada",
+    "publicada",
+    "error",
+    "pendiente_revision",
+]
+
+
+class UltimaEvaluacionResumen(BaseModel):
+    """Última evaluación de la entrega. Para el estudiante, lo no publicado se muestra como
+    `pendiente_revision` y sin nota."""
+
+    id: int
+    estado: EstadoVisible
+    nota: float | None
+
+
+class EntregaRespuesta(BaseModel):
+    """Entrega del portafolio (nunca incluye rutas del bucket ni URLs firmadas)."""
+
+    id: int
+    laboratorio: LaboratorioResumen
+    estudiante: EstudianteResumen
+    rubrica_version_id: int
+    rubrica_version: int | None
+    tiene_pdf: bool
+    tiene_zip: bool
+    github_url: str | None
+    creada_en: datetime
+    ultima_evaluacion: UltimaEvaluacionResumen | None
+
+
+class ListadoEntregasRespuesta(BaseModel):
+    """Página del portafolio: `total` cuenta todas las que cumplen los filtros."""
+
+    items: list[EntregaRespuesta]
+    total: int
+    limit: int
+    offset: int
 
 
 # ---------- Estudiantes: listado, informe (RF-08) y mapa (RF-09) ----------
