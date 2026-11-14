@@ -47,6 +47,7 @@
 - Rol 1: los descriptores generados agregaron adjetivos que no estaban en el documento.
 - Rol 1: el asistente dio una recomendación sobre rangos de nivel que habría inflado el nivel "Insuficiente" a 3.4, y el asistente de chat numeró al revés RF-08 CA3 y RF-09 CA2.
 - Rol 1: Gemini devolvió error 503 por saturación durante una prueba.
+- Rol 1 (prueba real del evaluador con Gemini 3.5 Flash-Lite, 2026-11-14): para los criterios sin evidencia, el modelo citó el título del informe y la cita salió "verificada" sin respaldar nada. Además, el validador de cifras marcaba "Python 3.12" como una cifra inventada. Lo corregimos: ahora se permiten evidencias vacías solo en el nivel más bajo (prompt 1.1) y las versiones de software se reconocen como tales.
 - Rol 1: el código generado tenía problemas de seguridad y validación (inyección mediante marcadores, citas cortas siempre verificadas, comprobación de cifras con falsos positivos y negativos, falta de topes de tamaño).
 
 ## 6. Costos

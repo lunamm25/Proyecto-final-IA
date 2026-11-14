@@ -84,9 +84,9 @@ def _evaluacion_criterio(**cambios) -> dict:
     return base
 
 
-def test_evaluacion_sin_evidencias_falla() -> None:
-    with pytest.raises(ValidationError):
-        EvaluacionCriterio(**_evaluacion_criterio(evidencias=[]))
+def test_evaluacion_sin_evidencias_se_acepta_en_el_esquema() -> None:
+    """La lista vacía es válida en el esquema; el nivel lo controla validar_coherencia."""
+    assert EvaluacionCriterio(**_evaluacion_criterio(evidencias=[])).evidencias == []
 
 
 def test_evidencia_con_fragmento_vacio_falla() -> None:

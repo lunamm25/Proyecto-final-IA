@@ -63,7 +63,7 @@ class EvaluacionCriterio(BaseModel):
 
     criterio_id: str
     nivel_elegido: str
-    evidencias: list[Evidencia] = Field(min_length=1)
+    evidencias: list[Evidencia] = Field(default_factory=list)
     justificacion: str
     fortalezas: list[str]
     debilidades: list[str]

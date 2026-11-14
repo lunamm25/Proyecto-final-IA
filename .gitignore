@@ -43,3 +43,6 @@ Thumbs.db
 # Herramientas
 .ruff_cache/
 *.zip
+
+# Scripts de verificación local (no se suben)
+backend/scripts_locales/

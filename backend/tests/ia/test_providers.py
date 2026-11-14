@@ -165,7 +165,7 @@ def test_openai_max_retries_por_defecto_hace_tres_intentos() -> None:
 @pytest.mark.usefixtures("openai_falso")
 def test_openai_max_retries_cero_hace_un_intento() -> None:
     proveedor = _openai(max_retries=0)
-    with pytest.raises(ErrorRespuestaLLM, match="1 intentos"):
+    with pytest.raises(ErrorRespuestaLLM, match=r"tras 1 intento\."):
         proveedor.generar_json("p", Respuesta)
     assert proveedor._client.llamadas == 1
 
