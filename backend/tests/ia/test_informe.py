@@ -397,6 +397,7 @@ DATOS_SIN_VERSIONES = {
         "Usa Python 3.11 o superior.",
         "Instala la versión 3.12.4.",
         "Actualiza a v3.12 del intérprete.",
+        "Entrenaste con TensorFlow 2.15.",
         "Cualquier 3.12.x sirve.",
         "Revisa la sección 4.2 de la guía.",
         "Lee el capítulo 3 de la guía.",
@@ -417,6 +418,9 @@ def test_versiones_y_referencias_no_se_marcan(frase: str) -> None:
         ("Mejora un 20% tus resultados.", ["20"]),
         ("Ejecutaste 11 movimientos.", ["11"]),
         ("Con Python 3.12 obtuviste 4.7.", ["4.7"]),
+        ("Obtuviste la versión 4,5 en el laboratorio.", ["4,5"]),
+        ("Obtuviste la versión 4.5 en el laboratorio.", ["4.5"]),
+        ("Tu nota fue 4.7 en TensorFlow 2.15.", ["4.7"]),
     ],
 )
 def test_cifras_sin_respaldo_siguen_marcandose(frase: str, esperado: list[str]) -> None:

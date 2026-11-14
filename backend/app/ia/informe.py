@@ -64,10 +64,18 @@ _CANTIDAD = re.compile(
     rf"(?<![\w.,\-−])\d+(?:[.,]\d+)?\s*(?:{_UNIDADES})\b", re.IGNORECASE
 )
 _RANGO = re.compile(r"(?<![\w.,\-−])\d+\s*[-–]\s*\d+(?![.,]?\d)")
-# Versiones de software: "Python 3.12", "Python 3,12", "versión 3.12.4", "v3.12", "3.12.x".
-_SOFTWARE = r"python|pytest|pip|node(?:\.js)?|java|django|fastapi|numpy|pandas|ruff|ollama"
+# Versiones de software. Para no ocultar una nota inventada ("versión 4,5"):
+# - tras el nombre de un programa de la lista se acepta X.Y o X,Y ("Python 3.12", "Python 3,12");
+# - tras "versión" solo X.Y.Z o X.Y.x ("versión 3.12.4"); "versión 4.5" se sigue revisando;
+# - "3.12.x" suelto. "v3.12" no se toma como cifra porque va pegado a una letra (_CIFRA_TEXTO).
+# Límite conocido: un programa fuera de la lista ("Keras 3.1") sí se marca.
+_SOFTWARE = (
+    r"python|pytest|pip|node(?:\.js)?|java|django|fastapi|numpy|pandas|ruff|ollama"
+    r"|scikit-learn|tensorflow|pytorch|torch"
+)
 _VERSION = re.compile(
-    rf"\b(?:(?:{_SOFTWARE}|versi[oó]n(?:es)?)\s+v?|v)\d+(?:[.,]\d+)*(?:\.x)?\b"
+    rf"\b(?:{_SOFTWARE})\s+v?\d+(?:[.,]\d+)*(?:\.x)?\b"
+    r"|\bversi[oó]n(?:es)?\s+v?\d+\.\d+\.(?:\d+|x)\b"
     r"|(?<![\w.,\-−])\d+(?:\.\d+)+\.x\b",
     re.IGNORECASE,
 )

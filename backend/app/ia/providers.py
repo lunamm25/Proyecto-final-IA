@@ -37,10 +37,12 @@ def _limitar_temperatura(temperatura: float) -> float:
 
 
 def validar_max_retries(max_retries: int) -> int:
-    """Valida los reintentos: negativo es error y más de MAX_REINTENTOS se recorta."""
+    """Valida los reintentos: entero no negativo; más de MAX_REINTENTOS se recorta."""
+    if isinstance(max_retries, bool) or not isinstance(max_retries, int):
+        raise ErrorConfiguracionLLM("max_retries debe ser un número entero.")
     if max_retries < 0:
         raise ErrorConfiguracionLLM("max_retries no puede ser negativo.")
-    return min(int(max_retries), MAX_REINTENTOS)
+    return min(max_retries, MAX_REINTENTOS)
 
 
 def texto_intentos(cantidad: int) -> str:
@@ -78,7 +80,8 @@ class LLMProvider(ABC):
         """Llama al modelo, valida con el esquema y reintenta hasta 2 veces si falla."""
         prompt_actual = prompt
         ultimo_error = ""
-        for _ in range(self.max_retries + 1):
+        total_intentos = validar_max_retries(self.max_retries) + 1
+        for _ in range(total_intentos):
             crudo = self._llamar(prompt_actual, schema, imagenes)
             self.ultima_respuesta_cruda = crudo
             try:
@@ -91,7 +94,7 @@ class LLMProvider(ABC):
                     "Corrige la respuesta y devuelve SOLO el JSON válido, sin texto adicional."
                 )
         raise ErrorRespuestaLLM(
-            f"El modelo no devolvió un JSON válido tras {texto_intentos(self.max_retries + 1)}. "
+            f"El modelo no devolvió un JSON válido tras {texto_intentos(total_intentos)}. "
             f"Último error: {ultimo_error}"
         )
 
