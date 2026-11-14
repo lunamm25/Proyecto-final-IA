@@ -11,13 +11,14 @@ from app.models.tipos import ROLES, fecha_creacion, lista_sql
 
 
 class Perfil(Base):
-    """Perfil con nombre y rol; `id` coincide con auth.users.id."""
+    """Perfil con nombre, correo y rol; `id` coincide con auth.users.id."""
 
     __tablename__ = "perfiles"
     __table_args__ = (CheckConstraint(f"rol in ({lista_sql(ROLES)})", name="perfiles_rol_check"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
     nombre: Mapped[str | None] = mapped_column(Text)
+    correo: Mapped[str | None] = mapped_column(Text)
     rol: Mapped[str] = mapped_column(
         Text, nullable=False, default="estudiante", server_default=text("'estudiante'")
     )

@@ -61,7 +61,7 @@ Cada RF tiene criterios de aceptación (CA). Un RF está **terminado** solo si t
 ### RF-01 Autenticación y usuarios
 - CA1: registro e inicio de sesión con email/contraseña (Supabase Auth).
 - CA2: tabla `perfiles` con nombre y rol (`estudiante` por defecto).
-- CA3: el admin/docente puede cambiar el rol de un usuario.
+- CA3: el admin puede cambiar el rol de un usuario (decisión del equipo, 14 nov 2026: solo admin, no docente).
 - CA4: el backend valida el JWT de Supabase en cada petición y aplica permisos por rol (401/403).
 
 ### RF-02 Cohortes y laboratorios (Entrada de información)
@@ -236,7 +236,7 @@ Prefijo `/api`. Autenticación: `Authorization: Bearer <JWT de Supabase>`. Error
 |---|---|---|---|
 | GET | /api/salud | público | Estado del servicio |
 | GET | /api/yo | todos | Perfil del usuario actual |
-| GET/PATCH | /api/usuarios, /api/usuarios/{id}/rol | admin/docente | Gestión de usuarios |
+| GET/PATCH | /api/usuarios, /api/usuarios/{id}/rol | admin | Gestión de usuarios (lista con id, nombre, correo, rol; cambio de rol `{rol, motivo?}` con auditoría; 409 si un admin se quita su propio rol o se dejaría el sistema sin admin) |
 | GET | /api/cohortes | todos | Cohortes con laboratorios |
 | POST/PUT/DELETE | /api/laboratorios[/{id}] | docente | CRUD laboratorios |
 | POST | /api/laboratorios/{id}/rubrica/extraer | docente | Sube archivo → `RubricaSchema` + inconsistencias |

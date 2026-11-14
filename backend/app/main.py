@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import laboratorios, rubricas, yo
+from app.api import laboratorios, rubricas, usuarios, yo
 from app.api.errores import registrar_manejadores
 from app.config import Settings, get_settings
 
@@ -38,6 +38,7 @@ def crear_app(settings: Settings | None = None) -> FastAPI:
 
     registrar_manejadores(aplicacion)
     aplicacion.include_router(yo.router)
+    aplicacion.include_router(usuarios.router)
     aplicacion.include_router(laboratorios.router)
     aplicacion.include_router(rubricas.router)
     return aplicacion

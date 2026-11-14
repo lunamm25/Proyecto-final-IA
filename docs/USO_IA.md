@@ -29,6 +29,7 @@
 - Sandbox Docker vs subprocess: …
 - Rúbricas de demo: las 4 rúbricas de los laboratorios de demo fueron estructuradas por el equipo (Rol 1) al formato JSON de §7 a partir de los documentos del curso, y validadas automáticamente con el validador del backend (`validar_rubrica`) y con el cálculo de nota (`calcular_nota`) antes de cargarlas en el seed.
   - **Pendiente:** Las ponderaciones de LAB03 y los niveles de desempeño de LAB01 y Manizales Resiliente son propuestas del equipo, pendientes de aprobación docente.
+- Gestión de usuarios solo para admin (RF-01 CA3): REQUISITOS decía admin/docente; el equipo decidió restringirlo al admin para reducir quién puede cambiar permisos. Un admin no puede quitarse su propio rol ni dejar el sistema sin admin (409), y cada cambio de rol queda en `auditoria`. El correo se copia de `auth.users` a `perfiles` (migración 0002) para no consultar el esquema `auth` desde el backend; limitación: si el usuario cambia su correo en Supabase Auth, la copia no se actualiza sola.
 
 ## 4. Problemas encontrados y cómo se resolvieron
 | Fecha | Problema (p. ej., la IA generó código que no compilaba, alucinó una librería) | Solución |

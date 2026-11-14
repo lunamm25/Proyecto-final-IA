@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PerfilRespuesta(BaseModel):
@@ -16,6 +16,28 @@ class PerfilRespuesta(BaseModel):
     nombre: str | None
     rol: Literal["estudiante", "docente", "admin"]
     foto_url: str | None
+
+
+class UsuarioRespuesta(BaseModel):
+    """Usuario en la gestión de roles (solo admin)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    nombre: str | None
+    correo: str | None
+    rol: Literal["estudiante", "docente", "admin"]
+
+
+class CambioRolEntrada(BaseModel):
+    """Nuevo rol de un usuario y motivo opcional (queda en auditoría)."""
+
+    rol: str = Field(
+        description="Uno de: estudiante, docente o admin.",
+        json_schema_extra={"enum": ["estudiante", "docente", "admin"]},
+        examples=["docente"],
+    )
+    motivo: str | None = Field(default=None, max_length=500, examples=["Monitor del curso"])
 
 
 class LaboratorioEntrada(BaseModel):

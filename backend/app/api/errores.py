@@ -28,6 +28,9 @@ MENSAJES_VALIDACION = {
     "json_invalid": "el JSON está mal formado",
     "model_attributes_type": "debe ser un objeto JSON",
     "dict_type": "debe ser un objeto JSON",
+    "uuid_parsing": "debe ser un identificador UUID válido",
+    "uuid_type": "debe ser un identificador UUID válido",
+    "string_too_long": "es demasiado largo",
 }
 
 
