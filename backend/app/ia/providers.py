@@ -36,10 +36,25 @@ def _limitar_temperatura(temperatura: float) -> float:
     return max(0.0, min(float(temperatura), TEMPERATURA_MAXIMA))
 
 
+def validar_max_retries(max_retries: int) -> int:
+    """Valida los reintentos: entero no negativo; más de MAX_REINTENTOS se recorta."""
+    if isinstance(max_retries, bool) or not isinstance(max_retries, int):
+        raise ErrorConfiguracionLLM("max_retries debe ser un número entero.")
+    if max_retries < 0:
+        raise ErrorConfiguracionLLM("max_retries no puede ser negativo.")
+    return min(max_retries, MAX_REINTENTOS)
+
+
+def texto_intentos(cantidad: int) -> str:
+    """Devuelve "1 intento" o "N intentos" con el plural correcto."""
+    return f"{cantidad} intento" if cantidad == 1 else f"{cantidad} intentos"
+
+
 class LLMProvider(ABC):
     """Interfaz común: genera JSON validado contra un esquema Pydantic."""
 
     nombre: str = "base"
+    max_retries: int = MAX_REINTENTOS
 
     def __init__(self, modelo: str, temperatura: float = 0.1) -> None:
         """Guarda modelo y temperatura (limitada a 0.2)."""
@@ -51,13 +66,22 @@ class LLMProvider(ABC):
     def _llamar(self, prompt: str, schema: type[BaseModel], imagenes: list[bytes] | None) -> str:
         """Hace la llamada al modelo y devuelve el texto crudo."""
 
+    def generar_texto(
+        self, prompt: str, schema: type[BaseModel], imagenes: list[bytes] | None = None
+    ) -> str:
+        """Hace una sola llamada al modelo y devuelve el texto crudo, sin validar."""
+        crudo = self._llamar(prompt, schema, imagenes)
+        self.ultima_respuesta_cruda = crudo
+        return crudo
+
     def generar_json(
         self, prompt: str, schema: type[T], imagenes: list[bytes] | None = None
     ) -> T:
         """Llama al modelo, valida con el esquema y reintenta hasta 2 veces si falla."""
         prompt_actual = prompt
         ultimo_error = ""
-        for _ in range(MAX_REINTENTOS + 1):
+        total_intentos = validar_max_retries(self.max_retries) + 1
+        for _ in range(total_intentos):
             crudo = self._llamar(prompt_actual, schema, imagenes)
             self.ultima_respuesta_cruda = crudo
             try:
@@ -70,7 +94,7 @@ class LLMProvider(ABC):
                     "Corrige la respuesta y devuelve SOLO el JSON válido, sin texto adicional."
                 )
         raise ErrorRespuestaLLM(
-            f"El modelo no devolvió un JSON válido tras {MAX_REINTENTOS + 1} intentos. "
+            f"El modelo no devolvió un JSON válido tras {texto_intentos(total_intentos)}. "
             f"Último error: {ultimo_error}"
         )
 
@@ -86,9 +110,11 @@ class GeminiProvider(LLMProvider):
         modelo: str = "gemini-3.5-flash-lite",
         temperatura: float = 0.1,
         timeout: float = TIMEOUT_SEGUNDOS,
+        max_retries: int = MAX_REINTENTOS,
     ) -> None:
-        """Crea el cliente de Gemini con timeout."""
+        """Crea el cliente de Gemini con timeout y reintentos (0 a 2)."""
         super().__init__(modelo, temperatura)
+        self.max_retries = validar_max_retries(max_retries)
         if not api_key:
             raise ErrorConfiguracionLLM("Falta GEMINI_API_KEY para usar el proveedor Gemini.")
         try:
@@ -138,9 +164,11 @@ class OpenAICompatProvider(LLMProvider):
         modelo: str,
         temperatura: float = 0.1,
         timeout: float = TIMEOUT_SEGUNDOS,
+        max_retries: int = MAX_REINTENTOS,
     ) -> None:
-        """Crea el cliente OpenAI apuntando a la base_url indicada."""
+        """Crea el cliente OpenAI apuntando a la base_url indicada, con reintentos (0 a 2)."""
         super().__init__(modelo, temperatura)
+        self.max_retries = validar_max_retries(max_retries)
         try:
             from openai import OpenAI
         except ImportError as error:
@@ -195,9 +223,11 @@ class FakeProvider(LLMProvider):
         respuestas: list[str | dict | BaseModel],
         modelo: str = "fake-model",
         temperatura: float = 0.0,
+        max_retries: int = MAX_REINTENTOS,
     ) -> None:
-        """Guarda las respuestas predefinidas."""
+        """Guarda las respuestas predefinidas y los reintentos (0 a 2)."""
         super().__init__(modelo, temperatura)
+        self.max_retries = validar_max_retries(max_retries)
         self.respuestas = list(respuestas)
         self.prompts_recibidos: list[str] = []
         self.imagenes_recibidas: list[list[bytes] | None] = []

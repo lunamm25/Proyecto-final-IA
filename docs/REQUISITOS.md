@@ -167,7 +167,7 @@ class Evidencia(BaseModel):
 class EvaluacionCriterio(BaseModel):
     criterio_id: str
     nivel_elegido: str          # DEBE ser uno de los nombres de nivel del criterio
-    evidencias: list[Evidencia] # mínimo 1
+    evidencias: list[Evidencia] # mínimo 1, salvo en el nivel de menor puntaje (vacía = sin evidencia)
     justificacion: str
     fortalezas: list[str]
     debilidades: list[str]
@@ -182,7 +182,7 @@ class EvaluacionLLMSchema(BaseModel):
     # ⚠️ NO hay campo "nota": la calcula el backend.
 ```
 
-Validaciones adicionales en backend (no confiar en el LLM): todos los `criterio_id` existen y no faltan; `nivel_elegido` pertenece a los niveles del criterio; los niveles de un mismo criterio no pueden tener el mismo nombre; evidencias verificadas contra el material.
+Validaciones adicionales en backend (no confiar en el LLM): todos los `criterio_id` existen y no faltan; `nivel_elegido` pertenece a los niveles del criterio; sin evidencias solo se admite el nivel de menor puntaje; los niveles de un mismo criterio no pueden tener el mismo nombre; evidencias verificadas contra el material.
 
 Otros esquemas: `InformeNarrativoSchema` (competencias_desarrolladas, brechas, plan_fortalecimiento[{accion, recurso, prioridad, competencia}], conclusion) y `MapeoTematicasSchema` ([{criterio_id, tematicas[], conceptos[]}]).
 
@@ -264,6 +264,7 @@ Prefijo `/api`. Autenticación: `Authorization: Bearer <JWT de Supabase>`. Error
 | GET | /api/estudiantes?limit=&offset= | docente | Listado paginado `{items, total, limit, offset}` de estudiantes con id, nombre, correo y `laboratorios_evaluados` (laboratorios distintos con evaluación publicada), ordenado por nombre |
 | GET | /api/estudiantes/{id}/informe | est(propio)/docente | Informe integral (JSON). Solo evaluaciones `publicada` (por laboratorio, la más reciente). Números calculados por el backend (notas por laboratorio en orden C1-01…C2-02, promedios por cohorte, general, por competencia y por temática, evolución; ROUND_HALF_UP; `promedio_general` null sin datos). `narrativa` de la IA en campo aparte con `estado`: `generada` · `sin_datos` · `no_disponible` · `error` (mensaje genérico). Incluye `avisos`. Otro estudiante → 404 |
 | GET | /api/estudiantes/{id}/mapa | est(propio)/docente | Grafo `{nodos, aristas, avisos}`: temática → subtema → concepto → laboratorio; cada nodo con dominio (0–5), nivel (bajo <3,0 · medio 3,0–3,9 · alto ≥4,0), evidencias verificadas y aspectos por profundizar. Si el mapeo de la IA no está disponible, se agrupa por competencia y se informa en `avisos`. Sin datos → `{nodos: [], aristas: []}` |
+| POST | /api/sandbox/ejecutar | docente | Recibe un ZIP, ejecuta el código Python en sandbox con límites de seguridad y devuelve `{stdout, stderr, codigo_salida, error?}`; solo lo usa el pipeline de evaluación |
 | GET/PUT | /api/config-ia · POST /api/config-ia/probar | admin | Configuración IA. GET: proveedor, modelo y temperatura vigentes con `origen` (`base_de_datos` o `entorno` si no hay fila en `config_ia`), `modelo_permitido`, `actualizado_por` {id, nombre} y `actualizado_en`, `temperatura_maxima`, `claves` (solo booleanos `*_configurada`; nunca se devuelven claves ni la URL base), `proveedores_permitidos` [{proveedor, etiqueta, modelos, modelos_probados}] (`gemini`: lista fija del backend, `gemini-3.5-flash-lite` (predeterminado y probado) y `gemini-3.6-flash` (permitido, sin probar); `openai_compat`: variable `OPENAI_COMPAT_MODELOS`; `modelos_probados` es el subconjunto de `modelos` ya probado con nuestros prompts) y `versiones_prompt` (solo lectura). PUT `{proveedor, modelo, temperatura}` (los tres obligatorios; cualquier otro campo → 422) responde lo mismo que el GET: proveedor o modelo no permitido → 422; temperatura fuera de 0–0,2 → 422 (no se recorta); mismo valor → 200 sin cambios ni auditoría; cada cambio queda en `auditoria` en la misma transacción. POST `/probar` (solo admin, sin body): prueba la configuración guardada (o la del entorno si no hay fila) con un límite total de 10 s y responde siempre 200 `{ok, proveedor, modelo, latencia_ms, mensaje}` con mensaje genérico en español (`latencia_ms` null si falta la clave; igual al límite si se agotó el tiempo); nunca muestra claves, URL ni el error crudo. Cada prueba queda en `auditoria` (`probar_config_ia`) con el resultado (`ok`, `fallo`, `tiempo_agotado`, `sin_clave`) y el detalle del error tachado |
 
 ## 12. Casos de uso principales

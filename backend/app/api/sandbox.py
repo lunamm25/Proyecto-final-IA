@@ -1,8 +1,12 @@
 """Endpoint para ejecutar código en sandbox."""
 
-from fastapi import APIRouter, File, UploadFile
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, File, UploadFile
 from pydantic import BaseModel
 
+from app.api.deps import requiere_rol
+from app.models import Perfil
 from app.sandbox.runner import SandboxRunner
 
 router = APIRouter(prefix="/api/sandbox", tags=["sandbox"])
@@ -18,10 +22,14 @@ class EjecucionResponse(BaseModel):
 
 
 @router.post("/ejecutar", response_model=EjecucionResponse)
-async def ejecutar_codigo(archivo: UploadFile = File(...)) -> EjecucionResponse:  # noqa: B008
+async def ejecutar_codigo(
+    archivo: UploadFile = File(...),  # noqa: B008
+    _perfil: Annotated[Perfil, Depends(requiere_rol("docente"))] = None,
+) -> EjecucionResponse:
     """Ejecuta código Python dentro de un ZIP con límites de seguridad.
 
     Recibe un archivo ZIP, lo valida y ejecuta el código dentro.
+    Requiere rol docente o admin.
     """
     # Validar que es un ZIP
     if archivo.content_type not in ["application/zip", "application/x-zip-compressed"]:
