@@ -35,7 +35,7 @@ function CampoGithub({ valor, error, deshabilitado, alCambiar }: CampoGithubProp
   return (
     <div className="space-y-2">
       <label htmlFor="github_url" className="text-sm font-medium">
-        URL del repositorio <span className="text-destructive">*</span>
+        URL del repositorio
       </label>
       <p id="github_url-ayuda" className="text-xs text-muted-foreground">
         Repositorio público con la forma https://github.com/usuario/repositorio.
@@ -49,7 +49,6 @@ function CampoGithub({ valor, error, deshabilitado, alCambiar }: CampoGithubProp
         placeholder="https://github.com/usuario/repositorio"
         value={valor}
         disabled={deshabilitado}
-        aria-required
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? "github_url-ayuda github_url-error" : "github_url-ayuda"}
         onChange={(evento) => alCambiar(evento.target.value)}
@@ -64,7 +63,7 @@ function CampoGithub({ valor, error, deshabilitado, alCambiar }: CampoGithubProp
   );
 }
 
-/** Código del laboratorio: exactamente una opción, ZIP o URL pública de GitHub (RF-04 CA1). */
+/** Código del laboratorio (opcional): ZIP o URL pública de GitHub. Se envía solo la opción elegida. */
 export function SelectorCodigo({
   datos,
   errores,
@@ -74,9 +73,7 @@ export function SelectorCodigo({
 }: SelectorCodigoProps) {
   return (
     <fieldset className="space-y-4 rounded-xl border p-4">
-      <legend className="px-1 text-sm font-medium">
-        Código del laboratorio <span className="text-destructive">*</span>
-      </legend>
+      <legend className="px-1 text-sm font-medium">Código del laboratorio (opcional)</legend>
       <div className="flex flex-col gap-2 sm:flex-row sm:gap-6">
         {OPCIONES.map((opcion) => (
           <label
@@ -106,7 +103,6 @@ export function SelectorCodigo({
           etiqueta="Archivo ZIP con el código"
           ayuda={`Solo .zip, máximo ${MAX_ZIP_MB} MB. El servidor también limita el número de archivos y el tamaño descomprimido.`}
           accept=".zip,application/zip,application/x-zip-compressed"
-          obligatorio
           error={errores.zip}
           deshabilitado={deshabilitado}
           archivos={datos.zip ? [datos.zip] : []}

@@ -10,17 +10,21 @@ import {
   informeMock,
   informeNarrativaErrorMock,
   informeSinPublicadasMock,
+  laboratorioResumenMock,
   laboratoriosSinRubricaMock,
   mapaConAvisosMock,
   mapaMock,
   mapaVacioMock,
   MODELO_FALLA_MOCK,
   perfilesMock,
+  inconsistenciasExtraidaMock,
   rubricaExtraidaMock,
+  rubricaExtraidaValidaMock,
   resultadoSimuladoMock,
   rubricaVersionMock,
   trazaMock,
   usuariosMock,
+  verificacionExitosaMock,
 } from "@/lib/mocks";
 import { calcularInconsistencias } from "@/lib/inconsistencias-rubrica";
 import { leerSesionMock } from "@/lib/sesion-mock";
@@ -36,16 +40,19 @@ import type {
   Evaluacion,
   EstadoEvaluacion,
   EvaluacionResumen,
+  FiltrosEntregas,
   FiltrosEvaluaciones,
   IdNumerico,
   Informe,
   JsonValor,
   Laboratorio,
   LaboratorioEntrada,
+  ListadoEntregas,
   ListadoEstudiantes,
   ListadoEvaluaciones,
   Mapa,
   NuevaEntrega,
+  UltimaEvaluacion,
   Perfil,
   RespuestaEvaluar,
   ResultadoExtraccion,
@@ -325,14 +332,52 @@ function validarCodigoUnicoMock(datos: LaboratorioEntrada, idActual: IdNumerico 
   }
 }
 
-/** Validación aproximada de POST /api/entregas solo para el modo mock; la oficial la hace el backend. */
+/** Tamaño máximo del PDF y del ZIP de una entrega (como el backend). */
+export const MAX_ARCHIVO_ENTREGA_BYTES = 20 * 1024 * 1024;
+
+/** Mismo patrón de URL de GitHub que services/entregas.py. */
+const PATRON_GITHUB_MOCK = /^https:\/\/github\.com\/[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}(?:\/[A-Za-z0-9._-]+)*\/?$/;
+
+/**
+ * Validación de POST /api/entregas en el modo mock, con las reglas y mensajes de services/entregas.py:
+ * al menos una fuente (422), archivos de hasta 20 MB (413), tipos válidos y URL de GitHub válida (422),
+ * laboratorio existente con rúbrica aprobada (422).
+ */
 function validarEntregaMock(datos: NuevaEntrega): void {
-  if (!datos.pdf.name.toLowerCase().endsWith(".pdf")) {
-    throw new ErrorApi(422, "El informe debe ser un archivo PDF.");
+  if (!datos.pdf && !datos.zip && !datos.github_url?.trim()) {
+    throw new ErrorApi(422, "Debes adjuntar al menos uno: el PDF del informe, el ZIP del código o la URL de GitHub.");
   }
-  if (Boolean(datos.zip) === Boolean(datos.github_url)) {
-    throw new ErrorApi(422, "Debes enviar el código como ZIP o como URL de GitHub (solo una de las dos).");
+  if (!existeLaboratorioMock(datos.laboratorio_id)) throw new ErrorApi(422, "El laboratorio no existe.");
+  if (!estadoMock.rubricas[datos.laboratorio_id]) {
+    throw new ErrorApi(422, "El laboratorio aún no tiene rúbrica aprobada; no se pueden recibir entregas.");
   }
+  if (datos.pdf && datos.pdf.size > MAX_ARCHIVO_ENTREGA_BYTES) throw new ErrorApi(413, "El PDF supera el tamaño máximo de 20 MB.");
+  if (datos.zip && datos.zip.size > MAX_ARCHIVO_ENTREGA_BYTES) throw new ErrorApi(413, "El ZIP supera el tamaño máximo de 20 MB.");
+  if (datos.pdf && !datos.pdf.name.toLowerCase().endsWith(".pdf")) {
+    throw new ErrorApi(422, "El archivo del informe no es un PDF válido.");
+  }
+  if (datos.zip && !datos.zip.name.toLowerCase().endsWith(".zip")) {
+    throw new ErrorApi(422, "El archivo del código no es un ZIP válido.");
+  }
+  const url = datos.github_url?.trim();
+  if (url && (url.length > 300 || !PATRON_GITHUB_MOCK.test(url))) {
+    throw new ErrorApi(
+      422,
+      "La URL de GitHub no es válida: usa https://github.com/<usuario>/<repositorio>, sin credenciales, parámetros ni espacios.",
+    );
+  }
+}
+
+/**
+ * GET /entregas: lo que ve el estudiante de la última evaluación (como _ultima() del backend). Lo que no está
+ * publicado, procesando o en error llega como "pendiente_revision"; la nota solo si está publicada.
+ */
+function ultimaParaEstudianteMock(ultima: UltimaEvaluacion | null): UltimaEvaluacion | null {
+  if (!ultima) return null;
+  if (!["procesando", "error", "publicada"].includes(ultima.estado)) {
+    return { id: ultima.id, estado: "pendiente_revision", nota: null };
+  }
+  return { ...ultima, nota: ultima.estado === "publicada" ? ultima.nota : null };
 }
 
 // ---------- Evaluaciones en modo mock ----------
@@ -360,15 +405,26 @@ function buscarEvaluacionMock(id: IdNumerico): Evaluacion {
   return evaluacion;
 }
 
-/** La evaluación del backend no trae laboratorio ni estudiante: el mock los saca de su entrega. */
+/** Entrega de una evaluación (de ahí salen laboratorio_id, estudiante_id y estudiante_nombre del detalle). */
 function entregaDeEvaluacionMock(evaluacion: Evaluacion): Entrega | undefined {
   return estadoMock.entregas.find((e) => e.id === evaluacion.entrega_id);
 }
 
 function sincronizarResumenMock(evaluacion: Evaluacion): void {
   const entrega = entregaDeEvaluacionMock(evaluacion);
-  if (entrega?.evaluacion?.id !== evaluacion.id) return;
-  entrega.evaluacion = { id: evaluacion.id, estado: evaluacion.estado, nota: evaluacion.nota };
+  if (entrega?.ultima_evaluacion?.id !== evaluacion.id) return;
+  entrega.ultima_evaluacion = { id: evaluacion.id, estado: evaluacion.estado, nota: evaluacion.nota };
+}
+
+/** Detalle como EvaluacionRespuesta: el backend agrega laboratorio_id, estudiante_id y estudiante_nombre. */
+function detalleEvaluacionMock(evaluacion: Evaluacion): Evaluacion {
+  const entrega = entregaDeEvaluacionMock(evaluacion);
+  return {
+    ...evaluacion,
+    laboratorio_id: entrega?.laboratorio.id ?? null,
+    estudiante_id: entrega?.estudiante.id ?? null,
+    estudiante_nombre: entrega?.estudiante.nombre ?? null,
+  };
 }
 
 function avanzarProcesoMock(evaluacion: Evaluacion): void {
@@ -387,7 +443,7 @@ function avanzarProcesoMock(evaluacion: Evaluacion): void {
 
 function crearEvaluacionEnProcesoMock(entrega: Entrega, perfil: Perfil): Evaluacion {
   const { config } = estadoMock;
-  const version = estadoMock.rubricas[entrega.laboratorio_id];
+  const version = estadoMock.rubricas[entrega.laboratorio.id];
   const evaluacion: Evaluacion = {
     id: nuevoIdMock(),
     entrega_id: entrega.id,
@@ -403,6 +459,7 @@ function crearEvaluacionEnProcesoMock(entrega: Entrega, perfil: Perfil): Evaluac
     criterios: [],
     retroalimentacion: null,
     retroalimentacion_ia: null,
+    verificacion: entrega.tiene_zip ? verificacionExitosaMock : null,
     creada_en: new Date().toISOString(),
     aprobada_en: null,
     publicada_en: null,
@@ -420,21 +477,23 @@ function crearEvaluacionEnProcesoMock(entrega: Entrega, perfil: Perfil): Evaluac
 
 /** Como el backend: el estudiante solo ve sus evaluaciones publicadas (404 si no es suya o no está publicada). */
 function verificarAccesoEstudianteMock(evaluacion: Evaluacion, estudianteId: string): void {
-  if (entregaDeEvaluacionMock(evaluacion)?.estudiante_id !== estudianteId) throw noEncontrado();
+  if (entregaDeEvaluacionMock(evaluacion)?.estudiante.id !== estudianteId) throw noEncontrado();
   if (evaluacion.estado !== "publicada") throw noEncontrado();
 }
 
 /**
  * Lo que el backend oculta al estudiante: datos del modelo, nivel original de la IA, textos originales
- * (original_ia, retroalimentacion_ia) y el motivo del ajuste docente.
+ * (original_ia, retroalimentacion_ia), el motivo del ajuste docente, la verificación y su propio nombre.
  */
 function vistaEstudianteMock(evaluacion: Evaluacion): Evaluacion {
   return {
     ...evaluacion,
+    estudiante_nombre: null,
     proveedor: null,
     modelo: null,
     temperatura: null,
     prompt_version: null,
+    verificacion: null,
     retroalimentacion_ia: null,
     criterios: evaluacion.criterios.map((criterio) => ({
       ...criterio,
@@ -458,6 +517,7 @@ function trazaDeEvaluacionMock(evaluacion: Evaluacion): Traza {
     prompt_version: evaluacion.prompt_version,
     rubrica_version_id: evaluacion.rubrica_version_id,
     rubrica_version: evaluacion.rubrica_version,
+    verificacion: evaluacion.verificacion ?? null,
     eventos: existente.eventos,
   };
   trazasMock[evaluacion.id] = traza;
@@ -494,7 +554,7 @@ function ajustarCriterioMock(id: IdNumerico, criterioId: string, ajuste: AjusteC
   exigirEditableMock(evaluacion, "ajustar");
   const criterio = evaluacion.criterios.find((c) => c.criterio_id === criterioId);
   if (!criterio) throw new ErrorApi(404, `El criterio '${criterioId}' no existe en esta evaluación.`);
-  const laboratorioId = entregaDeEvaluacionMock(evaluacion)?.laboratorio_id;
+  const laboratorioId = entregaDeEvaluacionMock(evaluacion)?.laboratorio.id;
   const niveles = laboratorioId === undefined ? undefined
     : estadoMock.rubricas[laboratorioId]?.contenido.criterios.find((c) => c.id === criterioId)?.niveles;
   if (!niveles?.some((n) => n.nombre === ajuste.nivel_final)) {
@@ -618,13 +678,11 @@ function cambiarEstadoMock(id: IdNumerico, accion: AccionEstado, perfil: Perfil)
 /** GET /evaluaciones del modo mock: arma EvaluacionResumen con la entrega, el laboratorio y el estudiante. */
 function resumenEvaluacionMock(evaluacion: Evaluacion): EvaluacionResumen {
   const entrega = entregaDeEvaluacionMock(evaluacion);
-  const laboratorio = estadoMock.cohortes.flatMap((c) => c.laboratorios).find((l) => l.id === entrega?.laboratorio_id);
-  const estudiante = estadoMock.usuarios.find((u) => u.id === entrega?.estudiante_id);
   return {
     id: evaluacion.id,
     entrega_id: evaluacion.entrega_id,
-    estudiante: { id: entrega?.estudiante_id ?? "", nombre: estudiante?.nombre ?? null },
-    laboratorio: { id: laboratorio?.id ?? 0, codigo: laboratorio?.codigo ?? "", titulo: laboratorio?.titulo ?? "" },
+    estudiante: entrega?.estudiante ?? { id: "", nombre: null },
+    laboratorio: entrega?.laboratorio ?? { id: 0, codigo: "", titulo: "" },
     estado: evaluacion.estado,
     nota: evaluacion.nota,
     creada_en: evaluacion.creada_en,
@@ -638,8 +696,8 @@ function listarEstudiantesMock(limit: number, offset: number): ListadoEstudiante
   const filas = estadoMock.usuarios
     .filter((u) => u.rol === "estudiante")
     .map((u) => {
-      const publicadas = estadoMock.entregas.filter((e) => e.estudiante_id === u.id && e.evaluacion?.estado === "publicada");
-      return { id: u.id, nombre: u.nombre, correo: u.correo, laboratorios_evaluados: new Set(publicadas.map((e) => e.laboratorio_id)).size };
+      const publicadas = estadoMock.entregas.filter((e) => e.estudiante.id === u.id && e.ultima_evaluacion?.estado === "publicada");
+      return { id: u.id, nombre: u.nombre, correo: u.correo, laboratorios_evaluados: new Set(publicadas.map((e) => e.laboratorio.id)).size };
     })
     .sort((a, b) => (a.nombre ?? "").localeCompare(b.nombre ?? ""));
   return { items: filas.slice(offset, offset + limit), total: filas.length, limit, offset };
@@ -860,14 +918,38 @@ export async function obtenerRubricaVigenteONula(laboratorioId: IdNumerico): Pro
   }
 }
 
+/** Tamaño máximo del enunciado en PDF para extraer la rúbrica (como el backend). */
+export const MAX_PDF_RUBRICA_BYTES = 20 * 1024 * 1024;
+
+/**
+ * Extracción simulada con las reglas del backend: 404 sin laboratorio, 422 si no es PDF o está vacío, 413 si supera
+ * 20 MB y 503 si "la IA falla" (nombre con "falla"). Nombre con "valida" → valida: true; si no, valida: false con
+ * inconsistencias fijas.
+ */
+function extraerRubricaMock(laboratorioId: IdNumerico, archivo: File): ResultadoExtraccion {
+  if (!existeLaboratorioMock(laboratorioId)) throw new ErrorApi(404, "El laboratorio no existe.");
+  const nombre = archivo.name.toLowerCase();
+  if (!nombre.endsWith(".pdf") || archivo.size === 0) {
+    throw new ErrorApi(422, "El archivo debe ser un PDF con texto (no un escaneo ni una imagen).");
+  }
+  if (archivo.size > MAX_PDF_RUBRICA_BYTES) throw new ErrorApi(413, "El PDF supera el tamaño máximo de 20 MB.");
+  if (nombre.includes("falla")) {
+    throw new ErrorApi(503, "No se pudo extraer la rúbrica automáticamente. Inténtalo de nuevo o créala a mano.");
+  }
+  if (nombre.includes("valida")) return { rubrica: rubricaExtraidaValidaMock, valida: true, inconsistencias: [] };
+  return { rubrica: rubricaExtraidaMock, valida: false, inconsistencias: inconsistenciasExtraidaMock };
+}
+
+/**
+ * POST /laboratorios/{id}/rubrica/extraer (solo docente): multipart con el campo `archivo` (enunciado en PDF con
+ * texto, ≤ 20 MB). Devuelve la rúbrica propuesta (sin guardar), `valida` y las inconsistencias. Los 413, 422 y 503
+ * traen `detail` en español y se muestran tal cual.
+ */
 export async function extraerRubrica(laboratorioId: IdNumerico, archivo: File): Promise<ResultadoExtraccion> {
   if (MODO_MOCK) {
-    await esperar(1200);
-    return simulado(() => {
-      if (!existeLaboratorioMock(laboratorioId)) throw noEncontrado();
-      const rubrica = { ...rubricaExtraidaMock, titulo: `Rúbrica extraída de ${archivo.name}` };
-      return { rubrica, inconsistencias: validarRubricaMock(rubrica).inconsistencias };
-    });
+    await exigirRolMock(ROLES_GESTION_MOCK);
+    await esperar(1500);
+    return simulado(() => extraerRubricaMock(laboratorioId, archivo));
   }
   const formulario = new FormData();
   formulario.append("archivo", archivo);
@@ -894,31 +976,74 @@ export async function guardarVersionRubrica(laboratorioId: IdNumerico, rubrica: 
 
 // ---------- Entregas ----------
 
-export async function listarEntregas(estudianteId?: string): Promise<Entrega[]> {
-  if (MODO_MOCK) {
-    return simulado(() =>
-      estudianteId ? estadoMock.entregas.filter((e) => e.estudiante_id === estudianteId) : estadoMock.entregas,
-    );
+/** Tamaño de página por defecto de GET /entregas (el backend acepta limit 1–100). */
+export const LIMITE_ENTREGAS_POR_DEFECTO = 20;
+
+/** GET /entregas del modo mock: el estudiante solo ve las suyas y con "pendiente_revision" (como el backend). */
+function listarEntregasMock(filtros: FiltrosEntregas, perfil: Perfil): ListadoEntregas {
+  const limit = filtros.limit ?? LIMITE_ENTREGAS_POR_DEFECTO;
+  const offset = filtros.offset ?? 0;
+  const esEstudiante = perfil.rol === "estudiante";
+  if (esEstudiante && filtros.estudiante_id && filtros.estudiante_id !== perfil.id) {
+    throw new ErrorApi(404, "El estudiante no existe.");
   }
-  const consulta = estudianteId ? `?estudiante_id=${encodeURIComponent(estudianteId)}` : "";
-  return peticion<Entrega[]>("GET", `/entregas${consulta}`);
+  estadoMock.evaluaciones.forEach(avanzarProcesoMock);
+  const estudianteId = esEstudiante ? perfil.id : filtros.estudiante_id;
+  const filas = estadoMock.entregas
+    .filter((e) => !estudianteId || e.estudiante.id === estudianteId)
+    .filter((e) => filtros.laboratorio_id === undefined || e.laboratorio.id === filtros.laboratorio_id)
+    .sort((a, b) => b.creada_en.localeCompare(a.creada_en))
+    .map((e) => (esEstudiante ? { ...e, ultima_evaluacion: ultimaParaEstudianteMock(e.ultima_evaluacion) } : e));
+  return { items: filas.slice(offset, offset + limit), total: filas.length, limit, offset };
 }
 
+/** GET /entregas: portafolio paginado. El estudiante solo ve las suyas; docente/admin, las de cualquiera. */
+export async function listarEntregas(filtros: FiltrosEntregas = {}): Promise<ListadoEntregas> {
+  if (MODO_MOCK) {
+    const perfil = await exigirRolMock(["estudiante", "docente", "admin"]);
+    return simulado(() => listarEntregasMock(filtros, perfil));
+  }
+  const consulta = new URLSearchParams();
+  Object.entries(filtros).forEach(([clave, valor]) => {
+    if (valor !== undefined && valor !== "") consulta.set(clave, String(valor));
+  });
+  const texto = consulta.toString();
+  return peticion<ListadoEntregas>("GET", `/entregas${texto ? `?${texto}` : ""}`);
+}
+
+/** Todas las entregas de un estudiante, recorriendo las páginas (máximo 100 por página). */
+export async function listarTodasLasEntregas(estudianteId?: string): Promise<Entrega[]> {
+  const todas: Entrega[] = [];
+  let offset = 0;
+  for (;;) {
+    const pagina = await listarEntregas({ estudiante_id: estudianteId, limit: LIMITE_MAXIMO_LISTADO, offset });
+    todas.push(...pagina.items);
+    offset += pagina.items.length;
+    if (pagina.items.length === 0 || offset >= pagina.total) return todas;
+  }
+}
+
+/**
+ * POST /entregas (multipart, solo estudiante) → 201. Se arma un FormData y NO se pone Content-Type a mano:
+ * el navegador agrega el boundary. Los 413, 422 y 503 traen `detail` en español y se muestran tal cual.
+ */
 export async function crearEntrega(datos: NuevaEntrega): Promise<Entrega> {
   if (MODO_MOCK) {
+    const perfil = await exigirRolMock(["estudiante"]);
     return simulado(() => {
       validarEntregaMock(datos);
+      const version = rubricaVigenteMock(datos.laboratorio_id);
       const entrega: Entrega = {
         id: nuevoIdMock(),
-        estudiante_id: perfilesMock.estudiante.id,
-        laboratorio_id: datos.laboratorio_id,
-        rubrica_version_id: rubricaVigenteMock(datos.laboratorio_id).id,
-        pdf_path: datos.pdf.name,
-        codigo_zip_path: datos.zip?.name ?? null,
-        github_url: datos.github_url ?? null,
-        extras: (datos.extras ?? []).map((archivo) => archivo.name),
+        laboratorio: laboratorioResumenMock(datos.laboratorio_id),
+        estudiante: { id: perfil.id, nombre: perfil.nombre },
+        rubrica_version_id: version.id,
+        rubrica_version: version.version,
+        tiene_pdf: Boolean(datos.pdf),
+        tiene_zip: Boolean(datos.zip),
+        github_url: datos.github_url?.trim() || null,
         creada_en: new Date().toISOString(),
-        evaluacion: null,
+        ultima_evaluacion: null,
       };
       estadoMock.entregas.push(entrega);
       return entrega;
@@ -926,10 +1051,10 @@ export async function crearEntrega(datos: NuevaEntrega): Promise<Entrega> {
   }
   const formulario = new FormData();
   formulario.append("laboratorio_id", String(datos.laboratorio_id));
-  formulario.append("pdf", datos.pdf);
+  if (datos.pdf) formulario.append("pdf", datos.pdf);
   if (datos.zip) formulario.append("zip", datos.zip);
-  if (datos.github_url) formulario.append("github_url", datos.github_url);
-  (datos.extras ?? []).forEach((archivo) => formulario.append("extras", archivo));
+  if (datos.github_url?.trim()) formulario.append("github_url", datos.github_url.trim());
+  if (datos.extras) formulario.append("extras", JSON.stringify(datos.extras));
   return peticion<Entrega>("POST", "/entregas", formulario);
 }
 
@@ -939,11 +1064,17 @@ export async function evaluarEntrega(entregaId: IdNumerico): Promise<RespuestaEv
     return simulado(() => {
       const entrega = estadoMock.entregas.find((e) => e.id === entregaId);
       if (!entrega) throw noEncontrado();
-      if (entrega.evaluacion && entrega.evaluacion.estado !== "error") {
-        throw new ErrorApi(409, "Esta entrega ya fue enviada a evaluación.");
+      // Mismas reglas y mensajes que _comprobar_relanzamiento del backend.
+      const estadoActual = entrega.ultima_evaluacion?.estado;
+      if (estadoActual === "procesando") {
+        throw new ErrorApi(409, "Ya hay una evaluación en curso para esta entrega.");
+      }
+      const bloqueanAlEstudiante = ["borrador", "en_revision", "aprobada", "publicada"];
+      if (perfil.rol === "estudiante" && estadoActual && bloqueanAlEstudiante.includes(estadoActual)) {
+        throw new ErrorApi(409, `Esta entrega ya tiene una evaluación en estado '${estadoActual}'; no puedes lanzar otra.`);
       }
       const evaluacion = crearEvaluacionEnProcesoMock(entrega, perfil);
-      entrega.evaluacion = { id: evaluacion.id, estado: evaluacion.estado, nota: null };
+      entrega.ultima_evaluacion = { id: evaluacion.id, estado: evaluacion.estado, nota: null };
       const respuesta: RespuestaEvaluar = { evaluacion_id: evaluacion.id, estado: evaluacion.estado };
       return respuesta;
     });
@@ -961,9 +1092,9 @@ export async function obtenerEvaluacion(id: IdNumerico): Promise<Evaluacion> {
     const perfil = await perfilMockActual();
     return simulado(() => {
       const evaluacion = buscarEvaluacionMock(id);
-      if (perfil.rol !== "estudiante") return evaluacion;
+      if (perfil.rol !== "estudiante") return detalleEvaluacionMock(evaluacion);
       verificarAccesoEstudianteMock(evaluacion, perfil.id);
-      return vistaEstudianteMock(evaluacion);
+      return vistaEstudianteMock(detalleEvaluacionMock(evaluacion));
     });
   }
   return peticion<Evaluacion>("GET", `/evaluaciones/${id}`);
@@ -990,7 +1121,7 @@ export async function ajustarCriterio(
 ): Promise<Evaluacion> {
   if (MODO_MOCK) {
     const perfil = await perfilMockActual();
-    return simulado(() => ajustarCriterioMock(evaluacionId, criterioId, ajuste, perfil));
+    return simulado(() => detalleEvaluacionMock(ajustarCriterioMock(evaluacionId, criterioId, ajuste, perfil)));
   }
   return peticion<Evaluacion>("PATCH", `/evaluaciones/${evaluacionId}/criterios/${encodeURIComponent(criterioId)}`, ajuste);
 }
@@ -999,7 +1130,7 @@ export async function ajustarCriterio(
 export async function editarRetroalimentacion(id: IdNumerico, entrada: RetroalimentacionEntrada): Promise<Evaluacion> {
   if (MODO_MOCK) {
     const perfil = await perfilMockActual();
-    return simulado(() => editarRetroalimentacionMock(id, entrada, perfil));
+    return simulado(() => detalleEvaluacionMock(editarRetroalimentacionMock(id, entrada, perfil)));
   }
   return peticion<Evaluacion>("PATCH", `/evaluaciones/${id}/retroalimentacion`, entrada);
 }
@@ -1008,7 +1139,7 @@ export async function editarRetroalimentacion(id: IdNumerico, entrada: Retroalim
 export async function pasarARevision(id: IdNumerico): Promise<Evaluacion> {
   if (MODO_MOCK) {
     const perfil = await perfilMockActual();
-    return simulado(() => cambiarEstadoMock(id, "revisar", perfil));
+    return simulado(() => detalleEvaluacionMock(cambiarEstadoMock(id, "revisar", perfil)));
   }
   return peticion<Evaluacion>("POST", `/evaluaciones/${id}/revisar`);
 }
@@ -1017,7 +1148,7 @@ export async function pasarARevision(id: IdNumerico): Promise<Evaluacion> {
 export async function aprobarEvaluacion(id: IdNumerico): Promise<Evaluacion> {
   if (MODO_MOCK) {
     const perfil = await perfilMockActual();
-    return simulado(() => cambiarEstadoMock(id, "aprobar", perfil));
+    return simulado(() => detalleEvaluacionMock(cambiarEstadoMock(id, "aprobar", perfil)));
   }
   return peticion<Evaluacion>("POST", `/evaluaciones/${id}/aprobar`);
 }
@@ -1026,7 +1157,7 @@ export async function aprobarEvaluacion(id: IdNumerico): Promise<Evaluacion> {
 export async function publicarEvaluacion(id: IdNumerico): Promise<Evaluacion> {
   if (MODO_MOCK) {
     const perfil = await perfilMockActual();
-    return simulado(() => cambiarEstadoMock(id, "publicar", perfil));
+    return simulado(() => detalleEvaluacionMock(cambiarEstadoMock(id, "publicar", perfil)));
   }
   return peticion<Evaluacion>("POST", `/evaluaciones/${id}/publicar`);
 }

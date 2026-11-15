@@ -8,17 +8,22 @@ import { idDesdeUrl, type Cohorte, type Evaluacion, type IdNumerico, type Labora
 export interface Referencias {
   laboratorioId: IdNumerico | null;
   estudianteId: string | null;
+  /** Solo docente/admin (para el estudiante el backend lo envía en null y no se muestra). */
+  estudianteNombre: string | null;
 }
 
 /**
- * Laboratorio y estudiante de la evaluación: los del backend si algún día los envía; si no, los de la URL
- * (?lab=&est=) que pone la pantalla que enlazó. Si no hay ninguno, quedan en null y la vista lo explica.
+ * Laboratorio y estudiante de la evaluación: los que envía el backend en el detalle (laboratorio_id, estudiante_id,
+ * estudiante_nombre). Los parámetros ?lab=&est= de la URL quedan solo como respaldo si no llegaran.
  */
-export function useReferenciasEvaluacion(evaluacion: Pick<Evaluacion, "laboratorio_id" | "estudiante_id">): Referencias {
+export function useReferenciasEvaluacion(
+  evaluacion: Pick<Evaluacion, "laboratorio_id" | "estudiante_id" | "estudiante_nombre">,
+): Referencias {
   const parametros = useSearchParams();
   return {
     laboratorioId: evaluacion.laboratorio_id ?? idDesdeUrl(parametros.get("lab") ?? ""),
     estudianteId: evaluacion.estudiante_id ?? (parametros.get("est") || null),
+    estudianteNombre: evaluacion.estudiante_nombre ?? null,
   };
 }
 

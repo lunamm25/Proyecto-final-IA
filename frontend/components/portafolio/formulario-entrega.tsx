@@ -3,19 +3,15 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
-import { CheckCircle2, Info, Loader2 } from "lucide-react";
+import { CheckCircle2, Info, Loader2, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CampoArchivo } from "@/components/portafolio/campo-archivo";
 import { SelectorCodigo } from "@/components/portafolio/selector-codigo";
 import {
-  EXTENSIONES_IMAGEN,
-  MAX_IMAGEN_MB,
-  MAX_IMAGENES,
   MAX_PDF_MB,
   ORDEN_CAMPOS,
-  TIPOS_IMAGEN,
+  fuentesElegidas,
   validarFormulario,
-  validarImagen,
   validarPdf,
   type CampoEntrega,
   type DatosFormulario,
@@ -32,28 +28,37 @@ interface FormularioEntregaProps {
   versionRubrica: number;
 }
 
-const DATOS_INICIALES: DatosFormulario = { pdf: null, modoCodigo: "zip", zip: null, githubUrl: "", imagenes: [] };
+const DATOS_INICIALES: DatosFormulario = { pdf: null, modoCodigo: "zip", zip: null, githubUrl: "" };
 
-function construirEntrega(laboratorioId: IdNumerico, datos: DatosFormulario): NuevaEntrega | null {
-  if (!datos.pdf) return null;
-  const entrega: NuevaEntrega = { laboratorio_id: laboratorioId, pdf: datos.pdf };
-  if (datos.modoCodigo === "zip" && datos.zip) entrega.zip = datos.zip;
-  if (datos.modoCodigo === "github") entrega.github_url = datos.githubUrl.trim();
-  if (datos.imagenes.length > 0) entrega.extras = datos.imagenes;
+/** Cuerpo de POST /entregas: laboratorio_id y solo las fuentes elegidas (al menos una, ya validado). */
+function construirEntrega(laboratorioId: IdNumerico, datos: DatosFormulario): NuevaEntrega {
+  const { pdf, zip, github } = fuentesElegidas(datos);
+  const entrega: NuevaEntrega = { laboratorio_id: laboratorioId };
+  if (pdf) entrega.pdf = pdf;
+  if (zip) entrega.zip = zip;
+  if (github) entrega.github_url = github;
   return entrega;
 }
 
-/** Agrega imágenes válidas sin pasar del máximo; devuelve también el primer error encontrado. */
-function agregarImagenes(actuales: File[], nuevas: File[]): { imagenes: File[]; error?: string } {
-  const imagenes = [...actuales];
-  let error: string | undefined;
-  for (const archivo of nuevas) {
-    const problema = validarImagen(archivo);
-    if (problema) error ??= problema;
-    else if (imagenes.length >= MAX_IMAGENES) error ??= `Puedes adjuntar como máximo ${MAX_IMAGENES} imágenes.`;
-    else imagenes.push(archivo);
-  }
-  return { imagenes, error };
+/** Eligió GitHub y no adjuntó PDF (con GitHub elegido, el ZIP no se envía). */
+function soloGithub(datos: DatosFormulario): boolean {
+  return datos.modoCodigo === "github" && !datos.pdf;
+}
+
+/**
+ * El backend no clona repositorios: una entrega solo con la URL de GitHub termina en error al evaluar.
+ * Es un aviso (no bloquea el envío).
+ */
+function AvisoSoloGithub() {
+  return (
+    <div role="status" className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+      <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      <p>
+        Para que la IA pueda evaluar tu código, adjunta también el PDF del informe o el ZIP del código. Solo con la URL de
+        GitHub la evaluación terminará en error.
+      </p>
+    </div>
+  );
 }
 
 function MensajeExito() {
@@ -76,6 +81,7 @@ function MensajeExito() {
   );
 }
 
+/** Formulario de entrega (RF-04): PDF, código (ZIP o GitHub), o ambos; al menos uno. */
 export function FormularioEntrega({ laboratorioId, versionRubrica }: FormularioEntregaProps) {
   const router = useRouter();
   const [datos, setDatos] = useState<DatosFormulario>(DATOS_INICIALES);
@@ -92,7 +98,7 @@ export function FormularioEntrega({ laboratorioId, versionRubrica }: FormularioE
 
   const actualizar = (cambios: Partial<DatosFormulario>, campo: CampoEntrega, error?: string) => {
     setDatos((previos) => ({ ...previos, ...cambios }));
-    setErrores((previos) => ({ ...previos, [campo]: error }));
+    setErrores((previos) => ({ ...previos, [campo]: error, fuentes: undefined }));
   };
 
   const cambiarModo = (modoCodigo: ModoCodigo) => {
@@ -102,7 +108,7 @@ export function FormularioEntrega({ laboratorioId, versionRubrica }: FormularioE
 
   const enfocarPrimerError = (encontrados: ErroresEntrega) => {
     const campo = ORDEN_CAMPOS.find((nombre) => encontrados[nombre]);
-    if (campo) document.getElementById(campo)?.focus();
+    if (campo) document.getElementById(campo === "fuentes" ? "pdf" : campo)?.focus();
   };
 
   const alEnviar = async (evento: FormEvent<HTMLFormElement>) => {
@@ -110,16 +116,16 @@ export function FormularioEntrega({ laboratorioId, versionRubrica }: FormularioE
     setErrorGeneral(null);
     const encontrados = validarFormulario(datos);
     setErrores(encontrados);
-    const entrega = construirEntrega(laboratorioId, datos);
-    if (Object.keys(encontrados).length > 0 || !entrega) {
+    if (Object.keys(encontrados).length > 0) {
       enfocarPrimerError(encontrados);
       return;
     }
     setEnviando(true);
     try {
-      await crearEntrega(entrega);
+      await crearEntrega(construirEntrega(laboratorioId, datos));
       setEnviada(true);
     } catch (causa) {
+      // 413, 422 y 503 traen `detail` en español: se muestra tal cual.
       setErrorGeneral(mensajeDeError(causa));
     } finally {
       setEnviando(false);
@@ -130,12 +136,20 @@ export function FormularioEntrega({ laboratorioId, versionRubrica }: FormularioE
 
   return (
     <form noValidate onSubmit={(evento) => void alEnviar(evento)} className="space-y-6" aria-describedby="nota-entrega">
+      <p className="text-sm text-muted-foreground">
+        Adjunta al menos uno: el informe en PDF, el código en ZIP o la URL de GitHub.
+      </p>
+      {errores.fuentes && (
+        <p id="fuentes-error" role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          {errores.fuentes}
+        </p>
+      )}
+
       <CampoArchivo
         id="pdf"
         etiqueta="Informe del laboratorio (PDF)"
-        ayuda={`Obligatorio. Solo .pdf, máximo ${MAX_PDF_MB} MB. Debe tener texto seleccionable (no un escaneo como imagen).`}
+        ayuda={`Solo .pdf, máximo ${MAX_PDF_MB} MB. Debe tener texto seleccionable (no un escaneo como imagen).`}
         accept="application/pdf,.pdf"
-        obligatorio
         error={errores.pdf}
         deshabilitado={enviando}
         archivos={datos.pdf ? [datos.pdf] : []}
@@ -155,22 +169,7 @@ export function FormularioEntrega({ laboratorioId, versionRubrica }: FormularioE
         alActualizar={actualizar}
       />
 
-      <CampoArchivo
-        id="extras"
-        etiqueta="Imágenes (opcional)"
-        ayuda={`Capturas o diagramas en PNG, JPG o WEBP. Máximo ${MAX_IMAGENES} imágenes de ${MAX_IMAGEN_MB} MB cada una.`}
-        accept={[...TIPOS_IMAGEN, ...EXTENSIONES_IMAGEN].join(",")}
-        multiple
-        error={errores.extras}
-        deshabilitado={enviando}
-        limiteAlcanzado={datos.imagenes.length >= MAX_IMAGENES}
-        archivos={datos.imagenes}
-        alElegir={(archivos) => {
-          const resultado = agregarImagenes(datos.imagenes, archivos);
-          actualizar({ imagenes: resultado.imagenes }, "extras", resultado.error);
-        }}
-        alQuitar={(indice) => actualizar({ imagenes: datos.imagenes.filter((_, i) => i !== indice) }, "extras")}
-      />
+      {soloGithub(datos) && <AvisoSoloGithub />}
 
       <div id="nota-entrega" className="flex items-start gap-2 rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
         <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />

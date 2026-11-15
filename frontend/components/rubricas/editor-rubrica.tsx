@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Loader2, Plus, Server } from "lucide-react";
+import { CheckCircle2, Loader2, Plus, Server, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Aviso, type DatosAviso } from "@/components/docente/aviso";
 import { Campo, CLASE_CONTROL } from "@/components/docente/campo";
@@ -43,7 +43,8 @@ export function EditorRubrica({ laboratorio, vigente, alGuardar }: EditorRubrica
   const { generales, porCriterio } = agruparInconsistencias(borrador);
   const inconsistencias = [...generales, ...porCriterio.flat()];
   const camposVacios = camposObligatoriosVacios(borrador);
-  const bloqueado = inconsistencias.length > 0 || camposVacios.length > 0;
+  // Si la extracción llegó con valida: false, no se puede guardar hasta que el servidor valide la rúbrica corregida.
+  const bloqueado = inconsistencias.length > 0 || camposVacios.length > 0 || editor.revisionPendiente;
   const siguiente = (vigente?.version ?? 0) + 1;
 
   async function validarEnServidor() {
@@ -56,6 +57,7 @@ export function EditorRubrica({ laboratorio, vigente, alGuardar }: EditorRubrica
     try {
       const resultado = await validarRubrica(editorARubrica(borrador));
       editor.setServidor({ origen: "validacion", inconsistencias: resultado.inconsistencias });
+      if (resultado.valida) editor.marcarValidadaPorServidor();
     } catch (causa) {
       setAviso({ tipo: "error", mensaje: mensajeDeError(causa) });
     } finally {
@@ -93,8 +95,16 @@ export function EditorRubrica({ laboratorio, vigente, alGuardar }: EditorRubrica
           deshabilitado={deshabilitado}
           alCambiarOcupado={(activo) => setOcupado(activo ? "extrayendo" : null)}
           alExtraer={(resultado) => {
-            editor.cargarExtraida(resultado.rubrica, { origen: "extraccion", inconsistencias: resultado.inconsistencias });
-            setAviso({ tipo: "info", mensaje: "Rúbrica extraída. Revísala y corrige las inconsistencias antes de aprobarla." });
+            editor.cargarExtraida(
+              resultado.rubrica,
+              { origen: "extraccion", inconsistencias: resultado.inconsistencias },
+              resultado.valida,
+            );
+            setAviso(
+              resultado.valida
+                ? { tipo: "info", mensaje: "Rúbrica extraída y válida según el servidor. Revísala antes de aprobarla." }
+                : null,
+            );
           }}
         />
         <section aria-labelledby="titulo-editor" className="space-y-4">
@@ -115,11 +125,13 @@ export function EditorRubrica({ laboratorio, vigente, alGuardar }: EditorRubrica
         </section>
       </div>
       <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+        {editor.revisionPendiente && <AvisoExtraccionInvalida />}
         <ResumenInconsistencias inconsistencias={inconsistencias} camposVacios={camposVacios} servidor={servidor} />
         {aviso && <Aviso {...aviso} />}
         <AccionesRubrica
           ocupado={ocupado}
           bloqueado={bloqueado}
+          revisionPendiente={editor.revisionPendiente}
           sucio={sucio}
           siguiente={siguiente}
           alValidar={() => void validarEnServidor()}
@@ -169,13 +181,36 @@ function ListaCriterios({ editor, porCriterio, deshabilitado }: ListaCriteriosPr
 interface AccionesRubricaProps {
   ocupado: Ocupado;
   bloqueado: boolean;
+  revisionPendiente: boolean;
   sucio: boolean;
   siguiente: number;
   alValidar: () => void;
   alGuardar: () => void;
 }
 
-function AccionesRubrica({ ocupado, bloqueado, sucio, siguiente, alValidar, alGuardar }: AccionesRubricaProps) {
+/** La IA propuso una rúbrica que el validador del backend marcó como no válida (valida: false). */
+function AvisoExtraccionInvalida() {
+  return (
+    <div role="alert" className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+      <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      <div className="space-y-1">
+        <p className="font-medium">La rúbrica extraída no es válida todavía.</p>
+        <p>
+          Corrige las inconsistencias que reportó el servidor y pulsa «Validar con el servidor». Cuando el servidor la
+          dé por válida, podrás guardarla.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function textoAyudaGuardar(bloqueado: boolean, revisionPendiente: boolean, siguiente: number): string {
+  if (revisionPendiente) return "La rúbrica extraída tiene inconsistencias: corrígelas y valídala con el servidor antes de guardar.";
+  if (bloqueado) return "Corrige todos los problemas de la revisión para poder aprobar.";
+  return `Se creará la versión ${siguiente}, inmutable. Las entregas existentes conservan su versión.`;
+}
+
+function AccionesRubrica({ ocupado, bloqueado, revisionPendiente, sucio, siguiente, alValidar, alGuardar }: AccionesRubricaProps) {
   return (
     <div className="space-y-2 rounded-xl border p-4">
       {sucio && <p className="text-sm font-medium text-amber-700">Tienes cambios sin guardar.</p>}
@@ -189,9 +224,7 @@ function AccionesRubrica({ ocupado, bloqueado, sucio, siguiente, alValidar, alGu
         {ocupado === "guardando" ? "Guardando…" : "Guardar y aprobar nueva versión"}
       </Button>
       <p id="ayuda-guardar" className="text-xs text-muted-foreground">
-        {bloqueado
-          ? "Corrige todos los problemas de la revisión para poder aprobar."
-          : `Se creará la versión ${siguiente}, inmutable. Las entregas existentes conservan su versión.`}
+        {textoAyudaGuardar(bloqueado, revisionPendiente, siguiente)}
       </p>
     </div>
   );

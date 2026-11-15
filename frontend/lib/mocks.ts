@@ -5,11 +5,13 @@ import type {
   Cohorte,
   ConfigIA,
   Entrega,
+  EstudianteResumen,
   Evaluacion,
   EvaluacionCriterio,
   EvidenciaMapa,
   Informe,
   Laboratorio,
+  LaboratorioResumen,
   Mapa,
   NivelDominio,
   NodoMapa,
@@ -21,7 +23,9 @@ import type {
   RubricaVersion,
   TipoNodo,
   Traza,
+  UltimaEvaluacion,
   Usuario,
+  VerificacionResumen,
 } from "@/lib/tipos";
 
 const FECHA = "2026-11-10T15:00:00Z";
@@ -235,92 +239,103 @@ export const rubricaExtraidaMock: Rubrica = {
   ],
 };
 
-export const entregasMock: Entrega[] = [
-  {
-    id: 1,
-    estudiante_id: "est-1",
-    laboratorio_id: 1,
-    rubrica_version_id: 10,
-    pdf_path: "entregas/est-1/lab-1/informe.pdf",
-    codigo_zip_path: "entregas/est-1/lab-1/codigo.zip",
-    github_url: null,
-    extras: [],
-    creada_en: "2026-09-02T14:00:00Z",
-    evaluacion: { id: 6, estado: "publicada", nota: 3.6 },
-  },
-  {
-    id: 2,
-    estudiante_id: "est-1",
-    laboratorio_id: 2,
-    rubrica_version_id: 11,
-    pdf_path: "entregas/est-1/lab-2/informe.pdf",
-    codigo_zip_path: null,
-    github_url: "https://github.com/ana-estudiante/lab2-ml",
-    extras: [],
-    creada_en: "2026-09-20T14:00:00Z",
-    evaluacion: { id: 3, estado: "en_revision", nota: 3.1 },
-  },
-  {
-    id: 3,
-    estudiante_id: "est-1",
-    laboratorio_id: 3,
-    rubrica_version_id: 1,
-    pdf_path: "entregas/est-1/lab-3/informe.pdf",
-    codigo_zip_path: "entregas/est-1/lab-3/codigo.zip",
-    github_url: null,
-    extras: ["entregas/est-1/lab-3/captura.png"],
-    creada_en: "2026-10-15T14:00:00Z",
-    evaluacion: { id: 1, estado: "publicada", nota: 4.2 },
-  },
-  {
-    id: 4,
-    estudiante_id: "est-1",
-    laboratorio_id: 4,
-    rubrica_version_id: 2,
-    pdf_path: "entregas/est-1/lab-4/informe.pdf",
-    codigo_zip_path: null,
-    github_url: "https://github.com/ana-estudiante/rag-local",
-    extras: [],
-    creada_en: "2026-11-05T14:00:00Z",
-    evaluacion: { id: 2, estado: "borrador", nota: 3.8 },
-  },
-  {
-    id: 5,
-    estudiante_id: "est-1",
-    laboratorio_id: 5,
-    rubrica_version_id: 3,
-    pdf_path: "entregas/est-1/lab-5/informe.pdf",
-    codigo_zip_path: null,
-    github_url: null,
-    extras: [],
-    creada_en: "2026-11-12T14:00:00Z",
-    evaluacion: null,
-  },
-  {
-    id: 6,
-    estudiante_id: "est-1",
-    laboratorio_id: 6,
-    rubrica_version_id: 4,
-    pdf_path: "entregas/est-1/lab-6/informe.pdf",
-    codigo_zip_path: "entregas/est-1/lab-6/codigo.zip",
-    github_url: null,
-    extras: [],
-    creada_en: "2026-11-11T14:00:00Z",
-    evaluacion: { id: 4, estado: "error", nota: null },
-  },
-  {
-    id: 7,
-    estudiante_id: "est-2",
-    laboratorio_id: 3,
-    rubrica_version_id: 1,
-    pdf_path: "entregas/est-2/lab-3/informe.pdf",
-    codigo_zip_path: "entregas/est-2/lab-3/codigo.zip",
-    github_url: null,
-    extras: [],
-    creada_en: "2026-11-09T14:00:00Z",
-    evaluacion: { id: 5, estado: "aprobada", nota: 4.6 },
-  },
+/**
+ * Inconsistencias que el validador del backend reportaría para `rubricaExtraidaMock` (textos en español, como
+ * ExtraccionRubricaRespuesta). Son fijas: el mock no calcula nada.
+ */
+export const inconsistenciasExtraidaMock: string[] = [
+  "Las ponderaciones suman 95 %; deben sumar 100 %.",
+  "El nivel 'Insuficiente' del criterio 'Calidad del código' no tiene descriptor.",
+  "Los puntajes del criterio 'Informe del laboratorio' no están ordenados de mayor a menor.",
 ];
+
+/** Extracción simulada con valida: true (se usa si el nombre del PDF contiene "valida"). */
+export const rubricaExtraidaValidaMock: Rubrica = {
+  titulo: "Rúbrica extraída – Laboratorio (válida)",
+  criterios: [
+    {
+      id: "c1",
+      competencia: "Programación en Python",
+      nombre: "Calidad del código",
+      ponderacion: 60,
+      niveles: [
+        { nombre: "Excelente", puntaje: 5, descriptor: "Código modular, legible y con pruebas." },
+        { nombre: "Aceptable", puntaje: 3, descriptor: "Código funcional con poca estructura." },
+        { nombre: "Insuficiente", puntaje: 1, descriptor: "Código confuso o que no funciona." },
+      ],
+    },
+    {
+      id: "c2",
+      competencia: "Comunicación técnica",
+      nombre: "Informe del laboratorio",
+      ponderacion: 40,
+      niveles: [
+        { nombre: "Excelente", puntaje: 5, descriptor: "Informe completo, con análisis y referencias." },
+        { nombre: "Insuficiente", puntaje: 1, descriptor: "Informe incompleto o sin conclusiones." },
+      ],
+    },
+  ],
+};
+
+/** Laboratorio resumido (como LaboratorioResumen del backend) a partir de las cohortes del mock. */
+export function laboratorioResumenMock(laboratorioId: number): LaboratorioResumen {
+  const laboratorio = cohortesMock.flatMap((c) => c.laboratorios).find((l) => l.id === laboratorioId);
+  return { id: laboratorioId, codigo: laboratorio?.codigo ?? "", titulo: laboratorio?.titulo ?? "" };
+}
+
+interface DatosEntregaMock {
+  id: number;
+  estudiante: EstudianteResumen;
+  laboratorio_id: number;
+  rubrica_version_id: number;
+  tiene_pdf: boolean;
+  tiene_zip: boolean;
+  github_url: string | null;
+  creada_en: string;
+  ultima_evaluacion: UltimaEvaluacion | null;
+}
+
+/** Entrega con la forma de EntregaRespuesta. `ultima_evaluacion` va con el estado real (vista docente). */
+function entregaMock(datos: DatosEntregaMock): Entrega {
+  return {
+    id: datos.id,
+    laboratorio: laboratorioResumenMock(datos.laboratorio_id),
+    estudiante: datos.estudiante,
+    rubrica_version_id: datos.rubrica_version_id,
+    rubrica_version: 1,
+    tiene_pdf: datos.tiene_pdf,
+    tiene_zip: datos.tiene_zip,
+    github_url: datos.github_url,
+    creada_en: datos.creada_en,
+    ultima_evaluacion: datos.ultima_evaluacion,
+  };
+}
+
+const ANA: EstudianteResumen = { id: "est-1", nombre: "Ana Estudiante" };
+const JUAN: EstudianteResumen = { id: "est-2", nombre: "Juan Pérez" };
+
+export const entregasMock: Entrega[] = [
+  entregaMock({ id: 1, estudiante: ANA, laboratorio_id: 1, rubrica_version_id: 101, tiene_pdf: true, tiene_zip: true,
+    github_url: null, creada_en: "2026-09-02T14:00:00Z", ultima_evaluacion: { id: 6, estado: "publicada", nota: 3.6 } }),
+  entregaMock({ id: 2, estudiante: ANA, laboratorio_id: 2, rubrica_version_id: 102, tiene_pdf: true, tiene_zip: false,
+    github_url: "https://github.com/ana-estudiante/lab2-ml", creada_en: "2026-09-20T14:00:00Z",
+    ultima_evaluacion: { id: 3, estado: "en_revision", nota: 3.1 } }),
+  entregaMock({ id: 3, estudiante: ANA, laboratorio_id: 3, rubrica_version_id: 103, tiene_pdf: true, tiene_zip: true,
+    github_url: null, creada_en: "2026-10-15T14:00:00Z", ultima_evaluacion: { id: 1, estado: "publicada", nota: 4.2 } }),
+  entregaMock({ id: 4, estudiante: ANA, laboratorio_id: 4, rubrica_version_id: 104, tiene_pdf: true, tiene_zip: false,
+    github_url: "https://github.com/ana-estudiante/rag-local", creada_en: "2026-11-05T14:00:00Z",
+    ultima_evaluacion: { id: 2, estado: "borrador", nota: 3.8 } }),
+  entregaMock({ id: 5, estudiante: ANA, laboratorio_id: 5, rubrica_version_id: 105, tiene_pdf: true, tiene_zip: false,
+    github_url: null, creada_en: "2026-11-12T14:00:00Z", ultima_evaluacion: null }),
+  entregaMock({ id: 6, estudiante: ANA, laboratorio_id: 6, rubrica_version_id: 106, tiene_pdf: false, tiene_zip: true,
+    github_url: null, creada_en: "2026-11-11T14:00:00Z", ultima_evaluacion: { id: 4, estado: "error", nota: null } }),
+  entregaMock({ id: 7, estudiante: JUAN, laboratorio_id: 3, rubrica_version_id: 103, tiene_pdf: true, tiene_zip: true,
+    github_url: null, creada_en: "2026-11-09T14:00:00Z", ultima_evaluacion: { id: 5, estado: "aprobada", nota: 4.6 } }),
+];
+
+/** Verificación técnica de ejemplo (VerificacionResumen): una ejecución correcta y una con error. */
+export const verificacionExitosaMock: VerificacionResumen = { codigo_salida: 0, tiene_error: false, ejecucion_exitosa: true };
+export const verificacionConErrorMock: VerificacionResumen = { codigo_salida: 1, tiene_error: true, ejecucion_exitosa: false };
 
 /** Cita del mock con la forma de CitaRespuesta (la similitud la calcula el backend). */
 function cita(fragmento: string, fuente: string, ubicacion: string, verificada: boolean): Cita {
@@ -409,6 +424,7 @@ export const evaluacionPublicadaMock: Evaluacion = {
   criterios: criteriosConOriginal,
   retroalimentacion: retroalimentacionMock,
   retroalimentacion_ia: retroalimentacionMock,
+  verificacion: verificacionExitosaMock,
   creada_en: "2026-10-15T15:00:00Z",
   aprobada_en: "2026-10-16T10:00:00Z",
   publicada_en: "2026-10-16T10:05:00Z",
@@ -419,6 +435,8 @@ const criteriosBorradorMock: EvaluacionCriterio[] = criteriosConOriginal.map((cr
   ...criterio,
   nivel_final: criterio.nivel_ia,
   ajuste_docente: null,
+  // c3 sin citas: para probar "Sin evidencia en la entrega" (sin ningún indicador de verificación).
+  citas: criterio.criterio_id === "c3" ? [] : criterio.citas,
 }));
 
 export const evaluacionBorradorMock: Evaluacion = {
@@ -441,6 +459,8 @@ const evaluacionEnRevisionMock: Evaluacion = {
   rubrica_version_id: 102,
   estado: "en_revision",
   nota: 3.1,
+  // Entrega solo con URL de GitHub: el código no se ejecutó en el sandbox (verificación "no disponible").
+  verificacion: null,
   creada_en: "2026-09-20T15:00:00Z",
 };
 
@@ -454,6 +474,7 @@ const evaluacionErrorMock: Evaluacion = {
   criterios: [],
   retroalimentacion: null,
   retroalimentacion_ia: null,
+  verificacion: verificacionConErrorMock,
   error: "La respuesta del modelo no cumplió el esquema después de 2 reintentos: falta el criterio c3.",
   creada_en: "2026-11-11T15:00:00Z",
 };
@@ -496,6 +517,7 @@ export const trazaMock: Traza = {
   prompt_version: "evaluacion-v1",
   rubrica_version_id: 103,
   rubrica_version: 1,
+  verificacion: verificacionExitosaMock,
   eventos: [
     {
       id: 1,

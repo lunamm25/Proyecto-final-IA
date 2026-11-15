@@ -132,9 +132,13 @@ export interface ResultadoValidacion {
   inconsistencias: string[];
 }
 
-/** POST /api/laboratorios/{id}/rubrica/extraer (aún no existe en el backend; misma convención de textos). */
+/**
+ * POST /api/laboratorios/{id}/rubrica/extraer (ExtraccionRubricaRespuesta): rúbrica propuesta por la IA, sin guardar,
+ * y el resultado del validador. Las inconsistencias son textos en español.
+ */
 export interface ResultadoExtraccion {
   rubrica: Rubrica;
+  valida: boolean;
   inconsistencias: string[];
 }
 
@@ -156,36 +160,75 @@ export interface RubricaVersion {
 /** EstadoEvaluacion del backend: "procesando" mientras corre el pipeline en segundo plano. */
 export type EstadoEvaluacion = "procesando" | "borrador" | "en_revision" | "aprobada" | "publicada" | "error";
 
-export interface ResumenEvaluacion {
+/**
+ * EstadoVisible de la última evaluación de una entrega. Para el estudiante, lo que no está publicado
+ * (ni procesando ni en error) llega como "pendiente_revision" y sin nota.
+ */
+export type EstadoVisibleEntrega = EstadoEvaluacion | "pendiente_revision";
+
+/** UltimaEvaluacionResumen. */
+export interface UltimaEvaluacion {
   id: IdNumerico;
-  estado: EstadoEvaluacion;
-  /** Calculada por el backend; null mientras no exista o no sea visible para el usuario. */
+  estado: EstadoVisibleEntrega;
+  /** Calculada por el backend; para el estudiante solo llega si está publicada. */
   nota: number | null;
 }
 
-/** GET /api/entregas (aún no existe en el backend; ids con la misma convención). */
-export interface Entrega {
+/** LaboratorioResumen del backend. */
+export interface LaboratorioResumen {
   id: IdNumerico;
-  /** UUID del estudiante. */
-  estudiante_id: string;
-  laboratorio_id: IdNumerico;
-  rubrica_version_id: IdNumerico;
-  pdf_path: string;
-  codigo_zip_path: string | null;
-  github_url: string | null;
-  extras: string[];
-  creada_en: string;
-  /** null = sin evaluar. */
-  evaluacion: ResumenEvaluacion | null;
+  codigo: string;
+  titulo: string;
 }
 
-/** Datos del formulario para POST /api/entregas (se envían como multipart/form-data). */
+/** GET/POST /api/entregas (EntregaRespuesta): nunca trae rutas del bucket ni URLs firmadas. */
+export interface Entrega {
+  id: IdNumerico;
+  laboratorio: LaboratorioResumen;
+  estudiante: EstudianteResumen;
+  rubrica_version_id: IdNumerico;
+  rubrica_version: number | null;
+  tiene_pdf: boolean;
+  tiene_zip: boolean;
+  github_url: string | null;
+  creada_en: string;
+  /** null = sin evaluar. */
+  ultima_evaluacion: UltimaEvaluacion | null;
+}
+
+/** GET /api/entregas (ListadoEntregasRespuesta): `total` cuenta todas las que cumplen los filtros. */
+export interface ListadoEntregas {
+  items: Entrega[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/** Filtros de GET /api/entregas (el estudiante solo ve las suyas aunque no envíe estudiante_id). */
+export interface FiltrosEntregas {
+  estudiante_id?: string;
+  laboratorio_id?: IdNumerico;
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * Datos para POST /api/entregas (multipart, solo estudiante): laboratorio_id y al menos uno de pdf, zip o github_url.
+ * `extras` es un objeto JSON pequeño (se envía como texto), no archivos.
+ */
 export interface NuevaEntrega {
   laboratorio_id: IdNumerico;
-  pdf: File;
+  pdf?: File;
   zip?: File;
   github_url?: string;
-  extras?: File[];
+  extras?: Record<string, string>;
+}
+
+/** VerificacionResumen: resumen de la ejecución del código en el sandbox (nunca stdout ni stderr). */
+export interface VerificacionResumen {
+  codigo_salida: number;
+  tiene_error: boolean;
+  ejecucion_exitosa: boolean;
 }
 
 /** POST /api/entregas/{id}/evaluar → 202 (EvaluacionLanzadaRespuesta; estado "procesando"). */
@@ -241,13 +284,18 @@ export interface Retroalimentacion {
 }
 
 /**
- * GET /api/evaluaciones/{id} (EvaluacionRespuesta). Para el estudiante, proveedor, modelo, temperatura y
- * prompt_version llegan en null. El backend aún no envía laboratorio ni estudiante (pedido a Rol 2): si los
- * agrega se usan; si no, la pantalla los toma de la URL (?lab=&est=).
+ * GET /api/evaluaciones/{id} (EvaluacionRespuesta). Para el estudiante, proveedor, modelo, temperatura,
+ * prompt_version, verificacion y estudiante_nombre llegan en null. Laboratorio y estudiante vienen del backend;
+ * los parámetros ?lab=&est= de la URL quedan solo como respaldo si no llegaran.
  */
 export interface Evaluacion {
   id: IdNumerico;
   entrega_id: IdNumerico;
+  laboratorio_id?: IdNumerico | null;
+  /** UUID del estudiante. */
+  estudiante_id?: string | null;
+  /** Solo docente/admin; null para el estudiante. */
+  estudiante_nombre?: string | null;
   estado: EstadoEvaluacion;
   /** Calculada por el backend (0,0–5,0). El frontend nunca la calcula. */
   nota: number | null;
@@ -262,11 +310,11 @@ export interface Evaluacion {
   retroalimentacion: Retroalimentacion | null;
   /** Retroalimentación original de la IA (solo docente/admin). */
   retroalimentacion_ia: Retroalimentacion | null;
+  /** Resumen de la ejecución en sandbox (solo docente/admin; null si no hubo). */
+  verificacion?: VerificacionResumen | null;
   creada_en: string;
   aprobada_en: string | null;
   publicada_en: string | null;
-  laboratorio_id?: IdNumerico;
-  estudiante_id?: string;
 }
 
 /** PATCH /api/evaluaciones/{id}/criterios/{criterio_id} (AjusteCriterioEntrada). */
@@ -351,8 +399,10 @@ export interface EventoTraza {
   motivo: string | null;
 }
 
-/** GET /api/evaluaciones/{id}/traza (TrazaRespuesta). No incluye respuesta cruda ni verificación técnica. */
+/** GET /api/evaluaciones/{id}/traza (TrazaRespuesta). Trae la verificación técnica si hubo; nunca la respuesta cruda. */
 export interface Traza {
+  /** Resumen de la ejecución en sandbox (null si no se ejecutó). */
+  verificacion?: VerificacionResumen | null;
   evaluacion_id: IdNumerico;
   entrega_id: IdNumerico;
   estado: EstadoEvaluacion;

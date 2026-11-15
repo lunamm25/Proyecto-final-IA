@@ -65,7 +65,9 @@ interface PropsRevision {
 }
 
 function Cabecera({ evaluacion, contexto, referencias, alCambiar }: PropsRevision) {
-  const nombre = useNombreEstudiante(referencias.estudianteId);
+  // El nombre viene en el detalle (estudiante_nombre); GET /usuarios queda solo como respaldo (es solo para admin).
+  const nombreRespaldo = useNombreEstudiante(referencias.estudianteNombre ? null : referencias.estudianteId);
+  const nombre = referencias.estudianteNombre ?? nombreRespaldo;
   return (
     <header className="space-y-4 rounded-xl border bg-card p-4 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -197,7 +199,7 @@ function ContenidoRevision({ evaluacion, fallos, alCambiar }: { evaluacion: Eval
           <SeccionCriterios {...props} />
           <section aria-labelledby="titulo-verificacion" className="space-y-3">
             <h2 id="titulo-verificacion" className="text-lg font-semibold">Verificación técnica del código</h2>
-            <PanelVerificacion />
+            <PanelVerificacion verificacion={evaluacion.verificacion} />
           </section>
         </>
       )}

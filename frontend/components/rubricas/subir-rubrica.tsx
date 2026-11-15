@@ -8,17 +8,15 @@ import { CampoArchivo } from "@/components/portafolio/campo-archivo";
 import { extraerRubrica, mensajeDeError } from "@/lib/api";
 import type { ResultadoExtraccion } from "@/lib/tipos";
 
-export const MAX_RUBRICA_MB = 10;
-export const EXTENSIONES_RUBRICA = [".pdf", ".docx", ".txt", ".md"];
+/** El backend solo acepta el enunciado en PDF con texto, de hasta 20 MB. */
+export const MAX_RUBRICA_MB = 20;
 
-/** Valida extensión y tamaño en el cliente; el backend vuelve a validar. */
+/** Valida tipo y tamaño en el cliente; el backend vuelve a validar (413/422 con su mensaje). */
 export function validarArchivoRubrica(archivo: File): string | undefined {
-  const nombre = archivo.name.toLowerCase();
-  if (!EXTENSIONES_RUBRICA.some((ext) => nombre.endsWith(ext))) {
-    return "El archivo debe ser PDF, DOCX, TXT o MD.";
-  }
+  const esPdf = archivo.name.toLowerCase().endsWith(".pdf") && (archivo.type === "application/pdf" || archivo.type === "");
+  if (!esPdf) return "El enunciado debe ser un archivo PDF (.pdf) con texto seleccionable.";
   if (archivo.size === 0) return "El archivo está vacío.";
-  if (archivo.size > MAX_RUBRICA_MB * 1024 * 1024) return `El archivo supera el máximo de ${MAX_RUBRICA_MB} MB.`;
+  if (archivo.size > MAX_RUBRICA_MB * 1024 * 1024) return `El PDF supera el máximo de ${MAX_RUBRICA_MB} MB.`;
   return undefined;
 }
 
@@ -30,7 +28,7 @@ interface SubirRubricaProps {
   alExtraer: (resultado: ResultadoExtraccion) => void;
 }
 
-/** Sube un archivo de rúbrica y lo convierte con IA a `RubricaSchema` (RF-03 CA1). */
+/** Sube el enunciado en PDF y la IA propone la rúbrica (RF-03 CA1). La propuesta no se guarda hasta aprobarla. */
 export function SubirRubrica({ labId, hayContenido, deshabilitado, alCambiarOcupado, alExtraer }: SubirRubricaProps) {
   const [archivo, setArchivo] = useState<File | null>(null);
   const [extrayendo, setExtrayendo] = useState(false);
@@ -48,6 +46,7 @@ export function SubirRubrica({ labId, hayContenido, deshabilitado, alCambiarOcup
       alExtraer(await extraerRubrica(labId, archivo));
       setArchivo(null);
     } catch (causa) {
+      // 404, 413, 422 y 503 traen `detail` en español: se muestra tal cual.
       setError(mensajeDeError(causa));
     } finally {
       setExtrayendo(false);
@@ -58,13 +57,13 @@ export function SubirRubrica({ labId, hayContenido, deshabilitado, alCambiarOcup
   return (
     <section aria-labelledby="titulo-subir" className="space-y-3 rounded-xl border p-4">
       <h2 id="titulo-subir" className="font-semibold">
-        Subir rúbrica con IA
+        Extraer la rúbrica con IA
       </h2>
       <CampoArchivo
         id="archivo-rubrica"
-        etiqueta="Archivo de la rúbrica"
-        ayuda={`PDF, DOCX, TXT o MD, máximo ${MAX_RUBRICA_MB} MB. La IA la convierte en criterios y niveles que luego puedes revisar.`}
-        accept={EXTENSIONES_RUBRICA.join(",")}
+        etiqueta="Enunciado del laboratorio (PDF)"
+        ayuda={`Solo PDF con texto seleccionable, máximo ${MAX_RUBRICA_MB} MB. La IA propone criterios y niveles que luego revisas antes de aprobar.`}
+        accept="application/pdf,.pdf"
         error={errorArchivo}
         deshabilitado={deshabilitado || extrayendo}
         archivos={archivo ? [archivo] : []}

@@ -1,6 +1,6 @@
 import { EstadoVacio } from "@/components/estados";
 import { formatearFechaHora } from "@/components/evaluaciones/estado-evaluacion";
-import { NoDisponible } from "@/components/revision/panel-verificacion";
+import { NoDisponible, PanelVerificacion } from "@/components/revision/panel-verificacion";
 import { nombreVisible } from "@/lib/perfil";
 import type { Evaluacion, EventoTraza, JsonValor, Traza } from "@/lib/tipos";
 
@@ -67,7 +67,7 @@ function ItemEvento({ evento }: { evento: EventoTraza }) {
   );
 }
 
-/** Trazabilidad de la evaluación (RNF-03): modelo, versiones, fechas y eventos de auditoría. */
+/** Trazabilidad de la evaluación (RNF-03): modelo, versiones, fechas, verificación técnica y eventos de auditoría. */
 export function PanelTraza({ traza, evaluacion }: { traza: Traza; evaluacion: Evaluacion }) {
   return (
     <div className="space-y-4">
@@ -81,6 +81,10 @@ export function PanelTraza({ traza, evaluacion }: { traza: Traza; evaluacion: Ev
         <Dato etiqueta="Aprobada" valor={fecha(evaluacion.aprobada_en)} />
         <Dato etiqueta="Publicada" valor={fecha(evaluacion.publicada_en)} />
       </dl>
+      <div>
+        <h4 className="mb-2 text-sm font-semibold">Verificación técnica registrada</h4>
+        <PanelVerificacion verificacion={traza.verificacion} />
+      </div>
       <div>
         <h4 className="mb-2 text-sm font-semibold">Eventos</h4>
         {traza.eventos.length === 0 ? (

@@ -6,6 +6,7 @@ import {
   estadoDeLaboratorio,
   formatearFecha,
   formatearNota,
+  notaVisible,
   type EstadoLaboratorio,
 } from "@/components/portafolio/estado-entrega";
 import { rutaEvaluacion } from "@/lib/rutas-evaluacion";
@@ -54,10 +55,10 @@ function Acciones({ estado, laboratorio, entrega, evaluando, alEvaluar }: Accion
     );
   }
 
-  if (estado === "publicada" && entrega.evaluacion) {
+  if (estado === "publicada" && entrega.ultima_evaluacion) {
     return (
       <Link
-        href={rutaEvaluacion(entrega.evaluacion.id, { laboratorioId: laboratorio.id })}
+        href={rutaEvaluacion(entrega.ultima_evaluacion.id, { laboratorioId: laboratorio.id })}
         className={`${CLASE_ENLACE_BOTON} border hover:bg-muted`}
       >
         Ver evaluación
@@ -67,10 +68,14 @@ function Acciones({ estado, laboratorio, entrega, evaluando, alEvaluar }: Accion
 
   return (
     <>
-      <p className="text-xs text-muted-foreground">El docente revisará la evaluación antes de publicarla.</p>
-      {entrega.evaluacion && (
+      <p className="text-xs text-muted-foreground">
+        {estado === "procesando"
+          ? "La IA está evaluando tu entrega; luego el docente la revisará."
+          : "El docente revisará la evaluación antes de publicarla."}
+      </p>
+      {entrega.ultima_evaluacion && (
         <Link
-          href={rutaEvaluacion(entrega.evaluacion.id, { laboratorioId: laboratorio.id })}
+          href={rutaEvaluacion(entrega.ultima_evaluacion.id, { laboratorioId: laboratorio.id })}
           className={`${CLASE_ENLACE_BOTON} border hover:bg-muted`}
         >
           Ver progreso
@@ -82,7 +87,7 @@ function Acciones({ estado, laboratorio, entrega, evaluando, alEvaluar }: Accion
 
 export function TarjetaLaboratorio({ laboratorio, entrega, evaluando, alEvaluar }: TarjetaLaboratorioProps) {
   const estado = estadoDeLaboratorio(entrega);
-  const nota = estado === "publicada" ? entrega?.evaluacion?.nota ?? null : null;
+  const nota = notaVisible(entrega);
 
   return (
     <li className="flex flex-col gap-3 rounded-xl border bg-card p-4 md:flex-row md:items-center md:gap-6">

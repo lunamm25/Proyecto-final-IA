@@ -13,7 +13,7 @@ import {
   formatearFecha,
   ultimaEntregaPorLaboratorio,
 } from "@/components/portafolio/estado-entrega";
-import { listarCohortes, listarEntregas, obtenerRubricaVigenteONula } from "@/lib/api";
+import { LIMITE_MAXIMO_LISTADO, listarCohortes, listarEntregas, obtenerRubricaVigenteONula } from "@/lib/api";
 import { idDesdeUrl, type Cohorte, type Entrega, type IdNumerico, type Laboratorio, type RubricaVersion } from "@/lib/tipos";
 import { useCarga } from "@/lib/use-carga";
 
@@ -134,11 +134,14 @@ function VistaEntregarValida({ labId }: { labId: IdNumerico }) {
   const estudianteId = perfil?.id;
 
   const cargar = useCallback(async (): Promise<DatosEntregar | null> => {
-    const [cohortes, entregas] = await Promise.all([listarCohortes(), listarEntregas(estudianteId)]);
+    const [cohortes, entregas] = await Promise.all([
+      listarCohortes(),
+      listarEntregas({ estudiante_id: estudianteId, laboratorio_id: labId, limit: LIMITE_MAXIMO_LISTADO }),
+    ]);
     const encontrado = buscarLaboratorio(cohortes, labId);
     if (!encontrado) return null;
     const rubrica = await obtenerRubricaVigenteONula(labId);
-    return { ...encontrado, rubrica, entregaPrevia: ultimaEntregaPorLaboratorio(entregas).get(labId) };
+    return { ...encontrado, rubrica, entregaPrevia: ultimaEntregaPorLaboratorio(entregas.items).get(labId) };
   }, [labId, estudianteId]);
 
   const { estado, recargar } = useCarga(cargar);

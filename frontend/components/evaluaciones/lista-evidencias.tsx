@@ -25,19 +25,25 @@ function textoSimilitud(similitud: number): string {
   return `similitud ${Math.round(similitud)} %`;
 }
 
+/** Una cita solo cuenta como verificada si el backend envía `verificada: true` (cualquier otro valor = no verificada). */
+function estaVerificada(cita: Cita): boolean {
+  return cita.verificada === true;
+}
+
 function ItemCita({ cita }: { cita: Cita }) {
+  const verificada = estaVerificada(cita);
   return (
-    <li className={cn("rounded-lg border p-3", cita.verificada ? "bg-muted/30" : "border-red-300 border-l-4 bg-red-50/60")}>
+    <li className={cn("rounded-lg border p-3", verificada ? "bg-muted/30" : "border-red-300 border-l-4 bg-red-50/60")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs text-muted-foreground">
           {textoFuente(cita.fuente)}
           {cita.ubicacion && ` · ${cita.ubicacion}`}
           {` · ${textoSimilitud(cita.similitud)}`}
         </span>
-        <MarcaVerificacion verificada={cita.verificada} />
+        <MarcaVerificacion verificada={verificada} />
       </div>
       <blockquote className="mt-2 border-l-2 pl-3 text-sm italic break-words">“{cita.fragmento}”</blockquote>
-      {!cita.verificada && (
+      {!verificada && (
         <p className="mt-2 text-xs text-red-800">
           Esta cita no se encontró en el material entregado: puede ser una alucinación de la IA.
         </p>
@@ -46,12 +52,18 @@ function ItemCita({ cita }: { cita: Cita }) {
   );
 }
 
-/** Citas de un criterio con su verificación anti-alucinación (RF-05 CA3). */
+/** Texto cuando el criterio no trae citas: sin ningún indicador de verificación. */
+export const TEXTO_SIN_EVIDENCIA = "Sin evidencia en la entrega";
+
+/**
+ * Citas de un criterio con su verificación anti-alucinación (RF-05 CA3). Se usa en la vista del estudiante y en la
+ * revisión docente. Con `citas: []` solo muestra "Sin evidencia en la entrega": nada de "verificada".
+ */
 export function ListaCitas({ citas }: { citas: Cita[] }) {
   if (citas.length === 0) {
-    return <p className="text-sm text-muted-foreground">No hay evidencias citadas para este criterio.</p>;
+    return <p className="text-sm text-muted-foreground">{TEXTO_SIN_EVIDENCIA}</p>;
   }
-  const noVerificadas = citas.filter((c) => !c.verificada).length;
+  const noVerificadas = citas.filter((c) => !estaVerificada(c)).length;
   return (
     <div>
       {noVerificadas > 0 && (

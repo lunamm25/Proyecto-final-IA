@@ -7,7 +7,7 @@ import { EstadoVacio, MensajeError } from "@/components/estados";
 import { useSesion } from "@/components/proveedor-sesion";
 import { TarjetaLaboratorio } from "@/components/portafolio/tarjeta-laboratorio";
 import { ultimaEntregaPorLaboratorio } from "@/components/portafolio/estado-entrega";
-import { evaluarEntrega, listarCohortes, listarEntregas, mensajeDeError } from "@/lib/api";
+import { evaluarEntrega, listarCohortes, listarTodasLasEntregas, mensajeDeError } from "@/lib/api";
 import type { Cohorte, Entrega, IdNumerico } from "@/lib/tipos";
 import { rutaEvaluacion } from "@/lib/rutas-evaluacion";
 import { useCarga } from "@/lib/use-carga";
@@ -107,7 +107,8 @@ export function VistaPortafolio() {
   const [aviso, setAviso] = useState<Aviso | null>(null);
 
   const cargar = useCallback(async (): Promise<DatosPortafolio> => {
-    const [cohortes, entregas] = await Promise.all([listarCohortes(), listarEntregas(estudianteId)]);
+    // GET /entregas es paginado: se recorren las páginas para tener la última entrega de cada laboratorio.
+    const [cohortes, entregas] = await Promise.all([listarCohortes(), listarTodasLasEntregas(estudianteId)]);
     const ordenadas = [...cohortes].sort((a, b) => a.numero - b.numero);
     return { cohortes: ordenadas, entregas: ultimaEntregaPorLaboratorio(entregas) };
   }, [estudianteId]);
