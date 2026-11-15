@@ -1,0 +1,235 @@
+{
+  "titulo": "LAB 01 - MANIZALES RESILIENTE - Diseño de soluciones digitales inteligentes para gestión post-terremoto",
+  "criterios": [
+    {
+      "id": "c1",
+      "competencia": "Formulación del problema y valor",
+      "nombre": "Formulación del problema y valor",
+      "ponderacion": 10.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 5.0,
+          "descriptor": "Cumple todos los aspectos que pide el documento: problema claro; relevante; medible y bien delimitado; evita iniciar por tecnología."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.5,
+          "descriptor": "Cumple algunos de los aspectos que pide el documento, pero falta o está incompleto al menos uno: problema claro; relevante; medible y bien delimitado; evita iniciar por tecnología."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 0.0,
+          "descriptor": "No cumple los aspectos que pide el documento o no hay evidencia de ellos: problema claro; relevante; medible y bien delimitado; evita iniciar por tecnología."
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "competencia": "Comprensión inicial de IA/ML/Visión/PLN/Voz/Robótica",
+      "nombre": "Comprensión inicial de IA/ML/Visión/PLN/Voz/Robótica",
+      "ponderacion": 15.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 5.0,
+          "descriptor": "Cumple todos los aspectos que pide el documento: Define qué es; para qué sirve; límites y relación con el caso; sin confusiones conceptuales."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.5,
+          "descriptor": "Cumple algunos de los aspectos que pide el documento, pero falta o está incompleto al menos uno: Define qué es; para qué sirve; límites y relación con el caso; sin confusiones conceptuales."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 0.0,
+          "descriptor": "No cumple los aspectos que pide el documento o no hay evidencia de ellos: Define qué es; para qué sirve; límites y relación con el caso; sin confusiones conceptuales."
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "competencia": "Selección tecnológica y trade-offs",
+      "nombre": "Selección tecnológica y trade-offs",
+      "ponderacion": 12.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 5.0,
+          "descriptor": "Cumple todos los aspectos que pide el documento: Cada tecnología responde a una necesidad; existen alternativas consideradas; descartes justificados."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.5,
+          "descriptor": "Cumple algunos de los aspectos que pide el documento, pero falta o está incompleto al menos uno: Cada tecnología responde a una necesidad; existen alternativas consideradas; descartes justificados."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 0.0,
+          "descriptor": "No cumple los aspectos que pide el documento o no hay evidencia de ellos: Cada tecnología responde a una necesidad; existen alternativas consideradas; descartes justificados."
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "competencia": "Arquitectura conceptual",
+      "nombre": "Arquitectura conceptual",
+      "ponderacion": 15.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 5.0,
+          "descriptor": "Cumple todos los aspectos que pide el documento: Flujo end-to-end coherente; integra software, datos, IA, seguridad, HITL y operación."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.5,
+          "descriptor": "Cumple algunos de los aspectos que pide el documento, pero falta o está incompleto al menos uno: Flujo end-to-end coherente; integra software, datos, IA, seguridad, HITL y operación."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 0.0,
+          "descriptor": "No cumple los aspectos que pide el documento o no hay evidencia de ellos: Flujo end-to-end coherente; integra software, datos, IA, seguridad, HITL y operación."
+        }
+      ]
+    },
+    {
+      "id": "c5",
+      "competencia": "Diseño de aplicación moderna",
+      "nombre": "Diseño de aplicación moderna",
+      "ponderacion": 10.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 5.0,
+          "descriptor": "Cumple todos los aspectos que pide el documento: Usuarios, roles, APIs, persistencia; mapas/eventos/offline según corresponda; experiencia coherente."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.5,
+          "descriptor": "Cumple algunos de los aspectos que pide el documento, pero falta o está incompleto al menos uno: Usuarios, roles, APIs, persistencia; mapas/eventos/offline según corresponda; experiencia coherente."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 0.0,
+          "descriptor": "No cumple los aspectos que pide el documento o no hay evidencia de ellos: Usuarios, roles, APIs, persistencia; mapas/eventos/offline según corresponda; experiencia coherente."
+        }
+      ]
+    },
+    {
+      "id": "c6",
+      "competencia": "Datos y trazabilidad",
+      "nombre": "Datos y trazabilidad",
+      "ponderacion": 8.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 5.0,
+          "descriptor": "Cumple todos los aspectos que pide el documento: Fuentes identificadas, tipos, calidad, uso; supuestos claramente diferenciados."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.5,
+          "descriptor": "Cumple algunos de los aspectos que pide el documento, pero falta o está incompleto al menos uno: Fuentes identificadas, tipos, calidad, uso; supuestos claramente diferenciados."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 0.0,
+          "descriptor": "No cumple los aspectos que pide el documento o no hay evidencia de ellos: Fuentes identificadas, tipos, calidad, uso; supuestos claramente diferenciados."
+        }
+      ]
+    },
+    {
+      "id": "c7",
+      "competencia": "Riesgos, resiliencia y Failure Injection",
+      "nombre": "Riesgos, resiliencia y Failure Injection",
+      "ponderacion": 10.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 5.0,
+          "descriptor": "Cumple todos los aspectos que pide el documento: Reconoce fallos, riesgos y modos degradados; propone controles realistas."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.5,
+          "descriptor": "Cumple algunos de los aspectos que pide el documento, pero falta o está incompleto al menos uno: Reconoce fallos, riesgos y modos degradados; propone controles realistas."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 0.0,
+          "descriptor": "No cumple los aspectos que pide el documento o no hay evidencia de ellos: Reconoce fallos, riesgos y modos degradados; propone controles realistas."
+        }
+      ]
+    },
+    {
+      "id": "c8",
+      "competencia": "Quality Gates + Human-in-the-Loop",
+      "nombre": "Quality Gates + Human-in-the-Loop",
+      "ponderacion": 8.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 5.0,
+          "descriptor": "Cumple todos los aspectos que pide el documento: Define límites de automatización; controles y evidencia antes de decisiones críticas."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.5,
+          "descriptor": "Cumple algunos de los aspectos que pide el documento, pero falta o está incompleto al menos uno: Define límites de automatización; controles y evidencia antes de decisiones críticas."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 0.0,
+          "descriptor": "No cumple los aspectos que pide el documento o no hay evidencia de ellos: Define límites de automatización; controles y evidencia antes de decisiones críticas."
+        }
+      ]
+    },
+    {
+      "id": "c9",
+      "competencia": "Uso responsable de IA + Banco de Prompts",
+      "nombre": "Uso responsable de IA + Banco de Prompts",
+      "ponderacion": 7.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 5.0,
+          "descriptor": "Cumple todos los aspectos que pide el documento: Uso declarado, trazable, versionado y validado; no hay contenido no defendible."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.5,
+          "descriptor": "Cumple algunos de los aspectos que pide el documento, pero falta o está incompleto al menos uno: Uso declarado, trazable, versionado y validado; no hay contenido no defendible."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 0.0,
+          "descriptor": "No cumple los aspectos que pide el documento o no hay evidencia de ellos: Uso declarado, trazable, versionado y validado; no hay contenido no defendible."
+        }
+      ]
+    },
+    {
+      "id": "c10",
+      "competencia": "Prototipo y defensa técnica",
+      "nombre": "Prototipo y defensa técnica",
+      "ponderacion": 5.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 5.0,
+          "descriptor": "Cumple todos los aspectos que pide el documento: Comunica con claridad; todos los integrantes pueden explicar decisiones y limitaciones."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.5,
+          "descriptor": "Cumple algunos de los aspectos que pide el documento, pero falta o está incompleto al menos uno: Comunica con claridad; todos los integrantes pueden explicar decisiones y limitaciones."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 0.0,
+          "descriptor": "No cumple los aspectos que pide el documento o no hay evidencia de ellos: Comunica con claridad; todos los integrantes pueden explicar decisiones y limitaciones."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,143 @@
+{
+  "titulo": "LABORATORIO 01 — Automatización de archivos con Python tradicional",
+  "criterios": [
+    {
+      "id": "c1",
+      "competencia": "Preparación, inventario y evidencia inicial",
+      "nombre": "Preparación, inventario y evidencia inicial",
+      "ponderacion": 10.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 5.0,
+          "descriptor": "Cumple todos los aspectos que pide el documento: captura de la estructura de proyecto y versión de Python; inventario inicial y cantidad de archivos; huellas del contenido antes de organizar."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.5,
+          "descriptor": "Cumple algunos de los aspectos que pide el documento, pero falta o está incompleto al menos uno: captura de la estructura de proyecto y versión de Python; inventario inicial y cantidad de archivos; huellas del contenido antes de organizar."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 0.0,
+          "descriptor": "No cumple los aspectos que pide el documento o no hay evidencia de ellos: captura de la estructura de proyecto y versión de Python; inventario inicial y cantidad de archivos; huellas del contenido antes de organizar."
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "competencia": "Simulación e interpretación correcta del plan",
+      "nombre": "Simulación e interpretación correcta del plan",
+      "ponderacion": 15.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 5.0,
+          "descriptor": "Cumple todos los aspectos que pide el documento: captura de simulación; explica qué significa cada operación; tres ejemplos de origen y destino; una extensión no contemplada explícitamente; la colisión prevista para acta reunion.pdf."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.5,
+          "descriptor": "Cumple algunos de los aspectos que pide el documento, pero falta o está incompleto al menos uno: captura de simulación; explica qué significa cada operación; tres ejemplos de origen y destino; una extensión no contemplada explícitamente; la colisión prevista para acta reunion.pdf."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 0.0,
+          "descriptor": "No cumple los aspectos que pide el documento o no hay evidencia de ellos: captura de simulación; explica qué significa cada operación; tres ejemplos de origen y destino; una extensión no contemplada explícitamente; la colisión prevista para acta reunion.pdf."
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "competencia": "Ejecución real, solución de colisiones e integridad",
+      "nombre": "Ejecución real, solución de colisiones e integridad",
+      "ponderacion": 25.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 5.0,
+          "descriptor": "Cumple todos los aspectos que pide el documento: estructura final; salida de verificación; reporte JSON correspondiente a la ejecución real con movimientos; 12 archivos iniciales, 11 movimientos; un conflicto de nombres resuelto; cero errores; 12 archivos finales; Compare-Object no muestra diferencias."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.5,
+          "descriptor": "Cumple algunos de los aspectos que pide el documento, pero falta o está incompleto al menos uno: estructura final; salida de verificación; reporte JSON correspondiente a la ejecución real con movimientos; 12 archivos iniciales, 11 movimientos; un conflicto de nombres resuelto; cero errores; 12 archivos finales; Compare-Object no muestra diferencias."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 0.0,
+          "descriptor": "No cumple los aspectos que pide el documento o no hay evidencia de ellos: estructura final; salida de verificación; reporte JSON correspondiente a la ejecución real con movimientos; 12 archivos iniciales, 11 movimientos; un conflicto de nombres resuelto; cero errores; 12 archivos finales; Compare-Object no muestra diferencias."
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "competencia": "Pruebas automatizadas e idempotencia",
+      "nombre": "Pruebas automatizadas e idempotencia",
+      "ponderacion": 20.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 5.0,
+          "descriptor": "Cumple todos los aspectos que pide el documento: pruebas correctas; segunda ejecución con cero movimientos; Explica con tus palabras por qué se trata de un comportamiento idempotente."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.5,
+          "descriptor": "Cumple algunos de los aspectos que pide el documento, pero falta o está incompleto al menos uno: pruebas correctas; segunda ejecución con cero movimientos; Explica con tus palabras por qué se trata de un comportamiento idempotente."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 0.0,
+          "descriptor": "No cumple los aspectos que pide el documento o no hay evidencia de ellos: pruebas correctas; segunda ejecución con cero movimientos; Explica con tus palabras por qué se trata de un comportamiento idempotente."
+        }
+      ]
+    },
+    {
+      "id": "c5",
+      "competencia": "Modificación .rtf y nueva prueba propia",
+      "nombre": "Modificación .rtf y nueva prueba propia",
+      "ponderacion": 20.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 5.0,
+          "descriptor": "Cumple todos los aspectos que pide el documento: cambio realizado en el código; nueva prueba; salida de organización; 11 pruebas correctas; True en Test-Path; 13 archivos conservados en Archivos_Reto."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.5,
+          "descriptor": "Cumple algunos de los aspectos que pide el documento, pero falta o está incompleto al menos uno: cambio realizado en el código; nueva prueba; salida de organización; 11 pruebas correctas; True en Test-Path; 13 archivos conservados en Archivos_Reto."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 0.0,
+          "descriptor": "No cumple los aspectos que pide el documento o no hay evidencia de ellos: cambio realizado en el código; nueva prueba; salida de organización; 11 pruebas correctas; True en Test-Path; 13 archivos conservados en Archivos_Reto."
+        }
+      ]
+    },
+    {
+      "id": "c6",
+      "competencia": "Análisis técnico y conexión con programación agéntica",
+      "nombre": "Análisis técnico y conexión con programación agéntica",
+      "ponderacion": 10.0,
+      "niveles": [
+        {
+          "nombre": "Excelente",
+          "puntaje": 5.0,
+          "descriptor": "Cumple todos los aspectos que pide el documento: Contesta con ejemplos del programa; Preguntas de análisis técnico; con un agente que utiliza Tool Calling; Reflexión de cierre."
+        },
+        {
+          "nombre": "Competente",
+          "puntaje": 3.5,
+          "descriptor": "Cumple algunos de los aspectos que pide el documento, pero falta o está incompleto al menos uno: Contesta con ejemplos del programa; Preguntas de análisis técnico; con un agente que utiliza Tool Calling; Reflexión de cierre."
+        },
+        {
+          "nombre": "Insuficiente",
+          "puntaje": 0.0,
+          "descriptor": "No cumple los aspectos que pide el documento o no hay evidencia de ellos: Contesta con ejemplos del programa; Preguntas de análisis técnico; con un agente que utiliza Tool Calling; Reflexión de cierre."
+        }
+      ]
+    }
+  ]
+}
