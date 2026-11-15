@@ -702,3 +702,18 @@ def test_servicio_estudiante_ajeno_lanza_no_encontrado(datos):
 def test_validar_github_url_lanza_datos_invalidos():
     with pytest.raises(DatosInvalidosError):
         validar_github_url("https://gitlab.com/a/b")
+
+
+MARCA_ERROR = "MARCA_ERROR_INTERNO_QX"
+
+
+@pytest.mark.parametrize("usuario", [ID_ESTUDIANTE, ID_DOCENTE, ID_ADMIN])
+def test_listado_no_incluye_el_texto_de_error(api, datos, usuario):
+    with datos() as s:
+        s.add(Evaluacion(id=60, entrega_id=1, estado="error", error=f"{MARCA_ERROR} interno"))
+        s.commit()
+    respuesta = listar(api, usuario)
+    assert respuesta.status_code == 200, respuesta.text
+    item = next(i for i in respuesta.json()["items"] if i["id"] == 1)
+    assert item["ultima_evaluacion"] == {"id": 60, "estado": "error", "nota": None}
+    assert MARCA_ERROR not in respuesta.text

@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.models import Auditoria, EvaluacionCriterio, RubricaVersion
+from app.models import Auditoria, Evaluacion, EvaluacionCriterio, RubricaVersion
 from app.services import revision
 from app.services.nota import calcular_nota
 from tests.test_auth import ID_ADMIN, ID_DOCENTE, ID_ESTUDIANTE
@@ -637,3 +637,40 @@ def test_estudiante_sin_edicion_ve_texto_de_la_ia(cliente, ev):
     cuerpo = ver(cliente, ev, ID_ESTUDIANTE).json()
     assert cuerpo["retroalimentacion"]["retroalimentacion_general"] == "Buen trabajo"
     assert cuerpo["criterios"][0]["justificacion"] == "Justificación de C1"
+
+
+# ---------- El texto de `error` nunca llega al estudiante ----------
+
+MARCA_ERROR = "MARCA_ERROR_INTERNO_QX"
+
+
+def poner_error(fabrica, evaluacion_id: int, estado: str) -> None:
+    with fabrica() as s:
+        evaluacion = s.get(Evaluacion, evaluacion_id)
+        evaluacion.estado = estado
+        evaluacion.error = f"{MARCA_ERROR} en app/servicio_interno.py"
+        s.commit()
+
+
+def test_estudiante_no_ve_el_texto_de_error_aunque_este_publicada(cliente, datos, ev):
+    poner_error(datos, ev, "publicada")
+    respuesta = ver(cliente, ev, ID_ESTUDIANTE)
+    assert respuesta.status_code == 200, respuesta.text
+    assert respuesta.json()["error"] is None
+    assert MARCA_ERROR not in respuesta.text
+
+
+def test_estudiante_evaluacion_en_error_403_sin_el_texto(cliente, datos, ev):
+    poner_error(datos, ev, "error")
+    respuesta = ver(cliente, ev, ID_ESTUDIANTE)
+    assert error(respuesta, 403) == MSG_PENDIENTE
+    assert MARCA_ERROR not in respuesta.text
+
+
+@pytest.mark.parametrize("usuario", [ID_DOCENTE, ID_ADMIN])
+@pytest.mark.parametrize("estado", ["error", "publicada"])
+def test_docente_y_admin_ven_el_texto_de_error(cliente, datos, ev, usuario, estado):
+    poner_error(datos, ev, estado)
+    respuesta = ver(cliente, ev, usuario)
+    assert respuesta.status_code == 200, respuesta.text
+    assert respuesta.json()["error"] == f"{MARCA_ERROR} en app/servicio_interno.py"
