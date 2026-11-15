@@ -158,26 +158,72 @@ def test_respuesta_no_expone_rutas_del_bucket(api):
 # ---------- Validación de la petición ----------
 
 
-def test_sin_pdf_zip_ni_github_422(api, datos):
+MSG_PDF_OBLIGATORIO = "El informe en PDF es obligatorio."
+
+
+def assert_falta_pdf(respuesta) -> None:
+    assert respuesta.status_code == 422, respuesta.text
+    assert respuesta.json()["detail"] == MSG_PDF_OBLIGATORIO
+
+
+def test_sin_pdf_zip_ni_github_422(api, datos, almacen):
     antes = len(entregas_en_bd(datos))
-    assert_error(crear(api, pdf=None), 422, "al menos")
+    assert_falta_pdf(crear(api, pdf=None))
     assert len(entregas_en_bd(datos)) == antes
-
-
-def test_github_vacio_cuenta_como_ausente_422(api):
-    assert_error(crear(api, pdf=None, github_url="   "), 422, "al menos")
-
-
-def test_solo_zip_201(api):
-    respuesta = crear(api, pdf=None, zip_=ZIP_OK)
-    assert respuesta.status_code == 201, respuesta.text
-    assert respuesta.json()["tiene_pdf"] is False
-
-
-def test_solo_github_201(api, almacen):
-    respuesta = crear(api, pdf=None, github_url="https://github.com/ana/lab-01")
-    assert respuesta.status_code == 201, respuesta.text
     assert almacen.subidas == []
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"zip_": ZIP_OK},
+        {"github_url": "https://github.com/ana/lab-01"},
+        {"zip_": ZIP_OK, "github_url": "https://github.com/ana/lab-01"},
+        {"github_url": "   "},
+    ],
+    ids=["solo_zip", "solo_github", "zip_y_github", "github_vacio"],
+)
+def test_sin_pdf_422_aunque_haya_zip_o_github(api, datos, almacen, extra):
+    antes = len(entregas_en_bd(datos))
+    assert_falta_pdf(crear(api, pdf=None, **extra))
+    assert len(entregas_en_bd(datos)) == antes
+    assert almacen.subidas == []
+    assert auditorias_entregas(datos) == []
+
+
+def test_pdf_vacio_cuenta_como_ausente_422(api, almacen):
+    assert_falta_pdf(crear(api, pdf=b"", zip_=ZIP_OK))
+    assert almacen.subidas == []
+
+
+def test_falta_pdf_se_detecta_antes_de_validar_el_zip(api):
+    assert_falta_pdf(crear(api, pdf=None, zip_=b"PKesto no es un zip"))
+
+
+def test_solo_pdf_201(api, almacen):
+    respuesta = crear(api)
+    assert respuesta.status_code == 201, respuesta.text
+    cuerpo = respuesta.json()
+    assert cuerpo["tiene_pdf"] is True and cuerpo["tiene_zip"] is False
+    assert cuerpo["github_url"] is None
+    assert len(almacen.subidas) == 1
+
+
+def test_pdf_y_zip_201(api, almacen):
+    respuesta = crear(api, zip_=ZIP_OK)
+    assert respuesta.status_code == 201, respuesta.text
+    cuerpo = respuesta.json()
+    assert cuerpo["tiene_pdf"] is True and cuerpo["tiene_zip"] is True
+    assert len(almacen.subidas) == 2
+
+
+def test_pdf_y_github_201(api, almacen):
+    respuesta = crear(api, github_url="https://github.com/ana/lab-01")
+    assert respuesta.status_code == 201, respuesta.text
+    cuerpo = respuesta.json()
+    assert cuerpo["tiene_pdf"] is True and cuerpo["tiene_zip"] is False
+    assert cuerpo["github_url"] == "https://github.com/ana/lab-01"
+    assert len(almacen.subidas) == 1
 
 
 def test_falta_laboratorio_422(api):
