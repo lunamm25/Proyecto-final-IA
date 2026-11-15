@@ -5,6 +5,8 @@ informe (pypdf) y los `.py` del ZIP (sin extraer a disco, con protección contra
 zip-bomb), quita correos y el nombre del estudiante y trunca a un tamaño fijo. Si
 `VERIFICACION_ACTIVA` está encendida, ejecuta el ZIP con el SandboxRunner de Rol 4 y guarda
 solo un resumen de 3 campos (nunca stdout ni stderr).
+Además, siempre analiza el ZIP de forma estática (RF-06, `app/verificacion/estatico.py`): no
+ejecuta código, así que no depende de `VERIFICACION_ACTIVA`.
 No se usa `entrega.extras` porque lo escribe el estudiante y no es confiable.
 """
 
@@ -23,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Entrega, Perfil
 from app.services.almacen import AlmacenArchivos
+from app.verificacion.estatico import analizar_zip_seguro
 
 logger = logging.getLogger(__name__)
 
@@ -61,11 +64,16 @@ class ZipInseguroError(MaterialIlegibleError):
 
 @dataclass(frozen=True)
 class Material:
-    """Texto del informe, resumen del código y resultados de la verificación técnica."""
+    """Texto del informe, resumen del código y resultados de la verificación técnica.
+
+    `resultados_verificacion` es el resumen del sandbox (si se ejecutó) y `analisis_estatico`
+    el detalle del análisis estático (`resumen` numérico + columnas de verificaciones_codigo).
+    """
 
     texto_informe: str = ""
     resumen_codigo: str | None = None
     resultados_verificacion: Any = None
+    analisis_estatico: dict[str, Any] | None = None
 
 
 CargadorMaterial = Callable[[Session, Entrega], Material]
@@ -259,13 +267,16 @@ def obtener_material(
         texto_informe = _truncar(sanear_texto(crudo, nombre, correo), LIMITE_INFORME, "informe")
     resumen_codigo: str | None = None
     verificacion: dict[str, Any] | None = None
+    estatico: dict[str, Any] | None = None
     if entrega.codigo_zip_path:
         datos_zip = almacen.descargar(entrega.codigo_zip_path)
         codigo = sanear_texto(extraer_codigo_zip(datos_zip), nombre, correo)
         resumen_codigo = _truncar(codigo, LIMITE_CODIGO, "código") or None
+        analisis = analizar_zip_seguro(datos_zip)
+        estatico = analisis.detalle if analisis is not None else None
         if verificacion_activa:
             verificacion = _verificar(datos_zip, ejecutar)
-    return Material(texto_informe, resumen_codigo, verificacion)
+    return Material(texto_informe, resumen_codigo, verificacion, estatico)
 
 
 def _limpiar(valor: Any, profundidad: int) -> Any:

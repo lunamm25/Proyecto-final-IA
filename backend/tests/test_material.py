@@ -351,10 +351,20 @@ def test_evaluacion_con_material_real_sin_verificacion(con_material_real, datos,
     assert "def suma" in (solicitud.resumen_codigo or "")
     assert CORREO not in solicitud.texto_informe + (solicitud.resumen_codigo or "")
     assert "Ana Estudiante" not in solicitud.texto_informe
-    assert solicitud.resultados_verificacion == {}
+    # RF-06: aun sin sandbox llega el análisis estático (solo conteos, nunca texto del ZIP).
+    assert set(solicitud.resultados_verificacion) == {"estatico"}
+    assert solicitud.resultados_verificacion["estatico"]["archivos_python"] == 1
+    assert CORREO not in repr(solicitud.resultados_verificacion)
     assert ejecutor.llamadas == []
     with datos() as s:
-        assert s.scalars(select(VerificacionCodigo)).first() is None
+        fila = s.scalars(select(VerificacionCodigo)).one()
+        assert fila.sandbox is None
+        assert set(fila.metricas) == {"estatico"}
+        assert resumen_verificacion(fila.metricas) is None
+        assert fila.sintaxis["con_error"] == 0
+        assert fila.complejidad["funciones"] == 1
+        columnas = repr([fila.sintaxis, fila.ruff, fila.complejidad, fila.tests])
+        assert CORREO not in columnas and "Ana Estudiante" not in columnas
 
 
 def test_evaluacion_con_verificacion_guarda_solo_tres_campos(con_material_real, datos, evaluador):
@@ -365,11 +375,14 @@ def test_evaluacion_con_verificacion_guarda_solo_tres_campos(con_material_real, 
     assert leer(datos, evaluacion_id).estado == "borrador"
     assert len(ejecutor.llamadas) == 1
     esperado = {"codigo_salida": 0, "tiene_error": False, "ejecucion_exitosa": True}
-    assert evaluador.solicitudes[0].resultados_verificacion == esperado
+    recibido = evaluador.solicitudes[0].resultados_verificacion
+    assert {k: v for k, v in recibido.items() if k != "estatico"} == esperado
+    assert "estatico" in recibido
     with datos() as s:
         fila = s.scalars(select(VerificacionCodigo)).one()
         assert fila.evaluacion_id == evaluacion_id
-        assert fila.metricas == esperado
+        assert resumen_verificacion(fila.metricas) == esperado
+        assert fila.sandbox == "subprocess"
     guardado = textos_guardados(datos)
     assert MARCADOR_SALIDA not in guardado and MARCADOR_ERROR not in guardado
     solicitud = repr(evaluador.solicitudes[0])
