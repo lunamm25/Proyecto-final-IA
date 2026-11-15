@@ -54,8 +54,22 @@ export function rutaInicioPorRol(rol: Rol): string {
   return rol === "estudiante" ? "/portafolio" : "/docente";
 }
 
-/** Acepta solo rutas internas para evitar redirecciones abiertas. */
-export function destinoSeguro(siguiente: string | null): string | null {
+// Barra invertida y caracteres de control (U+0000–U+001F, U+007F): el navegador los normaliza y "/\evil.com" o
+// "/<TAB>/evil.com" terminan apuntando a otro dominio.
+const CARACTERES_PELIGROSOS = /[\\\u0000-\u001f\u007f]/;
+const ORIGEN_REFERENCIA = "http://interno.invalid";
+
+/** Acepta solo rutas internas para evitar redirecciones abiertas; devuelve la ruta normalizada o null. */
+export function destinoSeguro(siguiente: string | null, origen?: string): string | null {
   if (!siguiente || !siguiente.startsWith("/") || siguiente.startsWith("//")) return null;
-  return siguiente;
+  if (CARACTERES_PELIGROSOS.test(siguiente)) return null;
+  const base = origen ?? (typeof window === "undefined" ? ORIGEN_REFERENCIA : window.location.origin);
+  let url: URL;
+  try {
+    url = new URL(siguiente, base);
+  } catch {
+    return null;
+  }
+  if (url.origin !== new URL(base).origin) return null;
+  return `${url.pathname}${url.search}${url.hash}`;
 }
