@@ -62,6 +62,7 @@ MSG_SIN_VERSION = "La entrega no tiene una versión de rúbrica aprobada; no se 
 MSG_RUBRICA_INCONSISTENTE = (
     "La versión de la rúbrica de esta entrega tiene inconsistencias; no se puede evaluar: {}"
 )
+MSG_RUBRICA_NO_LISTA = "La rúbrica de este laboratorio no está lista. Avisa a tu docente."
 MSG_PENDIENTE = "La evaluación está pendiente de revisión docente."
 MSG_ERROR_GENERICO = (
     "No se pudo completar la evaluación automática. Intenta de nuevo o contacta al docente."
@@ -135,12 +136,14 @@ def _entrega_visible(db: Session, entrega_id: int, perfil: Perfil) -> Entrega:
     return entrega
 
 
-def _version_evaluable(db: Session, entrega: Entrega) -> RubricaVersion:
-    """Versión de rúbrica de la entrega, aprobada y sin inconsistencias (o 409)."""
+def _version_evaluable(db: Session, entrega: Entrega, perfil: Perfil) -> RubricaVersion:
+    """Versión aprobada y sin inconsistencias (o 409; el estudiante no ve la lista)."""
     version = db.get(RubricaVersion, entrega.rubrica_version_id)
     if version is None or version.estado != "aprobada":
         raise ConflictoError(MSG_SIN_VERSION)
     inconsistencias = validar_rubrica(version.contenido)
+    if inconsistencias and not _es_docente(perfil):
+        raise ConflictoError(MSG_RUBRICA_NO_LISTA)
     if inconsistencias:
         raise ConflictoError(MSG_RUBRICA_INCONSISTENTE.format(" ".join(inconsistencias)))
     return version
@@ -276,7 +279,7 @@ def lanzar_evaluacion(
     el lanzamiento termina en 409; el lanzamiento y su auditoría van en otro commit.
     """
     entrega = _entrega_visible(db, entrega_id, perfil)
-    _version_evaluable(db, entrega)
+    _version_evaluable(db, entrega, perfil)
     recuperar_atascadas(db, entrega.id)
     _comprobar_relanzamiento(db, entrega.id, perfil)
     config = configuracion_ia(db, settings)

@@ -5,6 +5,7 @@ La evaluación de partida se crea con el flujo real (POST /evaluar con evaluador
 """
 
 import copy
+import logging
 from datetime import datetime
 from decimal import Decimal
 
@@ -205,6 +206,27 @@ def test_ajuste_recalcula_nota_con_nota_py(cliente, datos, ev):
     assert c2.puntaje_normalizado == pytest.approx(0.0)
     assert c2.ajuste_docente == "El informe es confuso"
     assert fila(datos, ev, "C1").puntaje_normalizado == pytest.approx(0.75)
+
+
+MSG_NO_RECALCULA = "No se puede recalcular la nota con los datos actuales."
+TEXTO_INTERNO = "MARCADOR_INTERNO criterio C9 en https://interno.ejemplo/ruta"
+
+
+def test_fallo_al_recalcular_no_expone_el_detalle(cliente, datos, ev, monkeypatch, caplog):
+    def _calcular_roto(*_args, **_kwargs):
+        raise ValueError(TEXTO_INTERNO)
+
+    monkeypatch.setattr(revision, "calcular_nota", _calcular_roto)
+    with caplog.at_level(logging.WARNING, logger="app.services.revision"):
+        r = ajustar(cliente, ev, "C1", {"nivel_final": "Excelente", "motivo": "Muy completo"})
+    assert error(r, 409) == MSG_NO_RECALCULA
+    assert "MARCADOR_INTERNO" not in r.text and "C9" not in r.text
+    registros = [x.getMessage() for x in caplog.records if x.name == "app.services.revision"]
+    assert len(registros) == 1
+    assert str(ev) in registros[0]
+    assert "ValueError" in registros[0] and "MARCADOR_INTERNO" in registros[0]
+    assert "interno.ejemplo" not in registros[0]
+    assert fila(datos, ev, "C1").nivel_final == "Bueno"
 
 
 def test_ajuste_a_todo_maximo_da_5(cliente, datos, ev):
