@@ -1,6 +1,7 @@
 """Utilidades compartidas por los módulos que llaman al LLM: recorte, delimitadores y reintentos."""
 
 import re
+import time
 import unicodedata
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
@@ -17,6 +18,12 @@ from app.ia.providers import (
 )
 
 T = TypeVar("T", bound=BaseModel)
+
+# Pausas (segundos) antes de repetir una llamada que falló por un error transitorio del
+# proveedor (p. ej. 503 por alta demanda). Son aparte de los reintentos de validación.
+PAUSAS_TRANSITORIAS = (3.0, 8.0)
+# Función de espera; las pruebas la reemplazan para no esperar de verdad.
+_dormir: Callable[[float], None] = time.sleep
 
 # En cada reintento se reenvía la respuesta anterior recortada (inicio y final) y el error.
 LIMITE_CARACTERES_RESPUESTA_ANTERIOR = 4_000
@@ -178,6 +185,23 @@ def limitar_temperatura(proveedor: LLMProvider) -> None:
     proveedor.temperatura = min(max(proveedor.temperatura, 0.0), TEMPERATURA_MAXIMA)
 
 
+def _llamar_con_pausas(
+    proveedor: LLMProvider, prompt: str, schema: type[BaseModel], pausas: list[float]
+) -> str:
+    """Llama al modelo; ante un error transitorio espera y repite el MISMO prompt.
+
+    `pausas` se comparte entre todos los intentos de una invocación y se va consumiendo:
+    así hay como máximo 2 repeticiones por errores transitorios en total.
+    """
+    while True:
+        try:
+            return proveedor.generar_texto(prompt, schema)
+        except ErrorRespuestaLLM as error:
+            if not error.transitorio or not pausas:
+                raise
+            _dormir(pausas.pop(0))
+
+
 def generar_con_reintentos(
     proveedor: LLMProvider,
     prompt_base: str,
@@ -189,16 +213,21 @@ def generar_con_reintentos(
 ) -> ResultadoIntentos[T]:
     """Llama al modelo, interpreta la respuesta y reintenta (`proveedor.max_retries`, máx. 2).
 
+    Aparte, si el proveedor falla de forma transitoria (503, 429, timeout...), repite la
+    misma llamada hasta 2 veces por invocación con pausas de 3 s y 8 s; esas repeticiones
+    no cuentan como reintentos de validación ni se guardan en `errores`.
+
     `interpretar` recibe el texto crudo y devuelve (valor, "") si es válido o (None, error).
     `que_se_pide` completa el mensaje final, p. ej. "una evaluación válida".
     """
     limitar_temperatura(proveedor)
     total_intentos = validar_max_retries(proveedor.max_retries) + 1
+    pausas = list(PAUSAS_TRANSITORIAS)
     prompt, errores, crudo = prompt_base, [], ""
     crudas: list[str] = []
     for intento in range(1, total_intentos + 1):
         try:
-            crudo = proveedor.generar_texto(prompt, schema)
+            crudo = _llamar_con_pausas(proveedor, prompt, schema, pausas)
         except ErrorRespuestaLLM as error:
             raise error_cls(
                 f"Falló la llamada al proveedor de IA: {error}", errores, crudo or None, crudas

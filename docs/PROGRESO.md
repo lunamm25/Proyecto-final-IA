@@ -34,7 +34,17 @@
 
   Las revisiones de calidad y seguridad quedaron aprobadas y sus hallazgos corregidos. ruff OK, pytest 229 passed.
   - **Pendiente, Rol 2 y Rol 3:** `evidencias` puede llegar vacía. La pantalla debe mostrar "Sin evidencia en la entrega" y no "verificado".
-  - **Pendiente, Rol 1:** repetir la prueba real (la segunda corrida falló por un 503 de Gemini).
+  - **Prueba real repetida con éxito (2026-11-14, `gemini-3.5-flash-lite`):** evaluador, mapeo e informe respondieron con JSON válido al primer intento. Con el prompt 1.1, los criterios c4 y c5 (ausentes en el informe de prueba) devuelven evidencias vacías en lugar de citar el título.
+- 2026-11-14 · Laura (Rol 1) · reintentos por errores transitorios del proveedor:
+  - ante 429, 500, 503, 504, timeout o error de conexión se repite la misma llamada hasta 2 veces, con pausas de 3 s y 8 s; esas repeticiones no cuentan como reintentos de validación;
+  - `obtener_proveedor()` lee `LLM_MAX_RETRIES` (de 0 a 2);
+  - el cliente OpenAI se crea con `max_retries=0`, para no sumar los reintentos del SDK.
+
+  Las revisiones de calidad y seguridad quedaron aprobadas y sus hallazgos de Rol 1 corregidos. ruff OK, pytest 881 passed.
+  - **Pendiente, Rol 2:**
+    - `construir_proveedor` no pasa `max_retries`, así que `LLM_MAX_RETRIES` todavía no llega a la API;
+    - `GET /api/estudiantes/{id}/informe` genera la narrativa dentro de la petición y no guarda los fallos en caché: con el proveedor caído, cada petición puede tardar hasta unos 11 s más, por las pausas;
+    - aplicar `tachar_secretos` al mensaje y a la causa que van a auditoría.
 
 ## 2026-11-13 — Luna (Rol 4 DevOps/Calidad)
 

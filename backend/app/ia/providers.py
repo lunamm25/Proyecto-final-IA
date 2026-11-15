@@ -16,8 +16,20 @@ TIMEOUT_SEGUNDOS = 120.0
 OLLAMA_BASE_URL = "http://localhost:11434/v1"
 
 
+# Códigos HTTP de fallos temporales del proveedor (saturación, límite de cuota, caída breve).
+CODIGOS_TRANSITORIOS = frozenset({429, 500, 503, 504})
+
+
 class ErrorRespuestaLLM(Exception):
-    """El LLM falló o devolvió una respuesta que no cumple el esquema."""
+    """El LLM falló o devolvió una respuesta que no cumple el esquema.
+
+    `transitorio` es True si el fallo es temporal (429, 500, 503, 504, timeout o conexión).
+    """
+
+    def __init__(self, mensaje: str, transitorio: bool = False) -> None:
+        """Guarda el mensaje y si el error es transitorio."""
+        super().__init__(mensaje)
+        self.transitorio = transitorio
 
 
 class ErrorConfiguracionLLM(Exception):
@@ -29,6 +41,18 @@ def _detectar_mime(datos: bytes) -> str:
     if datos.startswith(b"\x89PNG"):
         return "image/png"
     return "image/jpeg"
+
+
+def es_error_transitorio(error: BaseException) -> bool:
+    """Indica si un error del SDK es temporal: código 429/500/503/504, timeout o conexión."""
+    for codigo in (getattr(error, "status_code", None), getattr(error, "code", None)):
+        if isinstance(codigo, int) and codigo in CODIGOS_TRANSITORIOS:
+            return True
+    if isinstance(error, (TimeoutError, ConnectionError)):
+        return True
+    # Clases de los SDK y de httpx (APITimeoutError, APIConnectionError, ConnectError...).
+    nombres = (clase.__name__ for clase in type(error).__mro__)
+    return any("Timeout" in nombre or "Connect" in nombre for nombre in nombres)
 
 
 def _limitar_temperatura(temperatura: float) -> float:
@@ -145,7 +169,10 @@ class GeminiProvider(LLMProvider):
                 model=self.modelo, contents=contenidos, config=config
             )
         except Exception as error:  # se envuelve cualquier error del SDK
-            raise ErrorRespuestaLLM(f"Error al llamar a Gemini ({self.modelo}): {error}") from error
+            raise ErrorRespuestaLLM(
+                f"Error al llamar a Gemini ({self.modelo}): {error}",
+                transitorio=es_error_transitorio(error),
+            ) from error
         texto = respuesta.text
         if not texto:
             raise ErrorRespuestaLLM(f"Gemini ({self.modelo}) devolvió una respuesta vacía.")
@@ -176,7 +203,8 @@ class OpenAICompatProvider(LLMProvider):
                 "No está instalada la librería openai (pip install openai)."
             ) from error
         self.base_url = base_url
-        self._client = OpenAI(base_url=base_url, api_key=api_key, timeout=timeout)
+        # max_retries=0: el SDK no reintenta por su cuenta; los reintentos los controla comun.py.
+        self._client = OpenAI(base_url=base_url, api_key=api_key, timeout=timeout, max_retries=0)
 
     def _llamar(self, prompt: str, schema: type[BaseModel], imagenes: list[bytes] | None) -> str:
         """Envía el prompt con el JSON Schema y pide respuesta en JSON."""
@@ -205,7 +233,8 @@ class OpenAICompatProvider(LLMProvider):
         except Exception as error:  # se envuelve cualquier error del SDK
             raise ErrorRespuestaLLM(
                 f"Error al llamar al proveedor OpenAI-compatible ({self.base_url}, "
-                f"{self.modelo}): {error}"
+                f"{self.modelo}): {error}",
+                transitorio=es_error_transitorio(error),
             ) from error
         salida = respuesta.choices[0].message.content if respuesta.choices else None
         if not salida:
@@ -246,6 +275,25 @@ class FakeProvider(LLMProvider):
         return respuesta
 
 
+def _leer_max_retries() -> int:
+    """Lee LLM_MAX_RETRIES (entero de 0 a 2; por defecto 2; más de 2 se recorta)."""
+    texto = os.environ.get("LLM_MAX_RETRIES", "").strip()
+    if not texto:
+        return MAX_REINTENTOS
+    try:
+        valor = int(texto)
+    except ValueError as error:
+        raise ErrorConfiguracionLLM(
+            f"LLM_MAX_RETRIES debe ser un número entero de 0 a {MAX_REINTENTOS} "
+            f"(valor recibido: '{texto[:20]}')."
+        ) from error
+    if valor < 0:
+        raise ErrorConfiguracionLLM(
+            f"LLM_MAX_RETRIES no puede ser negativo (debe ser de 0 a {MAX_REINTENTOS})."
+        )
+    return validar_max_retries(valor)
+
+
 def obtener_proveedor() -> LLMProvider:
     """Construye el proveedor según las variables de entorno LLM_*."""
     nombre = os.environ.get("LLM_PROVIDER", "gemini").strip().lower()
@@ -257,13 +305,17 @@ def obtener_proveedor() -> LLMProvider:
         raise ErrorConfiguracionLLM(
             f"LLM_TEMPERATURE debe ser un número (valor recibido: '{texto_temp}')."
         ) from error
+    max_retries = _leer_max_retries()
 
     if nombre == "gemini":
         api_key = os.environ.get("GEMINI_API_KEY", "").strip()
         if not api_key:
             raise ErrorConfiguracionLLM("Falta GEMINI_API_KEY para usar el proveedor Gemini.")
         return GeminiProvider(
-            api_key=api_key, modelo=modelo or "gemini-3.5-flash-lite", temperatura=temperatura
+            api_key=api_key,
+            modelo=modelo or "gemini-3.5-flash-lite",
+            temperatura=temperatura,
+            max_retries=max_retries,
         )
     if nombre == "openai_compat":
         base_url = os.environ.get("OPENAI_COMPAT_BASE_URL", "").strip() or OLLAMA_BASE_URL
@@ -278,10 +330,19 @@ def obtener_proveedor() -> LLMProvider:
         if not modelo:
             raise ErrorConfiguracionLLM("Falta LLM_MODEL para el proveedor OpenAI-compatible.")
         return OpenAICompatProvider(
-            base_url=base_url, api_key=api_key, modelo=modelo, temperatura=temperatura
+            base_url=base_url,
+            api_key=api_key,
+            modelo=modelo,
+            temperatura=temperatura,
+            max_retries=max_retries,
         )
     if nombre == "fake":
-        return FakeProvider(respuestas=[], modelo=modelo or "fake-model", temperatura=temperatura)
+        return FakeProvider(
+            respuestas=[],
+            modelo=modelo or "fake-model",
+            temperatura=temperatura,
+            max_retries=max_retries,
+        )
     raise ErrorConfiguracionLLM(
         f"Proveedor de IA desconocido: '{nombre}'. Usa gemini, openai_compat o fake."
     )
