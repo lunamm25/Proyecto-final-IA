@@ -16,7 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.config import Settings
+from app.config import Settings, get_settings
 from app.models import (
     Auditoria,
     ConfigIA,
@@ -40,6 +40,7 @@ from app.services.evaluador_ia import Evaluador, ResultadoIA, SolicitudEvaluacio
 from app.services.material import CargadorMaterial, resumen_verificacion, sanear_verificacion
 from app.services.nota import calcular_nota
 from app.services.rubricas import validar_rubrica
+from app.services.secretos import detalle_error_tachado
 
 logger = logging.getLogger(__name__)
 
@@ -341,17 +342,9 @@ def _evaluar(
     db.commit()
 
 
-def _detalle_error(error: Exception) -> dict[str, Any]:
-    """Detalle técnico del fallo (solo para auditoría)."""
-    detalle: dict[str, Any] = {
-        "tipo": type(error).__name__,
-        "mensaje": str(error)[:LIMITE_MENSAJE_AUDITORIA],
-        "errores": [str(e) for e in getattr(error, "errores", [])],
-        "respuestas_crudas": [str(c) for c in getattr(error, "respuestas_crudas", [])],
-    }
-    if error.__cause__ is not None:
-        detalle["causa"] = repr(error.__cause__)[:LIMITE_MENSAJE_AUDITORIA]
-    return detalle
+def _detalle_error(error: Exception, settings: Settings) -> dict[str, Any]:
+    """Detalle técnico del fallo, con secretos tachados (solo para auditoría)."""
+    return detalle_error_tachado(error, settings, LIMITE_MENSAJE_AUDITORIA)
 
 
 def _registrar_error(
@@ -359,8 +352,9 @@ def _registrar_error(
     evaluacion_id: int,
     usuario_id: uuid.UUID | None,
     error: Exception,
+    settings: Settings | None = None,
 ) -> None:
-    """Deja la evaluación en `error` con mensaje genérico; el detalle va a auditoría."""
+    """Deja la evaluación en `error` con mensaje genérico; el detalle tachado va a auditoría."""
     try:
         with fabrica() as db:
             evaluacion = db.get(Evaluacion, evaluacion_id)
@@ -375,7 +369,7 @@ def _registrar_error(
                     entidad="evaluaciones",
                     entidad_id=str(evaluacion_id),
                     accion="evaluacion_ia_error",
-                    despues=_detalle_error(error),
+                    despues=_detalle_error(error, settings or get_settings()),
                 )
             )
             db.commit()
@@ -393,6 +387,7 @@ def ejecutar_evaluacion(
     fabrica: Callable[[], Session],
     evaluador: Evaluador,
     cargar_material: CargadorMaterial,
+    settings: Settings | None = None,
 ) -> None:
     """Tarea de fondo: evalúa con su propia sesión; nunca relanza ni deja `procesando`."""
     try:
@@ -406,7 +401,7 @@ def ejecutar_evaluacion(
         logger.warning(
             "La evaluación %s terminó en error (%s).", evaluacion_id, type(error).__name__
         )
-        _registrar_error(fabrica, evaluacion_id, usuario_id, error)
+        _registrar_error(fabrica, evaluacion_id, usuario_id, error, settings)
 
 
 # ---------- Consulta ----------

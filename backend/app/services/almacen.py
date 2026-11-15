@@ -12,6 +12,7 @@ from urllib.parse import quote
 import httpx
 
 from app.config import Settings
+from app.services.secretos import tachar_secretos
 
 TIMEOUT_SEGUNDOS = 30.0
 LIMITE_DESCARGA_BYTES = 25 * 1024 * 1024
@@ -76,8 +77,6 @@ class AlmacenSupabase:
 
     def _fallo(self, operacion: str, error: Exception | None, codigo: int | None) -> AlmacenError:
         """Error tachado (sin clave, URL ni tokens) para guardar en auditoría."""
-        from app.services.config_ia import tachar_secretos
-
         partes = [f"Fallo al {operacion} en el almacén"]
         if codigo is not None:
             partes.append(f"(HTTP {codigo})")

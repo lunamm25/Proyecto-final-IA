@@ -41,13 +41,13 @@ class CambioRolEntrada(BaseModel):
 
 
 class LaboratorioEntrada(BaseModel):
-    """Datos para crear o editar un laboratorio."""
+    """Datos para crear o editar un laboratorio (con topes de tamaño contra abusos)."""
 
     cohorte_id: int
-    codigo: str
-    titulo: str
-    descripcion: str | None = None
-    objetivos: str | None = None
+    codigo: str = Field(max_length=50, examples=["LAB01"])
+    titulo: str = Field(max_length=200, examples=["Funciones en Python"])
+    descripcion: str | None = Field(default=None, max_length=5000)
+    objetivos: str | None = Field(default=None, max_length=5000)
 
 
 class LaboratorioRespuesta(BaseModel):
@@ -217,7 +217,7 @@ class AjusteCriterioEntrada(BaseModel):
 class RetroalimentacionCriterioEntrada(BaseModel):
     """Textos editados de un criterio. Omitido = sin cambios; null = volver al texto de la IA."""
 
-    criterio_id: str = Field(min_length=1, examples=["C1"])
+    criterio_id: str = Field(min_length=1, max_length=100, examples=["C1"])
     justificacion: TextoLargo | None = None
     fortalezas: ListaTextos | None = None
     debilidades: ListaTextos | None = None

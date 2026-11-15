@@ -18,6 +18,8 @@ from app.api.errores import registrar_manejadores
 from app.config import Settings, get_settings
 
 ORIGEN_LOCAL = "http://localhost:3000"
+# Sin cookies: la autenticación va en el header Authorization: Bearer (no hacen falta credenciales).
+METODOS_CORS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 
 
 def origenes_permitidos(settings: Settings) -> list[str]:
@@ -36,8 +38,8 @@ def crear_app(settings: Settings | None = None) -> FastAPI:
     aplicacion.add_middleware(
         CORSMiddleware,
         allow_origins=origenes_permitidos(settings),
-        allow_credentials=True,
-        allow_methods=["*"],
+        allow_credentials=False,
+        allow_methods=METODOS_CORS,
         allow_headers=["Authorization", "Content-Type"],
     )
 

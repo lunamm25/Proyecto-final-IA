@@ -1,7 +1,8 @@
 """Trazabilidad de una evaluación (RF-07 CA4, CLAUDE.md §5): eventos de auditoría en orden.
 
 Solo para docente/admin. Incluye las respuestas crudas guardadas en auditoría, pero nunca claves
-ni datos de conexión: se eliminan las claves de diccionario que parezcan secretos.
+ni datos de conexión: se eliminan las claves de diccionario que parezcan secretos y, como segunda
+capa, se tachan las credenciales que aparezcan dentro de los textos (sin recortarlos).
 """
 
 from dataclasses import dataclass
@@ -11,10 +12,12 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import Settings, get_settings
 from app.models import Auditoria, Entrega, Evaluacion, Perfil, RubricaVersion, VerificacionCodigo
 from app.services.errores import NoEncontradoError
 from app.services.evaluaciones import MSG_EVALUACION_NO_EXISTE
 from app.services.material import resumen_verificacion
+from app.services.secretos import tachar_credenciales
 
 PATRONES_SECRETOS = (
     "api_key",
@@ -62,17 +65,24 @@ def _parece_secreto(clave: str) -> bool:
     return nombre == "key" or nombre.endswith("_key") or any(p in nombre for p in PATRONES_SECRETOS)
 
 
-def sin_secretos(valor: Any) -> Any:
-    """Copia del valor JSON sin las claves que parezcan secretos (recursivo)."""
+def _limpiar(valor: Any, settings: Settings) -> Any:
+    """Quita las claves sensibles y tacha credenciales en los textos (recursivo)."""
     if isinstance(valor, dict):
         return {
-            k: sin_secretos(v)
+            k: _limpiar(v, settings)
             for k, v in valor.items()
             if not (isinstance(k, str) and _parece_secreto(k))
         }
     if isinstance(valor, list):
-        return [sin_secretos(v) for v in valor]
+        return [_limpiar(v, settings) for v in valor]
+    if isinstance(valor, str):
+        return tachar_credenciales(valor, settings)
     return valor
+
+
+def sin_secretos(valor: Any, settings: Settings | None = None) -> Any:
+    """Copia del valor JSON sin claves que parezcan secretos y con credenciales tachadas."""
+    return _limpiar(valor, settings or get_settings())
 
 
 def obtener_traza(db: Session, evaluacion_id: int) -> Traza:

@@ -26,6 +26,7 @@ from app.api.esquemas import (
     UsuarioTraza,
     VerificacionResumen,
 )
+from app.config import Settings, get_settings
 from app.db import get_db
 from app.models import EvaluacionCriterio, Perfil
 from app.services import evaluaciones as servicio
@@ -230,7 +231,12 @@ def publicar(evaluacion_id: int, docente: Docente, db: BaseDatos) -> EvaluacionR
 
 
 @router.get("/{evaluacion_id}/traza", response_model=TrazaRespuesta, responses=RESPUESTAS_DOCENTE)
-def ver_traza(evaluacion_id: int, _docente: Docente, db: BaseDatos) -> TrazaRespuesta:
+def ver_traza(
+    evaluacion_id: int,
+    _docente: Docente,
+    db: BaseDatos,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> TrazaRespuesta:
     """Trazabilidad completa (incluye respuestas crudas; nunca claves)."""
     datos = traza.obtener_traza(db, evaluacion_id)
     ev, version = datos.evaluacion, datos.rubrica_version
@@ -258,8 +264,8 @@ def ver_traza(evaluacion_id: int, _docente: Docente, db: BaseDatos) -> TrazaResp
                     id=e.auditoria.usuario_id, nombre=e.usuario.nombre if e.usuario else None
                 ),
                 accion=e.auditoria.accion,
-                antes=sin_secretos(e.auditoria.antes),
-                despues=sin_secretos(e.auditoria.despues),
+                antes=sin_secretos(e.auditoria.antes, settings),
+                despues=sin_secretos(e.auditoria.despues, settings),
                 motivo=e.auditoria.motivo,
             )
             for e in datos.eventos

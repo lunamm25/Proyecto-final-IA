@@ -49,6 +49,10 @@ MENSAJES_VALIDACION = {
 }
 
 
+# Para tipos sin traducción: nunca el texto de Pydantic (inglés) ni el valor recibido.
+MSG_VALOR_NO_VALIDO = "valor no válido"
+
+
 def _codigo(error: DominioError) -> int:
     """Código HTTP según la clase del error (400 si no está mapeada)."""
     for clase, codigo in CODIGOS.items():
@@ -71,7 +75,7 @@ def _describir(error: dict[str, Any]) -> str:
     ubicacion = ".".join(str(parte) for parte in error.get("loc", ()) if parte != "body")
     plantilla = MENSAJES_VALIDACION.get(error.get("type", ""))
     if plantilla is None:
-        return f"{ubicacion or 'cuerpo'}: {error.get('msg', 'no es válido')}"
+        return f"{ubicacion or 'cuerpo'}: {MSG_VALOR_NO_VALIDO}"
     try:
         mensaje = plantilla.format(**error.get("ctx", {}))
     except (KeyError, IndexError, ValueError):

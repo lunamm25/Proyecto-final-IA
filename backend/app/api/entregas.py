@@ -187,6 +187,12 @@ def evaluar_entrega(
     """Lanza la evaluación con IA en segundo plano (estudiante: solo sus entregas)."""
     evaluacion = servicio.lanzar_evaluacion(db, entrega_id, perfil, settings)
     tareas.add_task(
-        servicio.ejecutar_evaluacion, evaluacion.id, perfil.id, fabrica, evaluador, cargar_material
+        servicio.ejecutar_evaluacion,
+        evaluacion.id,
+        perfil.id,
+        fabrica,
+        evaluador,
+        cargar_material,
+        settings,
     )
     return EvaluacionLanzadaRespuesta(evaluacion_id=evaluacion.id, estado="procesando")

@@ -19,6 +19,7 @@ from app.models import Auditoria, ConfigIA, Perfil
 from app.services.errores import DatosInvalidosError
 from app.services.evaluaciones import TEMPERATURA_MAXIMA, ConfigEvaluacion, configuracion_ia
 from app.services.evaluador_ia import ProbadorConexion, ProveedorSinConfigurarError
+from app.services.secretos import tachar_secretos
 
 # Modelos de Gemini que el admin puede elegir. Para añadir uno, agrégalo a esta tupla.
 # El primero es el predeterminado y el probado.
@@ -232,7 +233,6 @@ def cambiar_config(
 # ---------- Prueba de conexión (RF-10 CA2) ----------
 
 LIMITE_PRUEBA_SEGUNDOS = 10.0
-LIMITE_MENSAJE_ERROR = 500
 ACCION_PROBAR = "probar_config_ia"
 MSG_PRUEBA_OK = "Conexión correcta con el proveedor de IA."
 MSG_PRUEBA_FALLO = (
@@ -246,27 +246,6 @@ MENSAJES_PRUEBA = {
     "sin_clave": MSG_PRUEBA_SIN_CLAVE,
 }
 HOSTS_LOCALES = ("localhost", "127.0.0.1")
-# Valores de Settings que nunca deben quedar escritos en auditoría si aparecen en un error.
-CAMPOS_SECRETOS = (
-    "gemini_api_key",
-    "openai_compat_api_key",
-    "openai_compat_base_url",
-    "supabase_service_key",
-    "supabase_jwt_secret",
-    "database_url",
-)
-TACHADO = "***"
-PATRONES_SECRETOS: tuple[tuple[re.Pattern[str], str], ...] = (
-    (re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://\S+"), TACHADO),
-    (re.compile(r"(?i)\bBearer\s+\S+"), f"Bearer {TACHADO}"),
-    (re.compile(r"\beyJ[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*"), TACHADO),
-    (re.compile(r"\bsk-[A-Za-z0-9_-]+"), TACHADO),
-    (re.compile(r"\bAIza[A-Za-z0-9_-]+"), TACHADO),
-    (re.compile(r"\bsb_secret_[A-Za-z0-9_-]+"), TACHADO),
-    (re.compile(r"(?i)\b(api_key|key|token)=[^\s&;,]+"), rf"\1={TACHADO}"),
-)
-
-
 @dataclass(frozen=True)
 class ResultadoPrueba:
     """Resultado de probar la conexión (sin claves ni texto crudo del error)."""
@@ -281,16 +260,6 @@ class ResultadoPrueba:
 def mensaje_tiempo_agotado(limite: float) -> str:
     """Mensaje para el usuario cuando el proveedor no responde dentro del límite."""
     return MSG_PRUEBA_TIEMPO.format(limite)
-
-
-def tachar_secretos(texto: str, settings: Settings) -> str:
-    """Sustituye claves, tokens y URL por *** y recorta el texto (solo para auditoría)."""
-    valores = {str(getattr(settings, campo, "") or "").strip() for campo in CAMPOS_SECRETOS}
-    for valor in sorted((v for v in valores if len(v) >= 4), key=len, reverse=True):
-        texto = texto.replace(valor, TACHADO)
-    for patron, reemplazo in PATRONES_SECRETOS:
-        texto = patron.sub(reemplazo, texto)
-    return texto[:LIMITE_MENSAJE_ERROR]
 
 
 def _falta_clave(proveedor: str, settings: Settings) -> str | None:

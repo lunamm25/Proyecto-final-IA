@@ -28,6 +28,7 @@ from app.services.errores import (
 )
 from app.services.material import MaterialIlegibleError, extraer_texto_pdf
 from app.services.rubricas import obtener_version_vigente
+from app.services.secretos import tachar_secretos
 
 logger = logging.getLogger(__name__)
 
@@ -237,8 +238,6 @@ def _auditar_fallo(
     db: Session, perfil: Perfil, entrega_id: int | None, error: Exception, settings: Settings
 ) -> None:
     """Registra el fallo del almacén o del commit con el detalle tachado (transacción aparte)."""
-    from app.services.config_ia import tachar_secretos
-
     try:
         db.add(
             Auditoria(

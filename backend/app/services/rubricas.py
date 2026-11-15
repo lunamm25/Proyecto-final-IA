@@ -5,6 +5,9 @@ nombres o puntajes de nivel repetidos, puntaje fuera de 0 a 5, ponderación <= 0
 suma distinta de 100, ids de criterio duplicados y, desde el 14 nov 2026, criterio
 sin competencia o sin nombre y nivel sin descriptor (los exige RubricaSchema de Rol 1).
 Título y orden de puntajes NO se validan por decisión del equipo.
+Topes contra abusos (revisión de seguridad): máximo 30 criterios, 10 niveles por criterio y
+longitud máxima de título, id, nombre, competencia, nombre de nivel y descriptor; superarlos
+es una inconsistencia más. Las etiquetas de los mensajes recortan los textos largos.
 """
 
 import copy
@@ -27,10 +30,20 @@ from app.services.errores import (
 TOLERANCIA_PONDERACION = 0.01  # igual que services/nota.py
 PUNTAJE_MINIMO = 0.0
 PUNTAJE_MAXIMO = 5.0
+MAX_CRITERIOS = 30
+MAX_NIVELES = 10
+MAX_TITULO = 300
+MAX_ID = 100  # igual que criterio_id en api/esquemas.py
+MAX_NOMBRE = 300  # nombre y competencia del criterio
+MAX_NOMBRE_NIVEL = 200  # igual que nivel_final del ajuste docente
+MAX_DESCRIPTOR = 3000
+MAX_ETIQUETA = 80  # caracteres de un texto del usuario dentro de un mensaje
 
 MSG_NO_ES_OBJETO = "La rúbrica debe ser un objeto JSON con 'titulo' y 'criterios'."
 MSG_SIN_CRITERIOS = "La rúbrica no tiene criterios."
 MSG_CRITERIOS_NO_LISTA = "El campo 'criterios' debe ser una lista."
+MSG_MAX_CRITERIOS = "La rúbrica tiene {} criterios; el máximo es {}."
+MSG_TITULO_LARGO = "El título tiene {} caracteres; el máximo es {}."
 MSG_LAB_NO_EXISTE = "El laboratorio no existe."
 MSG_SIN_RUBRICA = "El laboratorio aún no tiene rúbrica aprobada"
 MSG_CONFLICTO_VERSION = (
@@ -55,6 +68,16 @@ def _texto(valor: Any) -> str | None:
     return None
 
 
+def _recortar(texto: str) -> str:
+    """Recorta un texto del usuario para citarlo en un mensaje."""
+    return texto if len(texto) <= MAX_ETIQUETA else texto[:MAX_ETIQUETA] + "…"
+
+
+def _largo(valor: Any, maximo: int) -> int | None:
+    """Longitud del texto si supera el máximo; None si cabe o no es texto."""
+    return len(valor) if isinstance(valor, str) and len(valor) > maximo else None
+
+
 def _fmt(numero: float) -> str:
     """Formatea un número con hasta 2 decimales y coma decimal (p. ej. 99,5)."""
     texto = f"{numero:.2f}".rstrip("0").rstrip(".")
@@ -64,14 +87,14 @@ def _fmt(numero: float) -> str:
 def _etiqueta_criterio(criterio: dict[str, Any], posicion: int) -> str:
     """Nombra el criterio por id y nombre (o por posición si no tiene id)."""
     cid, nombre = _texto(criterio.get("id")), _texto(criterio.get("nombre"))
-    base = f'Criterio "{cid}"' if cid else f"Criterio en la posición {posicion}"
-    return f"{base} ({nombre})" if nombre else base
+    base = f'Criterio "{_recortar(cid)}"' if cid else f"Criterio en la posición {posicion}"
+    return f"{base} ({_recortar(nombre)})" if nombre else base
 
 
 def _etiqueta_nivel(nivel: dict[str, Any], posicion: int) -> str:
     """Nombra el nivel por su nombre o por su posición."""
     nombre = _texto(nivel.get("nombre"))
-    return f'el nivel "{nombre}"' if nombre else f"el nivel en la posición {posicion}"
+    return f'el nivel "{_recortar(nombre)}"' if nombre else f"el nivel en la posición {posicion}"
 
 
 def _errores_textos_criterio(criterio: dict[str, Any]) -> list[str]:
@@ -79,6 +102,13 @@ def _errores_textos_criterio(criterio: dict[str, Any]) -> list[str]:
     errores = [] if _texto(criterio.get("competencia")) else ["no tiene competencia."]
     if not _texto(criterio.get("nombre")):
         errores.append("no tiene nombre.")
+    for campo, nombre, maximo in (
+        ("id", "el id", MAX_ID),
+        ("nombre", "el nombre", MAX_NOMBRE),
+        ("competencia", "la competencia", MAX_NOMBRE),
+    ):
+        if (largo := _largo(criterio.get(campo), maximo)) is not None:
+            errores.append(f"{nombre} tiene {largo} caracteres; el máximo es {maximo}.")
     return errores
 
 
@@ -101,7 +131,18 @@ def _errores_nivel(nivel: Any, posicion: int) -> tuple[list[str], float | None, 
     etiqueta = _etiqueta_nivel(nivel, posicion)
     sin_descriptor = [] if _texto(nivel.get("descriptor")) else [f"{etiqueta} no tiene descriptor."]
     errores, puntaje, etiqueta = _errores_puntaje(nivel, etiqueta)
-    return sin_descriptor + errores, puntaje, etiqueta
+    return sin_descriptor + _errores_largo_nivel(nivel, etiqueta) + errores, puntaje, etiqueta
+
+
+def _errores_largo_nivel(nivel: dict[str, Any], etiqueta: str) -> list[str]:
+    """Topes de longitud del nombre y del descriptor de un nivel."""
+    errores: list[str] = []
+    for campo, maximo in (("nombre", MAX_NOMBRE_NIVEL), ("descriptor", MAX_DESCRIPTOR)):
+        if (largo := _largo(nivel.get(campo), maximo)) is not None:
+            errores.append(
+                f"{etiqueta} tiene un {campo} de {largo} caracteres; el máximo es {maximo}."
+            )
+    return errores
 
 
 def _errores_puntaje(nivel: dict[str, Any], etiqueta: str) -> tuple[list[str], float | None, str]:
@@ -123,7 +164,7 @@ def _errores_nombres_nivel(niveles: list[Any]) -> list[str]:
     """Regla de nombres de nivel sin repetir (nota.py identifica el nivel por su nombre)."""
     conteo = Counter(_texto(n.get("nombre")) for n in niveles if isinstance(n, dict))
     return [
-        f'hay {veces} niveles con el nombre repetido "{nombre}".'
+        f'hay {veces} niveles con el nombre repetido "{_recortar(nombre)}".'
         for nombre, veces in conteo.items()
         if nombre and veces > 1
     ]
@@ -136,6 +177,8 @@ def _errores_niveles(criterio: dict[str, Any]) -> list[str]:
         return ["no tiene niveles de desempeño."]
     if not isinstance(niveles, list):
         return ["el campo 'niveles' debe ser una lista."]
+    if len(niveles) > MAX_NIVELES:
+        return [f"tiene {len(niveles)} niveles; el máximo es {MAX_NIVELES}."]
     errores: list[str] = []
     if len(niveles) < 2:
         errores.append("debe tener al menos 2 niveles de desempeño (tiene 1).")
@@ -172,7 +215,7 @@ def _errores_ids(criterios: list[dict[str, Any]]) -> list[str]:
     """Regla de ids duplicados (un mensaje por id)."""
     conteo = Counter(_texto(c.get("id")) for c in criterios)
     return [
-        f'Hay {veces} criterios con el id duplicado "{cid}".'
+        f'Hay {veces} criterios con el id duplicado "{_recortar(cid)}".'
         for cid, veces in conteo.items()
         if cid and veces > 1
     ]
@@ -187,7 +230,11 @@ def validar_rubrica(rubrica: Any) -> list[str]:
         return [MSG_SIN_CRITERIOS]
     if not isinstance(criterios, list):
         return [MSG_CRITERIOS_NO_LISTA]
+    if len(criterios) > MAX_CRITERIOS:
+        return [MSG_MAX_CRITERIOS.format(len(criterios), MAX_CRITERIOS)]
     errores: list[str] = []
+    if (largo := _largo(rubrica.get("titulo"), MAX_TITULO)) is not None:
+        errores.append(MSG_TITULO_LARGO.format(largo, MAX_TITULO))
     validos: list[dict[str, Any]] = []
     for posicion, criterio in enumerate(criterios, start=1):
         if not isinstance(criterio, dict):

@@ -12,7 +12,7 @@ from app.api import deps
 from app.config import get_settings
 from app.models import Auditoria, ConfigIA, Perfil
 from app.services import config_ia as servicio
-from app.services import evaluador_ia
+from app.services import evaluador_ia, secretos
 from app.services.evaluaciones import ConfigEvaluacion, configuracion_ia
 from tests.test_auth import ID_ADMIN, ID_DOCENTE, ID_ESTUDIANTE, ajustes, con_token, token_hs
 
@@ -767,7 +767,7 @@ def test_probar_no_importa_modulos_de_ia(cliente_api, monkeypatch):
     ],
 )
 def test_tachar_patrones(texto, esperado):
-    assert servicio.tachar_secretos(texto, ajustes()) == esperado
+    assert secretos.tachar_secretos(texto, ajustes()) == esperado
 
 
 def test_tachar_valores_exactos_de_settings():
@@ -777,12 +777,12 @@ def test_tachar_valores_exactos_de_settings():
         openai_compat_base_url="mi-servidor.interno:8080",
     )
     texto = "valor-gemini-raro / otra-clave / mi-servidor.interno:8080"
-    assert servicio.tachar_secretos(texto, settings) == "*** / *** / ***"
+    assert secretos.tachar_secretos(texto, settings) == "*** / *** / ***"
 
 
 def test_tachar_recorta_el_mensaje():
-    tachado = servicio.tachar_secretos("x" * 5000, ajustes())
-    assert len(tachado) <= servicio.LIMITE_MENSAJE_ERROR
+    tachado = secretos.tachar_secretos("x" * 5000, ajustes())
+    assert len(tachado) <= secretos.LIMITE_MENSAJE_ERROR
 
 
 # ---------- Probador real (sin red: el proveedor se sustituye) ----------
