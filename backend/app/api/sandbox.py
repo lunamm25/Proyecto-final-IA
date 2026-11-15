@@ -2,14 +2,25 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
 from app.api.deps import requiere_rol
+from app.config import Settings, get_settings
 from app.models import Perfil
 from app.sandbox.runner import SandboxRunner
 
-router = APIRouter(prefix="/api/sandbox", tags=["sandbox"])
+
+def _sandbox_habilitado(settings: Annotated[Settings, Depends(get_settings)]) -> None:
+    """Responde 404 (como si no existiera) mientras SANDBOX_HABILITADO sea false."""
+    if not settings.sandbox_habilitado:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+
+
+# La dependencia del router corre antes que la autenticación: apagado, nadie ve el endpoint.
+router = APIRouter(
+    prefix="/api/sandbox", tags=["sandbox"], dependencies=[Depends(_sandbox_habilitado)]
+)
 
 
 class EjecucionResponse(BaseModel):
@@ -29,7 +40,7 @@ async def ejecutar_codigo(
     """Ejecuta código Python dentro de un ZIP con límites de seguridad.
 
     Recibe un archivo ZIP, lo valida y ejecuta el código dentro.
-    Requiere rol docente o admin.
+    Requiere rol docente o admin y SANDBOX_HABILITADO=true (apagado por defecto).
     """
     # Validar que es un ZIP
     if archivo.content_type not in ["application/zip", "application/x-zip-compressed"]:

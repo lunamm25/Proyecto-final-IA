@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:3000"
     # Ejecutar el código del estudiante con SandboxRunner al evaluar (sin límite de memoria ni red).
     verificacion_activa: bool = False
+    # Habilita POST /api/sandbox/ejecutar. Apagado responde 404: el runner no limita memoria,
+    # CPU, procesos ni red y corre con el mismo usuario que lee las claves del servidor.
+    sandbox_habilitado: bool = False
 
 
 @lru_cache

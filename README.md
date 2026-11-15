@@ -188,6 +188,7 @@ y Vercel. **Nunca se suben al repositorio.**
 | `OPENAI_COMPAT_BASE_URL`, `OPENAI_COMPAT_API_KEY`, `OPENAI_COMPAT_MODELOS` | Proveedor OpenAI-compatible | Ollama local, Groq u OpenRouter. |
 | `FRONTEND_URL` | Origen permitido por CORS | La URL de Vercel en producción. |
 | `VERIFICACION_ACTIVA` | Ejecutar el código en el sandbox al evaluar | Déjala en `false`: el sandbox no limita memoria ni red. |
+| `SANDBOX_HABILITADO` | Habilitar `POST /api/sandbox/ejecutar` | `false` por defecto (el endpoint responde 404). Solo para pruebas locales. |
 
 Si el admin guarda una configuración de IA en la app, esa configuración (tabla `config_ia`)
 tiene prioridad sobre `LLM_PROVIDER`, `LLM_MODEL` y `LLM_TEMPERATURE`.
@@ -226,7 +227,8 @@ cuota de Gemini. Detalle en [`docs/USO_IA.md`](docs/USO_IA.md).
 ## Limitaciones conocidas
 
 - **Ejecución del código (RF-06 CA2):** el sandbox ejecuta los `.py` sueltos (no corre `pytest`)
-  y no limita memoria ni red, por eso está apagado en producción. La verificación objetiva en
+  y no limita memoria ni red, por eso está apagado en producción (el endpoint `/api/sandbox/ejecutar`
+  responde 404 salvo que se active `SANDBOX_HABILITADO=true`). La verificación objetiva en
   producción es el análisis estático.
 - **Análisis estático:** cubre Python y las celdas de código de los cuadernos `.ipynb` (las
   líneas mágicas `%` y `!` se omiten). Para otros lenguajes solo hay conteos de archivos.
