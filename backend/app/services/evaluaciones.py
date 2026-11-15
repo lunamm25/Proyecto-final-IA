@@ -10,10 +10,11 @@ import logging
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
@@ -37,6 +38,7 @@ from app.services.errores import (
     ProhibidoError,
 )
 from app.services.evaluador_ia import Evaluador, ResultadoIA, SolicitudEvaluacion
+from app.services.fechas import a_utc
 from app.services.material import CargadorMaterial, resumen_verificacion, sanear_verificacion
 from app.services.nota import calcular_nota
 from app.services.rubricas import validar_rubrica
@@ -46,10 +48,16 @@ logger = logging.getLogger(__name__)
 
 TEMPERATURA_MAXIMA = 0.2
 LIMITE_MENSAJE_AUDITORIA = 4_000
+# Minutos tras los que una evaluación en `procesando` se da por atascada y pasa a `error` al
+# relanzar. Peor caso normal de la IA: ~3 intentos × 120 s + carga del material (RNF-04 pide
+# < 2 min), así que 10 min deja margen de sobra. Cambia este número si hace falta.
+MINUTOS_MAX_PROCESANDO = 10
+ESTADOS_QUE_BLOQUEAN_AL_ESTUDIANTE = ("borrador", "en_revision", "aprobada", "publicada")
 
 MSG_ENTREGA_NO_EXISTE = "La entrega no existe."
 MSG_EVALUACION_NO_EXISTE = "La evaluación no existe."
 MSG_EN_CURSO = "Ya hay una evaluación en curso para esta entrega."
+MSG_YA_EVALUADA = "Esta entrega ya tiene una evaluación en estado '{}'; no puedes lanzar otra."
 MSG_SIN_VERSION = "La entrega no tiene una versión de rúbrica aprobada; no se puede evaluar."
 MSG_RUBRICA_INCONSISTENTE = (
     "La versión de la rúbrica de esta entrega tiene inconsistencias; no se puede evaluar: {}"
@@ -90,6 +98,7 @@ class DetalleEvaluacion:
     vista_estudiante: bool
     entrega: Entrega | None = None
     estudiante: Perfil | None = None
+    verificacion: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -145,6 +154,88 @@ def _hay_evaluacion_en_curso(db: Session, entrega_id: int) -> bool:
     return db.scalar(consulta.limit(1)) is not None
 
 
+def esta_atascada(creada_en: datetime | None, ahora: datetime) -> bool:
+    """True si lleva más de MINUTOS_MAX_PROCESANDO (fechas con o sin zona se tratan en UTC)."""
+    creada = a_utc(creada_en)
+    if creada is None:
+        return False
+    return a_utc(ahora) - creada > timedelta(minutes=MINUTOS_MAX_PROCESANDO)
+
+
+def _auditar_tiempo_agotado(db: Session, evaluacion: Evaluacion) -> None:
+    """Auditoría del sistema (sin usuario) de una evaluación atascada que pasa a `error`."""
+    db.add(
+        Auditoria(
+            usuario_id=None,
+            entidad="evaluaciones",
+            entidad_id=str(evaluacion.id),
+            accion="evaluacion_ia_error",
+            despues={"tipo": "TiempoAgotado", "minutos": MINUTOS_MAX_PROCESANDO},
+        )
+    )
+
+
+def recuperar_atascadas(db: Session, entrega_id: int, ahora: datetime | None = None) -> int:
+    """Pasa a `error` las evaluaciones atascadas de la entrega y lo audita (un solo commit).
+
+    Si la escritura falla se deshace todo (nada queda a medias) y se sigue: la evaluación
+    atascada sigue en `procesando` y el lanzamiento responderá 409.
+    """
+    ahora = ahora or datetime.now(UTC)
+    consulta = (
+        select(Evaluacion)
+        .where(Evaluacion.entrega_id == entrega_id, Evaluacion.estado == "procesando")
+        .with_for_update()
+    )
+    atascadas = [e for e in db.scalars(consulta) if esta_atascada(e.creada_en, ahora)]
+    if not atascadas:
+        return 0
+    for evaluacion in atascadas:
+        evaluacion.estado = "error"
+        evaluacion.error = MSG_ERROR_GENERICO
+        evaluacion.nota = None
+        _auditar_tiempo_agotado(db, evaluacion)
+    try:
+        db.commit()
+    except SQLAlchemyError as error:
+        db.rollback()
+        logger.error(
+            "No se pudieron recuperar las evaluaciones atascadas de la entrega %s (%s).",
+            entrega_id,
+            type(error).__name__,
+        )
+        return 0
+    logger.warning(
+        "Evaluaciones atascadas de la entrega %s pasadas a error: %s.", entrega_id, len(atascadas)
+    )
+    return len(atascadas)
+
+
+def _estado_que_bloquea(db: Session, entrega_id: int) -> str | None:
+    """Estado de la evaluación más reciente que impide relanzar al estudiante (o None)."""
+    consulta = (
+        select(Evaluacion.estado)
+        .where(
+            Evaluacion.entrega_id == entrega_id,
+            Evaluacion.estado.in_(ESTADOS_QUE_BLOQUEAN_AL_ESTUDIANTE),
+        )
+        .order_by(Evaluacion.creada_en.desc(), Evaluacion.id.desc())
+        .limit(1)
+    )
+    return db.scalar(consulta)
+
+
+def _comprobar_relanzamiento(db: Session, entrega_id: int, perfil: Perfil) -> None:
+    """409 si hay una en curso (todos) o, para el estudiante, una activa o publicada."""
+    if _hay_evaluacion_en_curso(db, entrega_id):
+        raise ConflictoError(MSG_EN_CURSO)
+    if _es_docente(perfil):
+        return
+    estado = _estado_que_bloquea(db, entrega_id)
+    if estado is not None:
+        raise ConflictoError(MSG_YA_EVALUADA.format(estado))
+
+
 def configuracion_ia(db: Session, settings: Settings) -> ConfigEvaluacion:
     """Config de `config_ia` (fila 1) o, si no existe, la de las variables LLM_*."""
     fila = db.get(ConfigIA, 1)
@@ -179,11 +270,15 @@ def _auditar_lanzamiento(db: Session, evaluacion: Evaluacion, perfil: Perfil) ->
 def lanzar_evaluacion(
     db: Session, entrega_id: int, perfil: Perfil, settings: Settings
 ) -> Evaluacion:
-    """Valida permisos y rúbrica, crea la evaluación en `procesando` y lo audita (un commit)."""
+    """Valida permisos y rúbrica, recupera atascadas y crea la evaluación en `procesando`.
+
+    La recuperación de atascadas se confirma antes (su propio commit) para que no se pierda si
+    el lanzamiento termina en 409; el lanzamiento y su auditoría van en otro commit.
+    """
     entrega = _entrega_visible(db, entrega_id, perfil)
     _version_evaluable(db, entrega)
-    if _hay_evaluacion_en_curso(db, entrega.id):
-        raise ConflictoError(MSG_EN_CURSO)
+    recuperar_atascadas(db, entrega.id)
+    _comprobar_relanzamiento(db, entrega.id, perfil)
     config = configuracion_ia(db, settings)
     evaluacion = Evaluacion(
         entrega_id=entrega.id,
@@ -252,7 +347,18 @@ def _guardar_exito(
     usuario_id: uuid.UUID | None,
     verificacion: dict[str, Any] | None = None,
 ) -> None:
-    """Calcula la nota con nota.py y guarda criterios, resultado, verificación y auditoría."""
+    """Calcula la nota con nota.py y guarda criterios, resultado, verificación y auditoría.
+
+    Si la evaluación ya no está en `procesando` (p. ej. se dio por atascada), no escribe nada
+    del resultado: solo deja constancia en auditoría de que se descartó.
+    """
+    if not _sigue_procesando(db, evaluacion.id):
+        crudas = {
+            "version_prompt": resultado.version_prompt,
+            "respuestas_crudas": resultado.respuestas_crudas,
+        }
+        _auditar_descarte(db, evaluacion.id, usuario_id, crudas)
+        return
     criterios = version.contenido["criterios"]
     elegidos = _validar_resultado(criterios, resultado)
     nota = calcular_nota(criterios, elegidos)
@@ -292,6 +398,31 @@ def _guardar_exito(
                 "respuestas_crudas": resultado.respuestas_crudas,
                 "version_prompt": resultado.version_prompt,
             },
+        )
+    )
+
+
+def _sigue_procesando(db: Session, evaluacion_id: int) -> bool:
+    """Recarga la evaluación bloqueándola y dice si sigue en `procesando`."""
+    evaluacion = db.get(Evaluacion, evaluacion_id, with_for_update=True, populate_existing=True)
+    return evaluacion is not None and evaluacion.estado == "procesando"
+
+
+def _auditar_descarte(
+    db: Session, evaluacion_id: int, usuario_id: uuid.UUID | None, despues: dict[str, Any]
+) -> None:
+    """Registra que el resultado tardío de la tarea se descartó (el estado no cambia)."""
+    logger.warning(
+        "Resultado tardío de la evaluación %s descartado: ya no estaba en procesando.",
+        evaluacion_id,
+    )
+    db.add(
+        Auditoria(
+            usuario_id=usuario_id,
+            entidad="evaluaciones",
+            entidad_id=str(evaluacion_id),
+            accion="evaluacion_ia_descartada",
+            despues={"motivo": "La evaluación ya no estaba en procesando.", **despues},
         )
     )
 
@@ -359,6 +490,11 @@ def _registrar_error(
         with fabrica() as db:
             evaluacion = db.get(Evaluacion, evaluacion_id)
             if evaluacion is None:
+                return
+            if not _sigue_procesando(db, evaluacion_id):
+                detalle = _detalle_error(error, settings or get_settings())
+                _auditar_descarte(db, evaluacion_id, usuario_id, {"error": detalle})
+                db.commit()
                 return
             evaluacion.estado = "error"
             evaluacion.error = MSG_ERROR_GENERICO
@@ -434,7 +570,16 @@ def obtener_detalle(db: Session, evaluacion_id: int, perfil: Perfil) -> DetalleE
         vista_estudiante=not es_docente,
         entrega=entrega,
         estudiante=estudiante,
+        verificacion=verificacion_resumida(db, evaluacion.id) if es_docente else None,
     )
+
+
+def verificacion_resumida(db: Session, evaluacion_id: int) -> dict[str, Any] | None:
+    """Los 3 campos guardados de la ejecución en sandbox (o None si no se ejecutó)."""
+    fila = db.scalar(
+        select(VerificacionCodigo).where(VerificacionCodigo.evaluacion_id == evaluacion_id)
+    )
+    return resumen_verificacion(fila.metricas) if fila else None
 
 
 def listar_evaluaciones(

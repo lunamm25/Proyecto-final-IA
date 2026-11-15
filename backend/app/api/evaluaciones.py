@@ -31,7 +31,8 @@ from app.db import get_db
 from app.models import EvaluacionCriterio, Perfil
 from app.services import evaluaciones as servicio
 from app.services import revision, traza
-from app.services.traza import a_utc, sin_secretos
+from app.services.fechas import a_utc
+from app.services.traza import sin_secretos
 
 router = APIRouter(prefix="/api/evaluaciones", tags=["evaluaciones"])
 
@@ -110,6 +111,9 @@ def _respuesta(detalle: servicio.DetalleEvaluacion) -> EvaluacionRespuesta:
         retroalimentacion_ia=None
         if estudiante or not original
         else RetroalimentacionRespuesta.model_validate(original),
+        verificacion=None
+        if estudiante or detalle.verificacion is None
+        else VerificacionResumen.model_validate(detalle.verificacion),
         creada_en=a_utc(ev.creada_en),
         aprobada_en=a_utc(ev.aprobada_en),
         publicada_en=a_utc(ev.publicada_en),

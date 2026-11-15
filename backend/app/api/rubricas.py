@@ -82,8 +82,8 @@ def validar_rubrica(
 def guardar_version(
     laboratorio_id: int, perfil: Docente, db: BaseDatos, rubrica: CuerpoRubrica = None
 ) -> RubricaVersion:
-    """Guarda y aprueba una versión nueva e inmutable de la rúbrica (solo docente)."""
-    return servicio.guardar_version(db, laboratorio_id, rubrica, perfil.id)
+    """Guarda y aprueba una versión nueva e inmutable de la rúbrica (solo docente; auditada)."""
+    return servicio.guardar_version(db, laboratorio_id, rubrica, perfil)
 
 
 @router.get(

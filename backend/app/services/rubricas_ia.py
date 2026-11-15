@@ -4,8 +4,11 @@ Flujo: laboratorio existe → PDF válido (≤ 20 MB, con texto) → la IA propo
 el validador del backend lista las inconsistencias. NO se guarda nada salvo la auditoría:
 el docente revisa y edita la propuesta y la guarda con POST .../rubrica/versiones.
 Cualquier fallo de la IA se resume en un mensaje genérico; el detalle tachado va a auditoría.
+La extracción tiene un tiempo máximo total (LIMITE_EXTRAER_SEGUNDOS): se ejecuta en un hilo y,
+si no termina a tiempo, se responde 503 sin esperar más (el hilo se abandona).
 """
 
+from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from typing import Any
 
@@ -16,7 +19,11 @@ from app.models import Auditoria, Laboratorio, Perfil
 from app.services.archivos import ArchivoEntrada, MensajesPdf, validar_pdf
 from app.services.errores import NoEncontradoError, ServicioNoDisponibleError
 from app.services.evaluaciones import configuracion_ia
-from app.services.extractor_rubrica import ExtractorRubrica
+from app.services.extractor_rubrica import (
+    LIMITE_EXTRAER_SEGUNDOS,
+    ExtractorRubrica,
+    RubricaExtraida,
+)
 from app.services.material import extraer_texto_pdf
 from app.services.rubricas import MSG_LAB_NO_EXISTE, validar_rubrica
 from app.services.secretos import detalle_error_tachado
@@ -37,6 +44,10 @@ MENSAJES_PDF = MensajesPdf(
         "Sube un PDF con texto seleccionable o crea la rúbrica a mano."
     ),
 )
+
+
+class TiempoAgotadoError(Exception):
+    """La extracción no terminó dentro del límite total."""
 
 
 @dataclass(frozen=True)
@@ -71,6 +82,28 @@ def _auditar(db: Session, actor: Perfil, laboratorio_id: int, accion: str, datos
     db.commit()
 
 
+def _extraer_con_limite(
+    extractor: ExtractorRubrica, texto: str, config: Any, limite: float
+) -> RubricaExtraida:
+    """Llama al extractor en un hilo y espera como máximo `limite` segundos en total."""
+    ejecutor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="extraer-rubrica")
+    try:
+        futuro = ejecutor.submit(extractor, texto, config)
+        terminados, _ = wait([futuro], timeout=limite)
+        if not terminados:
+            raise TiempoAgotadoError(f"Sin respuesta en {limite:g} s.")
+        return futuro.result()
+    finally:
+        ejecutor.shutdown(wait=False, cancel_futures=True)
+
+
+def _detalle_fallo(error: Exception, settings: Settings) -> dict[str, Any]:
+    """Detalle del fallo para auditoría (tipo TiempoAgotado si se agotó el límite)."""
+    if isinstance(error, TiempoAgotadoError):
+        return {"tipo": "TiempoAgotado", "mensaje": str(error)}
+    return detalle_error_tachado(error, settings, LIMITE_MENSAJE_AUDITORIA)
+
+
 def extraer_de_pdf(
     db: Session,
     laboratorio_id: int,
@@ -87,9 +120,9 @@ def extraer_de_pdf(
     config = configuracion_ia(db, settings)
     base = {"proveedor": config.proveedor, "modelo": config.modelo, "tamano_pdf_bytes": len(datos)}
     try:
-        extraida = extractor(texto, config)
-    except Exception as error:  # cualquier fallo de la IA: mensaje genérico al cliente
-        detalle = detalle_error_tachado(error, settings, LIMITE_MENSAJE_AUDITORIA)
+        extraida = _extraer_con_limite(extractor, texto, config, LIMITE_EXTRAER_SEGUNDOS)
+    except Exception as error:  # cualquier fallo de la IA o tiempo agotado: mensaje genérico
+        detalle = _detalle_fallo(error, settings)
         _auditar(db, actor, laboratorio_id, ACCION_ERROR, {**base, "error": detalle})
         raise ServicioNoDisponibleError(MSG_ERROR_IA) from None
     inconsistencias = validar_rubrica(extraida.rubrica)

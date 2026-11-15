@@ -29,10 +29,10 @@ from app.db import get_db
 from app.models import Perfil
 from app.services import estudiantes as servicio
 from app.services.desempeno import numero
+from app.services.fechas import a_utc
 from app.services.informe import Informe, obtener_informe
 from app.services.informe_ia import IAInforme
 from app.services.mapa import Mapa, obtener_mapa
-from app.services.traza import a_utc
 
 router = APIRouter(prefix="/api/estudiantes", tags=["estudiantes"])
 

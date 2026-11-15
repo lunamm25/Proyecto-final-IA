@@ -16,6 +16,10 @@ from app.services.errores import ServicioNoDisponibleError
 from app.services.evaluador_ia import ConfigProveedor, construir_proveedor
 
 MODULO = "app.ia.rubricas"
+# Tiempo máximo TOTAL (segundos) para extraer una rúbrica. Se pasa como timeout de cada petición
+# al proveedor y, además, rubricas_ia corta la espera total con este mismo límite (la función de
+# Rol 1 puede reintentar hasta 3 veces por JSON inválido). Cambia este número si hace falta.
+LIMITE_EXTRAER_SEGUNDOS = 60.0
 MSG_NO_DISPONIBLE = "La extracción automática de rúbricas aún no está disponible en esta versión."
 
 
@@ -61,7 +65,7 @@ def _crudas(proveedor: Any) -> list[str]:
 def extraer_rubrica_con_ia(texto: str, config: ConfigProveedor) -> RubricaExtraida:
     """Extractor real: llama a `app.ia.rubricas.extraer_rubrica(texto, proveedor)` de Rol 1."""
     modulo = _importar()
-    proveedor = construir_proveedor(config, get_settings())
+    proveedor = construir_proveedor(config, get_settings(), timeout=LIMITE_EXTRAER_SEGUNDOS)
     try:
         resultado = modulo.extraer_rubrica(texto, proveedor)
     except Exception as error:  # fallo del proveedor, JSON inválido o texto vacío

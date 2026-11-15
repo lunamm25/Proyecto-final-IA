@@ -12,7 +12,6 @@ es una inconsistencia más. Las etiquetas de los mensajes recortan los textos la
 
 import copy
 import math
-import uuid
 from collections import Counter
 from typing import Any
 
@@ -20,7 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Laboratorio, Rubrica, RubricaVersion
+from app.models import Auditoria, Laboratorio, Perfil, Rubrica, RubricaVersion
 from app.services.errores import (
     ConflictoError,
     NoEncontradoError,
@@ -294,10 +293,31 @@ def _rubrica_del_laboratorio(db: Session, laboratorio_id: int) -> Rubrica:
     return rubrica
 
 
+def _auditar_version(db: Session, version: RubricaVersion, laboratorio_id: int) -> None:
+    """Auditoría de la versión guardada: metadatos y nº de criterios (el contenido ya queda
+    inmutable en la propia versión, así que no se duplica)."""
+    criterios = version.contenido.get("criterios") if isinstance(version.contenido, dict) else None
+    db.add(
+        Auditoria(
+            usuario_id=version.creada_por,
+            entidad="rubrica_versiones",
+            entidad_id=str(version.id),
+            accion="guardar_version_rubrica",
+            despues={
+                "laboratorio_id": laboratorio_id,
+                "rubrica_id": version.rubrica_id,
+                "version": version.version,
+                "estado": version.estado,
+                "criterios": len(criterios) if isinstance(criterios, list) else 0,
+            },
+        )
+    )
+
+
 def guardar_version(
-    db: Session, laboratorio_id: int, contenido: Any, creada_por: uuid.UUID
+    db: Session, laboratorio_id: int, contenido: Any, actor: Perfil
 ) -> RubricaVersion:
-    """Valida y guarda una versión nueva aprobada (máximo + 1); las anteriores no cambian."""
+    """Valida y guarda una versión nueva aprobada (máximo + 1) y la audita en el mismo commit."""
     _laboratorio_o_404(db, laboratorio_id)
     inconsistencias = validar_rubrica(contenido)
     if inconsistencias:
@@ -312,12 +332,17 @@ def guardar_version(
             version=(ultima or 0) + 1,
             estado="aprobada",
             contenido=copy.deepcopy(contenido),
-            creada_por=creada_por,
+            creada_por=actor.id,
         )
         db.add(version)
+        db.flush()
+        _auditar_version(db, version, laboratorio_id)
         db.commit()
     except IntegrityError:
         db.rollback()
         raise ConflictoError(MSG_CONFLICTO_VERSION) from None
+    except Exception:
+        db.rollback()
+        raise
     db.refresh(version)
     return version

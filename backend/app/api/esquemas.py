@@ -176,10 +176,18 @@ class RetroalimentacionRespuesta(BaseModel):
     retroalimentacion_general: str | None = None
 
 
+class VerificacionResumen(BaseModel):
+    """Resumen de la ejecución del código en el sandbox (nunca stdout ni stderr)."""
+
+    codigo_salida: int
+    tiene_error: bool
+    ejecucion_exitosa: bool
+
+
 class EvaluacionRespuesta(BaseModel):
     """Detalle de una evaluación (nunca incluye respuestas crudas del LLM).
 
-    Para el estudiante, proveedor, modelo, temperatura y prompt_version van en null.
+    Para el estudiante, proveedor, modelo, temperatura, prompt_version y verificacion van en null.
     """
 
     id: int
@@ -202,6 +210,10 @@ class EvaluacionRespuesta(BaseModel):
     retroalimentacion: RetroalimentacionRespuesta | None
     retroalimentacion_ia: RetroalimentacionRespuesta | None = Field(
         default=None, description="Retroalimentación original de la IA (solo docente/admin)."
+    )
+    verificacion: VerificacionResumen | None = Field(
+        default=None,
+        description="Resumen de la ejecución en sandbox (solo docente/admin; null si no hubo).",
     )
     creada_en: datetime
     aprobada_en: datetime | None
@@ -298,14 +310,6 @@ class EventoTrazaRespuesta(BaseModel):
     antes: Any | None
     despues: Any | None
     motivo: str | None
-
-
-class VerificacionResumen(BaseModel):
-    """Resumen de la ejecución del código en el sandbox (nunca stdout ni stderr)."""
-
-    codigo_salida: int
-    tiene_error: bool
-    ejecucion_exitosa: bool
 
 
 class TrazaRespuesta(BaseModel):

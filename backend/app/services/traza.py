@@ -6,17 +6,15 @@ capa, se tachan las credenciales que aparezcan dentro de los textos (sin recorta
 """
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
-from app.models import Auditoria, Entrega, Evaluacion, Perfil, RubricaVersion, VerificacionCodigo
+from app.models import Auditoria, Entrega, Evaluacion, Perfil, RubricaVersion
 from app.services.errores import NoEncontradoError
-from app.services.evaluaciones import MSG_EVALUACION_NO_EXISTE
-from app.services.material import resumen_verificacion
+from app.services.evaluaciones import MSG_EVALUACION_NO_EXISTE, verificacion_resumida
 from app.services.secretos import tachar_credenciales
 
 PATRONES_SECRETOS = (
@@ -50,13 +48,6 @@ class Traza:
     rubrica_version: RubricaVersion | None
     eventos: list[EventoTraza]
     verificacion: dict[str, Any] | None = None
-
-
-def a_utc(fecha: datetime | None) -> datetime | None:
-    """Fecha con zona UTC (SQLite devuelve fechas sin zona: se tratan como UTC)."""
-    if fecha is None:
-        return None
-    return fecha.replace(tzinfo=UTC) if fecha.tzinfo is None else fecha.astimezone(UTC)
 
 
 def _parece_secreto(clave: str) -> bool:
@@ -99,8 +90,4 @@ def obtener_traza(db: Session, evaluacion_id: int) -> Traza:
         .order_by(Auditoria.creado_en, Auditoria.id)
     )
     eventos = [EventoTraza(fila, perfil) for fila, perfil in db.execute(consulta).all()]
-    fila_verificacion = db.scalar(
-        select(VerificacionCodigo).where(VerificacionCodigo.evaluacion_id == evaluacion.id)
-    )
-    verificacion = resumen_verificacion(fila_verificacion.metricas) if fila_verificacion else None
-    return Traza(evaluacion, version, eventos, verificacion)
+    return Traza(evaluacion, version, eventos, verificacion_resumida(db, evaluacion.id))

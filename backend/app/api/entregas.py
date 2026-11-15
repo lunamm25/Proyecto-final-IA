@@ -33,8 +33,8 @@ from app.services import evaluaciones as servicio
 from app.services.almacen import AlmacenArchivos
 from app.services.entregas import ArchivoEntrada, FilaEntrega
 from app.services.evaluador_ia import Evaluador
+from app.services.fechas import a_utc
 from app.services.material import CargadorMaterial
-from app.services.traza import a_utc
 
 router = APIRouter(prefix="/api/entregas", tags=["entregas"])
 

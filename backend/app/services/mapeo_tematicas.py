@@ -112,23 +112,23 @@ def _generar(
         )
         return None
     contenido = _a_json(mapeo, taxonomia)
-    cache_ia.auditar(
-        db,
-        perfil.id,
-        "rubrica_versiones",
-        str(version.id),
-        "mapear_tematicas_ia",
-        {
+    auditoria = {
+        "usuario_id": perfil.id,
+        "entidad": "rubrica_versiones",
+        "entidad_id": str(version.id),
+        "accion": "mapear_tematicas_ia",
+        "despues": {
             "proveedor": mapeo.proveedor,
             "modelo": mapeo.modelo,
             "version_prompt": mapeo.version_prompt,
             "respuestas_crudas": mapeo.respuestas_crudas,
             "mapeo": contenido,
         },
-    )
+    }
     cache_ia.guardar(
         db, TIPO, str(version.id), huella, contenido,
         version_prompt=mapeo.version_prompt, proveedor=mapeo.proveedor, modelo=mapeo.modelo,
+        auditoria=auditoria,
     )
     return _desde_json(contenido, taxonomia)
 

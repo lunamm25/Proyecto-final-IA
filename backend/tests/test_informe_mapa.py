@@ -22,11 +22,14 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import event, func, select
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Session
 
 from app.api.deps import obtener_ia_informe
 from app.models import (
     Auditoria,
+    CacheIA,
     Entrega,
     Evaluacion,
     EvaluacionCriterio,
@@ -766,3 +769,63 @@ def test_mapa_error_de_mapeo_agrupa_por_competencia(cli, ia, fabrica_api):
     errores = auditorias(fabrica_api, "mapear_tematicas_ia_error")
     assert errores and "MARCADOR_MAPEO_QX" in json.dumps(errores[0].despues)
     assert errores[0].entidad == "rubrica_versiones"
+
+
+# ---------- Fallos al escribir la auditoría o la caché (M3/M4) ----------
+
+
+class FalloAlGuardar:
+    """Hace fallar el flush si la sesión intenta guardar una fila que cumpla `condicion`."""
+
+    def __init__(self, condicion) -> None:
+        self.condicion = condicion
+
+    def __call__(self, session, _contexto, _instancias) -> None:
+        if any(self.condicion(o) for o in session.new):
+            raise OperationalError("INSERT", {}, Exception("disco lleno"))
+
+    def __enter__(self) -> "FalloAlGuardar":
+        event.listen(Session, "before_flush", self)
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        event.remove(Session, "before_flush", self)
+
+
+def _es_auditoria_de_error(objeto) -> bool:
+    return isinstance(objeto, Auditoria) and objeto.accion.endswith("_ia_error")
+
+
+def test_fallo_auditoria_del_error_devuelve_respaldo_200(cli, ia, fabrica_api):
+    ia.error_narrativa = RuntimeError("MARCADOR_FALLO_QX")
+    ia.error_mapeo = RuntimeError("MARCADOR_MAPEO_QX")
+    with FalloAlGuardar(_es_auditoria_de_error):
+        r = informe(cli)
+        m = mapa(cli)
+    assert r.status_code == 200, r.text
+    assert r.json()["narrativa"]["estado"] == "error"
+    assert r.json()["promedio_general"] == 4.2
+    assert "MARCADOR_FALLO_QX" not in r.text
+    assert m.status_code == 200, m.text
+    nodos = _nodos(m.json())
+    assert nodos["competencia:programacion"]["tipo"] == "competencia"
+    assert m.json()["avisos"]
+    assert auditorias(fabrica_api, "generar_informe_ia_error") == []
+    assert auditorias(fabrica_api, "mapear_tematicas_ia_error") == []
+
+
+def test_fallo_al_guardar_la_cache_no_deja_auditoria_huerfana(cli, ia, fabrica_api):
+    with FalloAlGuardar(lambda o: isinstance(o, CacheIA)):
+        r = informe(cli)
+    assert r.status_code == 200, r.text
+    assert r.json()["narrativa"]["estado"] == "generada"
+    assert auditorias(fabrica_api, "generar_informe_ia") == []
+    assert auditorias(fabrica_api, "mapear_tematicas_ia") == []
+    with fabrica_api() as s:
+        assert s.scalar(select(func.count()).select_from(CacheIA)) == 0
+    # Sin caché, el siguiente GET vuelve a llamar a la IA y ahora sí guarda ambas cosas.
+    informe(cli)
+    assert len(ia.datos_recibidos) == 2
+    assert len(auditorias(fabrica_api, "generar_informe_ia")) == 1
+    with fabrica_api() as s:
+        assert s.scalar(select(func.count()).select_from(CacheIA)) == 5

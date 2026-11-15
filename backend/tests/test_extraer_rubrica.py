@@ -3,6 +3,8 @@
 import copy
 import json
 import sys
+import threading
+import time
 
 import pytest
 from sqlalchemy import func, select
@@ -286,3 +288,47 @@ def test_integracion_fake_provider_json_invalido(cliente, fabrica_api, monkeypat
     assert d["error"]["tipo"] == "ExtraccionRubricaError"
     assert d["error"]["respuestas_crudas"] == ["no es json"]
 
+
+
+# ---------- Tiempo límite total de 60 s (M6) ----------
+
+
+def test_limite_por_defecto_es_60_segundos():
+    assert rubricas_ia.LIMITE_EXTRAER_SEGUNDOS == 60
+
+
+def test_extractor_que_no_responde_a_tiempo_503_y_auditoria(cliente, fabrica_api, monkeypatch):
+    liberar = threading.Event()
+
+    def extractor_lento(_texto, _config):
+        liberar.wait(5)
+        return RubricaExtraida(rubrica=rubrica_valida())
+
+    cliente.app.dependency_overrides[obtener_extractor_rubrica] = lambda: extractor_lento
+    monkeypatch.setattr(rubricas_ia, "LIMITE_EXTRAER_SEGUNDOS", 0.05)
+    inicio = time.monotonic()
+    try:
+        r = subir(cliente)
+    finally:
+        liberar.set()
+    assert time.monotonic() - inicio < 3
+    assert r.status_code == 503
+    assert r.json() == {"detail": MSG_GENERICO}
+    (fila,) = auditorias(fabrica_api, "extraer_rubrica_ia_error")
+    assert fila.despues["error"]["tipo"] == "TiempoAgotado"
+    assert auditorias(fabrica_api, "extraer_rubrica_ia") == []
+
+
+def test_adaptador_pasa_el_timeout_al_proveedor(cliente, fabrica_api, monkeypatch):
+    from app.ia.providers import FakeProvider
+
+    del cliente.app.dependency_overrides[obtener_extractor_rubrica]
+    capturas: dict = {}
+
+    def _construir(*_args, **kwargs):
+        capturas.update(kwargs)
+        return FakeProvider([rubrica_valida()])
+
+    monkeypatch.setattr(extractor_rubrica, "construir_proveedor", _construir)
+    assert subir(cliente).status_code == 200
+    assert capturas["timeout"] == rubricas_ia.LIMITE_EXTRAER_SEGUNDOS
