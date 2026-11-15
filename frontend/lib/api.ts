@@ -339,7 +339,7 @@ function validarCodigoUnicoMock(datos: LaboratorioEntrada, idActual: IdNumerico 
   if (!cohorte) throw noEncontrado();
   const codigo = datos.codigo.trim().toLowerCase();
   if (cohorte.laboratorios.some((l) => l.id !== idActual && l.codigo.trim().toLowerCase() === codigo)) {
-    throw new ErrorApi(409, `Ya existe un laboratorio con el código ${datos.codigo} en esta cohorte.`);
+    throw new ErrorApi(409, `Ya existe un laboratorio con el código ${datos.codigo} en este corte.`);
   }
 }
 

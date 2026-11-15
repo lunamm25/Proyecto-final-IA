@@ -9,6 +9,7 @@ import { Aviso, type DatosAviso } from "@/components/docente/aviso";
 import { DialogoLaboratorio } from "@/components/docente/dialogo-laboratorio";
 import { eliminarLaboratorio, listarCohortes, mensajeDeError } from "@/lib/api";
 import type { Cohorte, IdNumerico, Laboratorio, LaboratorioEnCohorte } from "@/lib/tipos";
+import { textoCorte } from "@/lib/corte";
 import { useCarga } from "@/lib/use-carga";
 
 /** null = diálogo cerrado; laboratorio null = crear uno nuevo. */
@@ -104,7 +105,7 @@ function SeccionCohorte({ cohorte, eliminandoId, alEditar, alEliminar }: Seccion
   return (
     <section aria-labelledby={`cohorte-${cohorte.id}`} className="space-y-3">
       <h2 id={`cohorte-${cohorte.id}`} className="text-xl font-semibold">
-        {cohorte.nombre}
+        {textoCorte(cohorte.nombre)}
       </h2>
       {cohorte.laboratorios.length === 0 ? (
         <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
@@ -122,7 +123,7 @@ function SeccionCohorte({ cohorte, eliminandoId, alEditar, alEliminar }: Seccion
   );
 }
 
-/** Lista de laboratorios por cohorte con crear/editar/eliminar (RF-02 CA1) y estado de la rúbrica vigente (CA2). */
+/** Lista de laboratorios por corte (cohorte en el backend) con crear/editar/eliminar (RF-02 CA1) y estado de la rúbrica vigente (CA2). */
 export function VistaLaboratorios() {
   const { estado, recargar, refrescar } = useCarga(cargarLaboratorios);
   const [edicion, setEdicion] = useState<Edicion>(null);
@@ -169,7 +170,7 @@ export function VistaLaboratorios() {
         </Button>
       </div>
       {cohortes.length === 0 ? (
-        <EstadoVacio titulo="No hay cohortes registradas" mensaje="Cuando el backend cargue las cohortes 1 y 2, aparecerán aquí." />
+        <EstadoVacio titulo="No hay cortes registrados" mensaje="Cuando el backend cargue los cortes 1 y 2, aparecerán aquí." />
       ) : (
         cohortes.map((cohorte) => (
           <SeccionCohorte key={cohorte.id} cohorte={cohorte} eliminandoId={eliminandoId}

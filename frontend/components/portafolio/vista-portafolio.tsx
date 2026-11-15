@@ -8,6 +8,7 @@ import { TarjetaLaboratorio } from "@/components/portafolio/tarjeta-laboratorio"
 import { ultimaEntregaPorLaboratorio } from "@/components/portafolio/estado-entrega";
 import { evaluarEntrega, listarCohortes, listarTodasLasEntregas, mensajeDeError } from "@/lib/api";
 import type { Cohorte, Entrega, IdNumerico } from "@/lib/tipos";
+import { textoCorte } from "@/lib/corte";
 import { useCarga } from "@/lib/use-carga";
 
 interface DatosPortafolio {
@@ -59,7 +60,7 @@ function SeccionCohorte({ cohorte, entregas, evaluandoId, alEvaluar }: SeccionCo
   return (
     <section aria-labelledby={`cohorte-${cohorte.id}`} className="space-y-3">
       <h2 id={`cohorte-${cohorte.id}`} className="text-xl font-semibold">
-        {cohorte.nombre}
+        {textoCorte(cohorte.nombre)}
       </h2>
       {cohorte.laboratorios.length === 0 ? (
         <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
@@ -129,8 +130,8 @@ export function VistaPortafolio() {
   if (cohortes.length === 0) {
     return (
       <EstadoVacio
-        titulo="Aún no hay cohortes"
-        mensaje="Cuando el docente registre las cohortes y sus laboratorios, aparecerán aquí."
+        titulo="Aún no hay cortes"
+        mensaje="Cuando el docente registre los cortes y sus laboratorios, aparecerán aquí."
       />
     );
   }

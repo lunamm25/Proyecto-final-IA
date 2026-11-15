@@ -1,4 +1,5 @@
 import { promedioDeCohorte, textoNota } from "@/components/informe/formato-informe";
+import { textoCorte } from "@/lib/corte";
 import type { Informe } from "@/lib/tipos";
 
 interface TarjetaKpiProps {
@@ -31,7 +32,7 @@ function TarjetaCohorte({ informe, numero }: { informe: Informe; numero: number 
   const evaluados = cohorte?.laboratorios_evaluados ?? 0;
   return (
     <TarjetaKpi
-      titulo={`Promedio ${cohorte?.cohorte ?? `cohorte ${numero}`}`}
+      titulo={`Promedio ${cohorte ? textoCorte(cohorte.cohorte) : `corte ${numero}`}`}
       valor={textoNota(promedio)}
       unidad={unidadNota(promedio)}
       detalle={evaluados === 1 ? "1 laboratorio evaluado" : `${evaluados} laboratorios evaluados`}

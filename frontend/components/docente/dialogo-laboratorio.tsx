@@ -16,6 +16,7 @@ import {
   type FormularioLaboratorio,
 } from "@/components/docente/validacion-laboratorio";
 import { actualizarLaboratorio, crearLaboratorio, mensajeDeError } from "@/lib/api";
+import { textoCorte } from "@/lib/corte";
 import type { Cohorte, Laboratorio } from "@/lib/tipos";
 
 interface DialogoLaboratorioProps {
@@ -108,18 +109,18 @@ interface CamposLaboratorioProps {
 function CamposLaboratorio({ datos, errores, cohortes, deshabilitado, alCambiar }: CamposLaboratorioProps) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <Campo id="lab-cohorte" etiqueta="Cohorte" obligatorio error={errores.cohorte_id}>
+      <Campo id="lab-cohorte" etiqueta="Corte" obligatorio error={errores.cohorte_id}>
         {(a11y) => (
           <select {...a11y} value={datos.cohorte_id} disabled={deshabilitado} className={CLASE_CONTROL}
             onChange={(e) => alCambiar("cohorte_id", e.target.value)}>
-            <option value="">Elige una cohorte…</option>
+            <option value="">Elige un corte…</option>
             {cohortes.map((c) => (
-              <option key={c.id} value={c.id}>{c.nombre}</option>
+              <option key={c.id} value={c.id}>{textoCorte(c.nombre)}</option>
             ))}
           </select>
         )}
       </Campo>
-      <Campo id="lab-codigo" etiqueta="Código" obligatorio ayuda="Único dentro de la cohorte, p. ej. C2-L1." error={errores.codigo}>
+      <Campo id="lab-codigo" etiqueta="Código" obligatorio ayuda="Único dentro del corte, p. ej. C2-L1." error={errores.codigo}>
         {(a11y) => (
           <input {...a11y} value={datos.codigo} maxLength={MAX_CODIGO} disabled={deshabilitado} className={CLASE_CONTROL}
             onChange={(e) => alCambiar("codigo", e.target.value)} />
