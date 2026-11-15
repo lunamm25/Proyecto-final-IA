@@ -22,6 +22,7 @@ from app.services.evaluador_ia import (
     evaluar_con_ia,
     probar_conexion_ia,
 )
+from app.services.extractor_rubrica import ExtractorRubrica, extraer_rubrica_con_ia
 from app.services.informe_ia import IAInforme, IAInformeReal
 from app.services.material import CargadorMaterial, EjecutorCodigo, obtener_material
 
@@ -129,3 +130,8 @@ def obtener_fabrica_sesiones() -> Callable[[], Session]:
 def obtener_ia_informe() -> IAInforme:
     """IA del informe y del mapa (narrativa y mapeo de temáticas); los tests la sustituyen."""
     return IAInformeReal()
+
+
+def obtener_extractor_rubrica() -> ExtractorRubrica:
+    """Extracción de rúbricas con IA desde el texto de un enunciado; los tests la sustituyen."""
+    return extraer_rubrica_con_ia

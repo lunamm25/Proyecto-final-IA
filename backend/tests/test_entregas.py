@@ -20,8 +20,8 @@ from app.db import get_db
 from app.models import Auditoria, Entrega, Evaluacion, Laboratorio
 from app.services import entregas as servicio
 from app.services.almacen import AlmacenError, AlmacenSupabase
-from app.services.entregas import ArchivoDemasiadoGrandeError, leer_limitado, validar_github_url
-from app.services.errores import DatosInvalidosError
+from app.services.entregas import leer_limitado, validar_github_url
+from app.services.errores import ArchivoDemasiadoGrandeError, DatosInvalidosError
 from tests.dobles_entregas import AlmacenMemoria, pdf_con_texto, pdf_sin_texto, zip_con
 from tests.test_auth import ID_ADMIN, ID_DOCENTE, ID_ESTUDIANTE, ajustes, con_token, token_hs
 from tests.test_evaluaciones import ID_OTRO

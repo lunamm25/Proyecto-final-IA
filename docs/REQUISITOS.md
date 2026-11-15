@@ -253,7 +253,7 @@ Prefijo `/api`. Autenticación: `Authorization: Bearer <JWT de Supabase>`. Error
 | GET/PATCH | /api/usuarios, /api/usuarios/{id}/rol | admin | Gestión de usuarios (lista con id, nombre, correo, rol; cambio de rol `{rol, motivo?}` con auditoría; 409 si un admin se quita su propio rol o se dejaría el sistema sin admin) |
 | GET | /api/cohortes | todos | Cohortes con laboratorios |
 | POST/PUT/DELETE | /api/laboratorios[/{id}] | docente | CRUD laboratorios |
-| POST | /api/laboratorios/{id}/rubrica/extraer | docente | Sube archivo → `RubricaSchema` + inconsistencias |
+| POST | /api/laboratorios/{id}/rubrica/extraer | docente | multipart con el campo `archivo`: enunciado **solo en PDF por ahora** (cabecera `%PDF-`, ≤ 20 MB leído por bloques, con texto extraíble; DOCX/texto de RF-03 CA1 aún no). La IA propone la rúbrica y el backend la pasa por el validador: 200 `{rubrica: RubricaSchema, valida, inconsistencias}`. **No guarda nada** (el docente la revisa, la edita y la guarda con `POST .../rubrica/versiones`); nunca devuelve respuestas crudas · 401 sin token · 403 estudiante · 404 laboratorio inexistente · 413 PDF > 20 MB · 422 falta el archivo, no es PDF o no tiene texto · 503 la IA falló (mensaje genérico; detalle tachado solo en auditoría `extraer_rubrica_ia_error`). Auditoría `extraer_rubrica_ia` en caso de éxito |
 | POST | /api/rubricas/validar | docente | Valida JSON de rúbrica → lista de inconsistencias |
 | POST | /api/laboratorios/{id}/rubrica/versiones | docente | Guarda y aprueba nueva versión |
 | GET | /api/laboratorios/{id}/rubrica | todos | Versión vigente |

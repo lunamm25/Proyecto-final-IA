@@ -85,6 +85,14 @@ class ValidacionRubricaRespuesta(BaseModel):
     inconsistencias: list[str]
 
 
+class ExtraccionRubricaRespuesta(BaseModel):
+    """Rúbrica propuesta por la IA (sin guardar) y el resultado del validador."""
+
+    rubrica: dict[str, Any]
+    valida: bool
+    inconsistencias: list[str]
+
+
 class RubricaVersionRespuesta(BaseModel):
     """Versión inmutable de una rúbrica."""
 

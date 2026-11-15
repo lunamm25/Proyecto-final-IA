@@ -12,29 +12,34 @@ import re
 import uuid
 import zipfile
 from dataclasses import dataclass
-from typing import Any, BinaryIO
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.models import Auditoria, Entrega, Evaluacion, Laboratorio, Perfil, RubricaVersion
+from app.services import archivos
 from app.services.almacen import AlmacenArchivos, AlmacenError
+from app.services.archivos import BLOQUE_LECTURA as BLOQUE_LECTURA
+from app.services.archivos import LIMITE_PDF_BYTES as LIMITE_PDF_BYTES
+from app.services.archivos import (
+    MB,
+    ArchivoEntrada,
+    MensajesPdf,
+    leer_limitado,
+    tipo_contenido,
+)
 from app.services.errores import (
-    ArchivoDemasiadoGrandeError,
     DatosInvalidosError,
     NoEncontradoError,
     ServicioNoDisponibleError,
 )
-from app.services.material import MaterialIlegibleError, extraer_texto_pdf
 from app.services.rubricas import obtener_version_vigente
 from app.services.secretos import tachar_secretos
 
 logger = logging.getLogger(__name__)
 
-MB = 1024 * 1024
-BLOQUE_LECTURA = 1 * MB
-LIMITE_PDF_BYTES = 20 * MB
 LIMITE_ZIP_BYTES = 20 * MB
 LIMITE_EXTRAS_CARACTERES = 4_000
 MAX_CLAVES_EXTRAS = 20
@@ -42,7 +47,6 @@ MAX_TEXTO_EXTRA = 500
 MAX_ARCHIVOS_ZIP = 2_000
 MAX_DESCOMPRIMIDO_BYTES = 100 * MB
 LIMITE_GITHUB_URL = 300
-TIPOS_PDF = {"application/pdf", "application/x-pdf", "application/octet-stream"}
 TIPOS_ZIP = {
     "application/zip",
     "application/x-zip-compressed",
@@ -73,6 +77,9 @@ MSG_PDF_SIN_TEXTO = (
     "El PDF no tiene texto extraíble (¿es un escaneo o una imagen?). "
     "Exporta el informe como PDF con texto seleccionable."
 )
+MENSAJES_PDF = MensajesPdf(
+    grande=MSG_PDF_GRANDE, tipo=MSG_PDF_TIPO, ilegible=MSG_PDF_ILEGIBLE, sin_texto=MSG_PDF_SIN_TEXTO
+)
 MSG_ZIP_TIPO = "El archivo del código no es un ZIP válido."
 MSG_ZIP_ARCHIVOS = f"El ZIP tiene demasiados archivos (máximo {MAX_ARCHIVOS_ZIP})."
 MSG_ZIP_DESCOMPRIMIDO = "El ZIP descomprimido supera el tamaño máximo de 100 MB."
@@ -86,14 +93,6 @@ MSG_EXTRAS = (
 )
 MSG_ALMACEN = "No se pudo guardar la entrega en este momento. Intenta de nuevo en unos minutos."
 MSG_ESTUDIANTE_NO_EXISTE = "El estudiante no existe."
-
-
-@dataclass(frozen=True)
-class ArchivoEntrada:
-    """Archivo recibido: flujo binario y content_type declarado (el nombre se ignora)."""
-
-    flujo: BinaryIO
-    content_type: str | None
 
 
 @dataclass(frozen=True)
@@ -116,23 +115,6 @@ class PaginaEntregas:
 
 
 # ---------- Validación ----------
-
-
-def leer_limitado(flujo: Any, limite: int, mensaje: str) -> bytes:
-    """Lee por bloques de 1 MB y rechaza (413) en cuanto se supera el límite."""
-    partes: list[bytes] = []
-    total = 0
-    while bloque := flujo.read(BLOQUE_LECTURA):
-        total += len(bloque)
-        if total > limite:
-            raise ArchivoDemasiadoGrandeError(mensaje)
-        partes.append(bloque)
-    return b"".join(partes)
-
-
-def _tipo(content_type: str | None) -> str:
-    """Content-Type sin parámetros y en minúscula."""
-    return (content_type or "").split(";")[0].strip().lower()
 
 
 def validar_github_url(url: str | None) -> str | None:
@@ -171,23 +153,12 @@ def validar_extras(texto: str | None) -> dict[str, Any] | None:
 
 def validar_pdf(archivo: ArchivoEntrada) -> bytes:
     """PDF real (cabecera %PDF-), ≤ 20 MB y con texto extraíble (RF-04 CA2)."""
-    if _tipo(archivo.content_type) not in TIPOS_PDF | {""}:
-        raise DatosInvalidosError(MSG_PDF_TIPO)
-    datos = leer_limitado(archivo.flujo, LIMITE_PDF_BYTES, MSG_PDF_GRANDE)
-    if not datos.startswith(b"%PDF-"):
-        raise DatosInvalidosError(MSG_PDF_TIPO)
-    try:
-        texto = extraer_texto_pdf(datos, limite=1)
-    except MaterialIlegibleError:
-        raise DatosInvalidosError(MSG_PDF_ILEGIBLE) from None
-    if not texto.strip():
-        raise DatosInvalidosError(MSG_PDF_SIN_TEXTO)
-    return datos
+    return archivos.validar_pdf(archivo, MENSAJES_PDF, LIMITE_PDF_BYTES)
 
 
 def validar_zip(archivo: ArchivoEntrada) -> bytes:
     """ZIP real (cabecera PK\\x03\\x04 y zipfile válido), ≤ 20 MB y dentro de los límites de §9."""
-    if _tipo(archivo.content_type) not in TIPOS_ZIP | {""}:
+    if tipo_contenido(archivo.content_type) not in TIPOS_ZIP | {""}:
         raise DatosInvalidosError(MSG_ZIP_TIPO)
     datos = leer_limitado(archivo.flujo, LIMITE_ZIP_BYTES, MSG_ZIP_GRANDE)
     if not datos.startswith(b"PK\x03\x04") or not zipfile.is_zipfile(io.BytesIO(datos)):
