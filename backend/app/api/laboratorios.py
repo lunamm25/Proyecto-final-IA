@@ -62,9 +62,9 @@ def listar_cohortes(_perfil: UsuarioActual, db: BaseDatos) -> list[CohorteRespue
     response_model=LaboratorioRespuesta,
     responses=ERRORES_AUTH | ERROR_409 | ERROR_422,
 )
-def crear_laboratorio(entrada: LaboratorioEntrada, _perfil: Docente, db: BaseDatos) -> Laboratorio:
-    """Crea un laboratorio en una cohorte (solo docente)."""
-    return servicio.crear_laboratorio(db, _datos(entrada))
+def crear_laboratorio(entrada: LaboratorioEntrada, perfil: Docente, db: BaseDatos) -> Laboratorio:
+    """Crea un laboratorio en una cohorte (solo docente; queda en auditoría)."""
+    return servicio.crear_laboratorio(db, _datos(entrada), perfil)
 
 
 @router.put(
@@ -73,10 +73,10 @@ def crear_laboratorio(entrada: LaboratorioEntrada, _perfil: Docente, db: BaseDat
     responses=ERRORES_AUTH | ERROR_404 | ERROR_409 | ERROR_422,
 )
 def editar_laboratorio(
-    laboratorio_id: int, entrada: LaboratorioEntrada, _perfil: Docente, db: BaseDatos
+    laboratorio_id: int, entrada: LaboratorioEntrada, perfil: Docente, db: BaseDatos
 ) -> Laboratorio:
-    """Edita un laboratorio (solo docente)."""
-    return servicio.actualizar_laboratorio(db, laboratorio_id, _datos(entrada))
+    """Edita un laboratorio (solo docente; los cambios quedan en auditoría)."""
+    return servicio.actualizar_laboratorio(db, laboratorio_id, _datos(entrada), perfil)
 
 
 @router.delete(
@@ -85,7 +85,7 @@ def editar_laboratorio(
     response_class=Response,
     responses=ERRORES_AUTH | ERROR_404 | ERROR_409,
 )
-def borrar_laboratorio(laboratorio_id: int, _perfil: Docente, db: BaseDatos) -> Response:
-    """Borra un laboratorio sin entregas, con su rúbrica y versiones (solo docente)."""
-    servicio.borrar_laboratorio(db, laboratorio_id)
+def borrar_laboratorio(laboratorio_id: int, perfil: Docente, db: BaseDatos) -> Response:
+    """Borra un laboratorio sin entregas, con su rúbrica y versiones (solo docente; auditado)."""
+    servicio.borrar_laboratorio(db, laboratorio_id, perfil)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

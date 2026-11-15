@@ -564,7 +564,11 @@ def test_informe_sin_texto_queda_error(cliente, datos, evaluador):
 
 
 def test_material_por_defecto_sin_texto_queda_error(cliente, datos, evaluador):
+    from app.api.deps import obtener_almacen
+    from tests.dobles_entregas import AlmacenMemoria
+
     del cliente.app.dependency_overrides[obtener_cargador_material]
+    cliente.app.dependency_overrides[obtener_almacen] = lambda: AlmacenMemoria()
     evaluacion_id = evaluar(cliente).json()["evaluacion_id"]
     assert leer(datos, evaluacion_id).estado == "error"
     assert evaluador.solicitudes == []

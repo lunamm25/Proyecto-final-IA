@@ -10,9 +10,10 @@ import importlib
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.services.errores import DominioError
 from app.services.evaluador_ia import ConfigProveedor, construir_proveedor
+from app.services.secretos import detalle_error_tachado
 
 Tarea = Literal["informe", "mapeo"]
 
@@ -207,14 +208,6 @@ class IAInformeReal:
 LIMITE_MENSAJE_AUDITORIA = 4_000
 
 
-def detalle_error(error: Exception) -> dict[str, Any]:
-    """Detalle técnico de un fallo de IA (solo para auditoría, nunca para el cliente)."""
-    detalle: dict[str, Any] = {
-        "tipo": type(error).__name__,
-        "mensaje": str(error)[:LIMITE_MENSAJE_AUDITORIA],
-        "errores": _textos(getattr(error, "errores", [])),
-        "respuestas_crudas": _textos(getattr(error, "respuestas_crudas", [])),
-    }
-    if error.__cause__ is not None:
-        detalle["causa"] = repr(error.__cause__)[:LIMITE_MENSAJE_AUDITORIA]
-    return detalle
+def detalle_error(error: Exception, settings: Settings | None = None) -> dict[str, Any]:
+    """Detalle técnico tachado de un fallo de IA (solo para auditoría, nunca para el cliente)."""
+    return detalle_error_tachado(error, settings or get_settings(), LIMITE_MENSAJE_AUDITORIA)

@@ -108,12 +108,19 @@ def _importar(nombre: str) -> Any:
 
 
 def construir_proveedor(
-    solicitud: ConfigProveedor, settings: Settings, timeout: float | None = None
+    solicitud: ConfigProveedor,
+    settings: Settings,
+    timeout: float | None = None,
+    max_retries: int | None = None,
 ) -> Any:
-    """Crea el LLMProvider de Rol 1 según la configuración (timeout opcional, en segundos)."""
+    """Crea el LLMProvider de Rol 1 (timeout en segundos y reintentos solo si se indican)."""
     providers = _importar("app.ia.providers")
     nombre = solicitud.proveedor.strip().lower()
-    extra: dict[str, float] = {} if timeout is None else {"timeout": timeout}
+    extra: dict[str, float | int] = {}
+    if timeout is not None:
+        extra["timeout"] = timeout
+    if max_retries is not None:
+        extra["max_retries"] = max_retries
     if nombre == "gemini":
         return providers.GeminiProvider(
             api_key=settings.gemini_api_key,
@@ -153,7 +160,7 @@ def probar_conexion_ia(config: ConfigProveedor, settings: Settings, timeout: flo
     """Hace una llamada mínima al proveedor configurado; lanza excepción si falla."""
     providers = _importar("app.ia.providers")
     try:
-        proveedor = construir_proveedor(config, settings, timeout=timeout)
+        proveedor = construir_proveedor(config, settings, timeout=timeout, max_retries=0)
     except providers.ErrorConfiguracionLLM as error:
         raise ProveedorSinConfigurarError(str(error)) from error
     generar_texto = getattr(proveedor, "generar_texto", None)

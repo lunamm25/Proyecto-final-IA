@@ -26,7 +26,8 @@ class Entrega(Base):
     rubrica_version_id: Mapped[int] = mapped_column(
         IdType, ForeignKey("rubrica_versiones.id", ondelete="RESTRICT"), nullable=False, index=True
     )
-    pdf_path: Mapped[str] = mapped_column(Text, nullable=False)
+    # Opcional desde la migración 0006: basta con PDF, ZIP o URL de GitHub.
+    pdf_path: Mapped[str | None] = mapped_column(Text)
     codigo_zip_path: Mapped[str | None] = mapped_column(Text)
     github_url: Mapped[str | None] = mapped_column(Text)
     extras: Mapped[dict[str, Any] | None] = mapped_column(JSONType)

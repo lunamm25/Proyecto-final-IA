@@ -41,13 +41,13 @@ class CambioRolEntrada(BaseModel):
 
 
 class LaboratorioEntrada(BaseModel):
-    """Datos para crear o editar un laboratorio."""
+    """Datos para crear o editar un laboratorio (con topes de tamaño contra abusos)."""
 
     cohorte_id: int
-    codigo: str
-    titulo: str
-    descripcion: str | None = None
-    objetivos: str | None = None
+    codigo: str = Field(max_length=50, examples=["LAB01"])
+    titulo: str = Field(max_length=200, examples=["Funciones en Python"])
+    descripcion: str | None = Field(default=None, max_length=5000)
+    objetivos: str | None = Field(default=None, max_length=5000)
 
 
 class LaboratorioRespuesta(BaseModel):
@@ -81,6 +81,14 @@ class CohorteRespuesta(BaseModel):
 class ValidacionRubricaRespuesta(BaseModel):
     """Resultado del validador: válida si no hay inconsistencias."""
 
+    valida: bool
+    inconsistencias: list[str]
+
+
+class ExtraccionRubricaRespuesta(BaseModel):
+    """Rúbrica propuesta por la IA (sin guardar) y el resultado del validador."""
+
+    rubrica: dict[str, Any]
     valida: bool
     inconsistencias: list[str]
 
@@ -168,14 +176,27 @@ class RetroalimentacionRespuesta(BaseModel):
     retroalimentacion_general: str | None = None
 
 
+class VerificacionResumen(BaseModel):
+    """Resumen de la ejecución del código en el sandbox (nunca stdout ni stderr)."""
+
+    codigo_salida: int
+    tiene_error: bool
+    ejecucion_exitosa: bool
+
+
 class EvaluacionRespuesta(BaseModel):
     """Detalle de una evaluación (nunca incluye respuestas crudas del LLM).
 
-    Para el estudiante, proveedor, modelo, temperatura y prompt_version van en null.
+    Para el estudiante, proveedor, modelo, temperatura, prompt_version y verificacion van en null.
     """
 
     id: int
     entrega_id: int
+    laboratorio_id: int | None = None
+    estudiante_id: uuid.UUID | None = None
+    estudiante_nombre: str | None = Field(
+        default=None, description="Nombre del estudiante (solo docente/admin)."
+    )
     estado: EstadoEvaluacion
     nota: float | None
     rubrica_version_id: int | None
@@ -189,6 +210,10 @@ class EvaluacionRespuesta(BaseModel):
     retroalimentacion: RetroalimentacionRespuesta | None
     retroalimentacion_ia: RetroalimentacionRespuesta | None = Field(
         default=None, description="Retroalimentación original de la IA (solo docente/admin)."
+    )
+    verificacion: VerificacionResumen | None = Field(
+        default=None,
+        description="Resumen de la ejecución en sandbox (solo docente/admin; null si no hubo).",
     )
     creada_en: datetime
     aprobada_en: datetime | None
@@ -212,7 +237,7 @@ class AjusteCriterioEntrada(BaseModel):
 class RetroalimentacionCriterioEntrada(BaseModel):
     """Textos editados de un criterio. Omitido = sin cambios; null = volver al texto de la IA."""
 
-    criterio_id: str = Field(min_length=1, examples=["C1"])
+    criterio_id: str = Field(min_length=1, max_length=100, examples=["C1"])
     justificacion: TextoLargo | None = None
     fortalezas: ListaTextos | None = None
     debilidades: ListaTextos | None = None
@@ -300,7 +325,56 @@ class TrazaRespuesta(BaseModel):
     prompt_version: str | None
     rubrica_version_id: int | None
     rubrica_version: int | None
+    verificacion: VerificacionResumen | None = Field(
+        default=None, description="Resumen de la ejecución en sandbox (null si no se ejecutó)."
+    )
     eventos: list[EventoTrazaRespuesta]
+
+
+# ---------- Entregas (RF-04) ----------
+
+EstadoVisible = Literal[
+    "procesando",
+    "borrador",
+    "en_revision",
+    "aprobada",
+    "publicada",
+    "error",
+    "pendiente_revision",
+]
+
+
+class UltimaEvaluacionResumen(BaseModel):
+    """Última evaluación de la entrega. Para el estudiante, lo no publicado se muestra como
+    `pendiente_revision` y sin nota."""
+
+    id: int
+    estado: EstadoVisible
+    nota: float | None
+
+
+class EntregaRespuesta(BaseModel):
+    """Entrega del portafolio (nunca incluye rutas del bucket ni URLs firmadas)."""
+
+    id: int
+    laboratorio: LaboratorioResumen
+    estudiante: EstudianteResumen
+    rubrica_version_id: int
+    rubrica_version: int | None
+    tiene_pdf: bool
+    tiene_zip: bool
+    github_url: str | None
+    creada_en: datetime
+    ultima_evaluacion: UltimaEvaluacionResumen | None
+
+
+class ListadoEntregasRespuesta(BaseModel):
+    """Página del portafolio: `total` cuenta todas las que cumplen los filtros."""
+
+    items: list[EntregaRespuesta]
+    total: int
+    limit: int
+    offset: int
 
 
 # ---------- Estudiantes: listado, informe (RF-08) y mapa (RF-09) ----------

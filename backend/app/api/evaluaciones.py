@@ -24,12 +24,15 @@ from app.api.esquemas import (
     RetroalimentacionRespuesta,
     TrazaRespuesta,
     UsuarioTraza,
+    VerificacionResumen,
 )
+from app.config import Settings, get_settings
 from app.db import get_db
 from app.models import EvaluacionCriterio, Perfil
 from app.services import evaluaciones as servicio
 from app.services import revision, traza
-from app.services.traza import a_utc, sin_secretos
+from app.services.fechas import a_utc
+from app.services.traza import sin_secretos
 
 router = APIRouter(prefix="/api/evaluaciones", tags=["evaluaciones"])
 
@@ -85,9 +88,15 @@ def _respuesta(detalle: servicio.DetalleEvaluacion) -> EvaluacionRespuesta:
     version = detalle.rubrica_version
     final = revision.retro_general_final(ev)
     original = revision.retro_general_ia(ev)
+    entrega, perfil_estudiante = detalle.entrega, detalle.estudiante
     return EvaluacionRespuesta(
         id=ev.id,
         entrega_id=ev.entrega_id,
+        laboratorio_id=entrega.laboratorio_id if entrega else None,
+        estudiante_id=entrega.estudiante_id if entrega else None,
+        estudiante_nombre=None
+        if estudiante or perfil_estudiante is None
+        else perfil_estudiante.nombre,
         estado=ev.estado,
         nota=_numero(ev.nota),
         rubrica_version_id=version.id if version else None,
@@ -102,6 +111,9 @@ def _respuesta(detalle: servicio.DetalleEvaluacion) -> EvaluacionRespuesta:
         retroalimentacion_ia=None
         if estudiante or not original
         else RetroalimentacionRespuesta.model_validate(original),
+        verificacion=None
+        if estudiante or detalle.verificacion is None
+        else VerificacionResumen.model_validate(detalle.verificacion),
         creada_en=a_utc(ev.creada_en),
         aprobada_en=a_utc(ev.aprobada_en),
         publicada_en=a_utc(ev.publicada_en),
@@ -223,7 +235,12 @@ def publicar(evaluacion_id: int, docente: Docente, db: BaseDatos) -> EvaluacionR
 
 
 @router.get("/{evaluacion_id}/traza", response_model=TrazaRespuesta, responses=RESPUESTAS_DOCENTE)
-def ver_traza(evaluacion_id: int, _docente: Docente, db: BaseDatos) -> TrazaRespuesta:
+def ver_traza(
+    evaluacion_id: int,
+    _docente: Docente,
+    db: BaseDatos,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> TrazaRespuesta:
     """Trazabilidad completa (incluye respuestas crudas; nunca claves)."""
     datos = traza.obtener_traza(db, evaluacion_id)
     ev, version = datos.evaluacion, datos.rubrica_version
@@ -238,6 +255,9 @@ def ver_traza(evaluacion_id: int, _docente: Docente, db: BaseDatos) -> TrazaResp
         prompt_version=ev.prompt_version,
         rubrica_version_id=version.id if version else None,
         rubrica_version=version.version if version else None,
+        verificacion=VerificacionResumen.model_validate(datos.verificacion)
+        if datos.verificacion
+        else None,
         eventos=[
             EventoTrazaRespuesta(
                 id=e.auditoria.id,
@@ -248,8 +268,8 @@ def ver_traza(evaluacion_id: int, _docente: Docente, db: BaseDatos) -> TrazaResp
                     id=e.auditoria.usuario_id, nombre=e.usuario.nombre if e.usuario else None
                 ),
                 accion=e.auditoria.accion,
-                antes=sin_secretos(e.auditoria.antes),
-                despues=sin_secretos(e.auditoria.despues),
+                antes=sin_secretos(e.auditoria.antes, settings),
+                despues=sin_secretos(e.auditoria.despues, settings),
                 motivo=e.auditoria.motivo,
             )
             for e in datos.eventos

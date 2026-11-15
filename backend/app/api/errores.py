@@ -7,12 +7,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.services.errores import (
+    ArchivoDemasiadoGrandeError,
     ConflictoError,
     DatosInvalidosError,
     DominioError,
     NoEncontradoError,
     ProhibidoError,
     RubricaConInconsistenciasError,
+    ServicioNoDisponibleError,
 )
 
 CODIGOS: dict[type[DominioError], int] = {
@@ -20,6 +22,8 @@ CODIGOS: dict[type[DominioError], int] = {
     ProhibidoError: status.HTTP_403_FORBIDDEN,
     ConflictoError: status.HTTP_409_CONFLICT,
     DatosInvalidosError: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    ArchivoDemasiadoGrandeError: status.HTTP_413_CONTENT_TOO_LARGE,
+    ServicioNoDisponibleError: status.HTTP_503_SERVICE_UNAVAILABLE,
 }
 
 MENSAJES_VALIDACION = {
@@ -45,6 +49,10 @@ MENSAJES_VALIDACION = {
 }
 
 
+# Para tipos sin traducción: nunca el texto de Pydantic (inglés) ni el valor recibido.
+MSG_VALOR_NO_VALIDO = "valor no válido"
+
+
 def _codigo(error: DominioError) -> int:
     """Código HTTP según la clase del error (400 si no está mapeada)."""
     for clase, codigo in CODIGOS.items():
@@ -67,7 +75,7 @@ def _describir(error: dict[str, Any]) -> str:
     ubicacion = ".".join(str(parte) for parte in error.get("loc", ()) if parte != "body")
     plantilla = MENSAJES_VALIDACION.get(error.get("type", ""))
     if plantilla is None:
-        return f"{ubicacion or 'cuerpo'}: {error.get('msg', 'no es válido')}"
+        return f"{ubicacion or 'cuerpo'}: {MSG_VALOR_NO_VALIDO}"
     try:
         mensaje = plantilla.format(**error.get("ctx", {}))
     except (KeyError, IndexError, ValueError):

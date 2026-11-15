@@ -334,25 +334,25 @@ def _narrativa(
         )
         return Narrativa("error", MSG_ERROR)
     contenido = _contenido(narrativa)
-    cache_ia.auditar(
-        db,
-        perfil.id,
-        "perfiles",
-        clave,
-        "generar_informe_ia",
-        {
+    auditoria = {
+        "usuario_id": perfil.id,
+        "entidad": "perfiles",
+        "entidad_id": clave,
+        "accion": "generar_informe_ia",
+        "despues": {
             "proveedor": narrativa.proveedor,
             "modelo": narrativa.modelo,
             "version_prompt": narrativa.version_prompt,
             "huella": huella,
             "respuestas_crudas": narrativa.respuestas_crudas,
         },
-    )
+    }
     generada_en = cache_ia.guardar(
         db, TIPO, clave, huella, contenido,
         version_prompt=narrativa.version_prompt or version,
         proveedor=narrativa.proveedor,
         modelo=narrativa.modelo,
+        auditoria=auditoria,
     )
     return _generada(contenido, generada_en)
 

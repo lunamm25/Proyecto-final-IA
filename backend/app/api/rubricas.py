@@ -2,19 +2,24 @@
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Body, Depends, status
+from fastapi import APIRouter, Body, Depends, File, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import UsuarioActual, requiere_rol
+from app.api.deps import UsuarioActual, obtener_extractor_rubrica, requiere_rol
 from app.api.esquemas import (
     ErrorRespuesta,
     ErrorRubricaRespuesta,
+    ExtraccionRubricaRespuesta,
     RubricaVersionRespuesta,
     ValidacionRubricaRespuesta,
 )
+from app.config import Settings, get_settings
 from app.db import get_db
 from app.models import Perfil, RubricaVersion
 from app.services import rubricas as servicio
+from app.services import rubricas_ia
+from app.services.archivos import ArchivoEntrada
+from app.services.extractor_rubrica import ExtractorRubrica
 
 router = APIRouter(prefix="/api", tags=["rúbricas"])
 
@@ -45,6 +50,11 @@ ERRORES_AUTH = {
     403: {"model": ErrorRespuesta, "description": "Sin permisos"},
 }
 ERROR_404 = {404: {"model": ErrorRespuesta, "description": "No encontrado"}}
+ERRORES_EXTRAER = {
+    413: {"model": ErrorRespuesta, "description": "PDF demasiado grande (máx. 20 MB)"},
+    422: {"model": ErrorRespuesta, "description": "Falta el archivo, no es PDF o no tiene texto"},
+    503: {"model": ErrorRespuesta, "description": "La IA no pudo extraer la rúbrica"},
+}
 
 
 @router.post(
@@ -72,8 +82,8 @@ def validar_rubrica(
 def guardar_version(
     laboratorio_id: int, perfil: Docente, db: BaseDatos, rubrica: CuerpoRubrica = None
 ) -> RubricaVersion:
-    """Guarda y aprueba una versión nueva e inmutable de la rúbrica (solo docente)."""
-    return servicio.guardar_version(db, laboratorio_id, rubrica, perfil.id)
+    """Guarda y aprueba una versión nueva e inmutable de la rúbrica (solo docente; auditada)."""
+    return servicio.guardar_version(db, laboratorio_id, rubrica, perfil)
 
 
 @router.get(
@@ -86,3 +96,32 @@ def leer_rubrica_vigente(
 ) -> RubricaVersion:
     """Versión vigente (la aprobada de mayor número) de la rúbrica del laboratorio."""
     return servicio.leer_version_vigente(db, laboratorio_id)
+
+
+@router.post(
+    "/laboratorios/{laboratorio_id}/rubrica/extraer",
+    response_model=ExtraccionRubricaRespuesta,
+    responses=ERRORES_AUTH | ERROR_404 | ERRORES_EXTRAER,
+)
+def extraer_rubrica(
+    laboratorio_id: int,
+    perfil: Docente,
+    db: BaseDatos,
+    settings: Annotated[Settings, Depends(get_settings)],
+    extractor: Annotated[ExtractorRubrica, Depends(obtener_extractor_rubrica)],
+    archivo: Annotated[UploadFile, File(description="Enunciado en PDF con texto (≤ 20 MB).")],
+) -> ExtraccionRubricaRespuesta:
+    """Propone la rúbrica a partir del enunciado en PDF (no la guarda; solo docente)."""
+    propuesta = rubricas_ia.extraer_de_pdf(
+        db,
+        laboratorio_id,
+        ArchivoEntrada(flujo=archivo.file, content_type=archivo.content_type),
+        perfil,
+        settings,
+        extractor,
+    )
+    return ExtraccionRubricaRespuesta(
+        rubrica=propuesta.rubrica,
+        valida=propuesta.valida,
+        inconsistencias=propuesta.inconsistencias,
+    )
