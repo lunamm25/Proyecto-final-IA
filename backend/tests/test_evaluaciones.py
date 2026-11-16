@@ -480,6 +480,49 @@ def test_rubrica_inconsistente_no_se_evalua(cliente, datos, evaluador):
     assert evaluador.solicitudes == []
 
 
+MSG_RUBRICA_NO_LISTA = "La rúbrica de este laboratorio no está lista. Avisa a tu docente."
+
+
+def _entrega_con_rubrica_inconsistente(datos) -> None:
+    """Entrega id=3 del estudiante con una versión aprobada cuyas ponderaciones suman 90."""
+    mala = copy.deepcopy(RUBRICA)
+    mala["criterios"][0]["ponderacion"] = 50
+    with datos() as s:
+        s.add(RubricaVersion(id=3, rubrica_id=1, version=3, contenido=mala, estado="aprobada"))
+        s.flush()
+        s.add(
+            Entrega(
+                id=3,
+                estudiante_id=ID_ESTUDIANTE,
+                laboratorio_id=10,
+                rubrica_version_id=3,
+                pdf_path="e3.pdf",
+            )
+        )
+        s.commit()
+
+
+def test_estudiante_no_ve_las_inconsistencias_de_la_rubrica(cliente, datos, evaluador):
+    _entrega_con_rubrica_inconsistente(datos)
+    respuesta = evaluar(cliente, 3, ID_ESTUDIANTE)
+    assert respuesta.status_code == 409
+    assert respuesta.json() == {"detail": MSG_RUBRICA_NO_LISTA}
+    for texto in ("suman", "inconsistencias", "90"):
+        assert texto not in respuesta.text
+    assert contar_evaluaciones(datos) == 0
+    assert evaluador.solicitudes == []
+
+
+@pytest.mark.parametrize("usuario", [ID_DOCENTE, ID_ADMIN])
+def test_docente_y_admin_ven_las_inconsistencias(cliente, datos, usuario):
+    _entrega_con_rubrica_inconsistente(datos)
+    respuesta = evaluar(cliente, 3, usuario)
+    assert respuesta.status_code == 409
+    detalle = respuesta.json()["detail"]
+    assert detalle.startswith("La versión de la rúbrica de esta entrega tiene inconsistencias")
+    assert "suman 90" in detalle
+
+
 # ---------- Errores de la tarea de fondo ----------
 
 

@@ -6,6 +6,7 @@ confirma todo en UN solo commit. Si algo falla se hace rollback: nunca queda un 
 registro ni un registro sin su cambio. La nota la recalcula siempre `nota.py`.
 """
 
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -15,12 +16,15 @@ from typing import Any, Concatenate, ParamSpec, TypeVar
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.models import Auditoria, Entrega, Evaluacion, EvaluacionCriterio, Perfil, RubricaVersion
 from app.services.errores import ConflictoError, DatosInvalidosError, NoEncontradoError
 from app.services.evaluaciones import MSG_EVALUACION_NO_EXISTE
 from app.services.nota import calcular_nota
 from app.services.rubricas import validar_rubrica
+from app.services.secretos import tachar_secretos
 
+logger = logging.getLogger(__name__)
 P = ParamSpec("P")
 R = TypeVar("R")
 Accion = Callable[Concatenate[Session, P], R]
@@ -51,7 +55,7 @@ MSG_CRITERIO_NO_EXISTE = "El criterio '{}' no existe en esta evaluación."
 MSG_NIVEL_NO_EXISTE = "El nivel '{}' no existe en el criterio '{}'."
 MSG_MOTIVO = "El motivo del ajuste es obligatorio."
 MSG_SIN_VERSION = "La entrega de esta evaluación no tiene versión de rúbrica."
-MSG_NO_RECALCULA = "No se puede recalcular la nota: {}"
+MSG_NO_RECALCULA = "No se puede recalcular la nota con los datos actuales."
 MSG_RUBRICA_INVALIDA = "No se puede aprobar: la rúbrica de esta entrega tiene inconsistencias: {}"
 MSG_FALTAN_NIVELES = "No se puede aprobar: falta el nivel final de los criterios {}."
 MSG_SIN_EDICION = "Indica al menos un texto de retroalimentación para editar."
@@ -149,7 +153,13 @@ def _recalcular(
     try:
         resultado = calcular_nota(version.contenido["criterios"], elegidos)
     except (ValueError, KeyError, TypeError) as error:
-        raise ConflictoError(MSG_NO_RECALCULA.format(error)) from None
+        detalle = tachar_secretos(f"{type(error).__name__}: {error}", get_settings())
+        logger.warning(
+            "No se pudo recalcular la nota de la evaluación %s: %s",
+            evaluacion.id,
+            detalle,
+        )
+        raise ConflictoError(MSG_NO_RECALCULA) from None
     evaluacion.nota = resultado.nota
     for cid, fila in filas.items():
         fila.puntaje_normalizado = resultado.normalizados[cid]

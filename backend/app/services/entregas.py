@@ -64,9 +64,7 @@ PATRON_GITHUB = re.compile(
 ACCION_CREAR = "crear_entrega"
 ACCION_FALLIDA = "crear_entrega_fallida"
 
-MSG_FALTA_MATERIAL = (
-    "Debes adjuntar al menos uno: el PDF del informe, el ZIP del código o la URL de GitHub."
-)
+MSG_PDF_OBLIGATORIO = "El informe en PDF es obligatorio."
 MSG_LAB_NO_EXISTE = "El laboratorio no existe."
 MSG_SIN_RUBRICA = "El laboratorio aún no tiene rúbrica aprobada; no se pueden recibir entregas."
 MSG_PDF_GRANDE = "El PDF supera el tamaño máximo de 20 MB."
@@ -240,13 +238,13 @@ def crear_entrega(
     almacen: AlmacenArchivos,
     settings: Settings,
 ) -> FilaEntrega:
-    """Valida, reserva el id, sube los archivos al bucket y confirma con auditoría."""
+    """Valida (PDF obligatorio; ZIP y GitHub opcionales), sube al bucket y audita."""
+    if pdf is None:
+        raise DatosInvalidosError(MSG_PDF_OBLIGATORIO)
     url = validar_github_url(github_url)
     datos_extras = validar_extras(extras)
-    if pdf is None and codigo_zip is None and url is None:
-        raise DatosInvalidosError(MSG_FALTA_MATERIAL)
     laboratorio, version = _version_para(db, laboratorio_id)
-    datos_pdf = validar_pdf(pdf) if pdf else None
+    datos_pdf = validar_pdf(pdf)
     datos_zip = validar_zip(codigo_zip) if codigo_zip else None
 
     entrega = Entrega(
@@ -259,7 +257,7 @@ def crear_entrega(
     db.add(entrega)
     db.flush()
     ruta_pdf, ruta_zip = _rutas(perfil.id, entrega.id)
-    entrega.pdf_path = ruta_pdf if datos_pdf is not None else None
+    entrega.pdf_path = ruta_pdf
     entrega.codigo_zip_path = ruta_zip if datos_zip is not None else None
     db.add(
         Auditoria(
@@ -270,10 +268,10 @@ def crear_entrega(
             despues={
                 "laboratorio_id": laboratorio.id,
                 "rubrica_version_id": version.id,
-                "tiene_pdf": datos_pdf is not None,
+                "tiene_pdf": True,
                 "tiene_zip": datos_zip is not None,
                 "github_url": url,
-                "tamano_pdf": len(datos_pdf) if datos_pdf is not None else None,
+                "tamano_pdf": len(datos_pdf),
                 "tamano_zip": len(datos_zip) if datos_zip is not None else None,
                 "tiene_extras": datos_extras is not None,
             },
@@ -282,9 +280,8 @@ def crear_entrega(
     entrega_id = entrega.id
     subidos: list[str] = []
     try:
-        if datos_pdf is not None:
-            almacen.subir(ruta_pdf, datos_pdf, "application/pdf")
-            subidos.append(ruta_pdf)
+        almacen.subir(ruta_pdf, datos_pdf, "application/pdf")
+        subidos.append(ruta_pdf)
         if datos_zip is not None:
             almacen.subir(ruta_zip, datos_zip, "application/zip")
             subidos.append(ruta_zip)

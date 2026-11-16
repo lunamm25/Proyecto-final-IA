@@ -187,7 +187,8 @@ class VerificacionResumen(BaseModel):
 class EvaluacionRespuesta(BaseModel):
     """Detalle de una evaluación (nunca incluye respuestas crudas del LLM).
 
-    Para el estudiante, proveedor, modelo, temperatura, prompt_version y verificacion van en null.
+    Para el estudiante, proveedor, modelo, temperatura, prompt_version, error y verificacion van
+    en null.
     """
 
     id: int
