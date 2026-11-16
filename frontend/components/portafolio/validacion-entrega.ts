@@ -1,5 +1,6 @@
 // Validación en el cliente del formulario de entrega (RF-04 CA1 y §9), con las reglas de services/entregas.py.
-// El backend vuelve a validar todo (PDF con texto, ZIP descomprimido, etc.) y responde 413/422/503 con `detail`.
+// PDF obligatorio; ZIP y URL de GitHub opcionales. El backend vuelve a validar todo (PDF con texto, ZIP
+// descomprimido, etc.) y responde 413/422/503 con `detail`.
 
 const MB = 1024 * 1024;
 
@@ -11,21 +12,18 @@ export const MAX_URL_GITHUB = 300;
 /** Mismo patrón que PATRON_GITHUB del backend: https://github.com/<usuario>/<repositorio>[/ruta]. */
 export const PATRON_GITHUB = /^https:\/\/github\.com\/[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}(?:\/[A-Za-z0-9._-]+)*\/?$/;
 
-export type ModoCodigo = "zip" | "github";
+/** Mismo texto que MSG_PDF_OBLIGATORIO del backend. */
+export const MENSAJE_PDF_OBLIGATORIO = "El informe en PDF es obligatorio.";
 
-/** "fuentes" = no hay ninguna: ni PDF, ni ZIP, ni URL de GitHub. */
-export type CampoEntrega = "pdf" | "zip" | "github_url" | "fuentes";
+export type CampoEntrega = "pdf" | "zip" | "github_url";
 
 export type ErroresEntrega = Partial<Record<CampoEntrega, string>>;
 
 export interface DatosFormulario {
   pdf: File | null;
-  modoCodigo: ModoCodigo;
   zip: File | null;
   githubUrl: string;
 }
-
-export const MENSAJE_SIN_FUENTES = "Debes adjuntar al menos uno: el PDF del informe, el ZIP del código o la URL de GitHub.";
 
 function tieneExtension(archivo: File, extensiones: string[]): boolean {
   const nombre = archivo.name.toLowerCase();
@@ -37,7 +35,7 @@ export function formatearTamano(bytes: number): string {
   return `${(bytes / MB).toFixed(1).replace(".", ",")} MB`;
 }
 
-/** PDF opcional: si se adjunta, debe ser .pdf y pesar como máximo 20 MB. */
+/** Revisa el PDF elegido: .pdf, no vacío y como máximo 20 MB. Que falte se revisa en validarFormulario. */
 export function validarPdf(archivo: File | null): string | undefined {
   if (!archivo) return undefined;
   const tipoValido = archivo.type === "application/pdf" || archivo.type === "";
@@ -66,26 +64,15 @@ export function validarGithub(url: string): string | undefined {
   return undefined;
 }
 
-/** Fuentes que se enviarán: solo la opción de código elegida (ZIP o GitHub). */
-export function fuentesElegidas(datos: DatosFormulario): { pdf: File | null; zip: File | null; github: string } {
-  return {
-    pdf: datos.pdf,
-    zip: datos.modoCodigo === "zip" ? datos.zip : null,
-    github: datos.modoCodigo === "github" ? datos.githubUrl.trim() : "",
-  };
-}
-
 /** Valida todo el formulario; devuelve solo los campos con error. */
 export function validarFormulario(datos: DatosFormulario): ErroresEntrega {
-  const { pdf, zip, github } = fuentesElegidas(datos);
   const errores: ErroresEntrega = {
-    fuentes: !pdf && !zip && github === "" ? MENSAJE_SIN_FUENTES : undefined,
-    pdf: validarPdf(datos.pdf),
-    zip: datos.modoCodigo === "zip" ? validarZip(datos.zip) : undefined,
-    github_url: datos.modoCodigo === "github" ? validarGithub(datos.githubUrl) : undefined,
+    pdf: datos.pdf ? validarPdf(datos.pdf) : MENSAJE_PDF_OBLIGATORIO,
+    zip: validarZip(datos.zip),
+    github_url: validarGithub(datos.githubUrl),
   };
   return Object.fromEntries(Object.entries(errores).filter(([, valor]) => valor !== undefined)) as ErroresEntrega;
 }
 
-/** Orden en que se enfoca el primer campo con error ("fuentes" enfoca el PDF). */
-export const ORDEN_CAMPOS: CampoEntrega[] = ["fuentes", "pdf", "zip", "github_url"];
+/** Orden en que se enfoca el primer campo con error. */
+export const ORDEN_CAMPOS: CampoEntrega[] = ["pdf", "zip", "github_url"];

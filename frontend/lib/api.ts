@@ -355,9 +355,8 @@ const PATRON_GITHUB_MOCK = /^https:\/\/github\.com\/[A-Za-z0-9][A-Za-z0-9-]{0,38
  * laboratorio existente con rúbrica aprobada (422).
  */
 function validarEntregaMock(datos: NuevaEntrega): void {
-  if (!datos.pdf && !datos.zip && !datos.github_url?.trim()) {
-    throw new ErrorApi(422, "Debes adjuntar al menos uno: el PDF del informe, el ZIP del código o la URL de GitHub.");
-  }
+  // Igual que el backend (MSG_PDF_OBLIGATORIO): sin PDF, 422. ZIP y GitHub son opcionales.
+  if (!(datos.pdf instanceof File)) throw new ErrorApi(422, "El informe en PDF es obligatorio.");
   if (!existeLaboratorioMock(datos.laboratorio_id)) throw new ErrorApi(422, "El laboratorio no existe.");
   if (!estadoMock.rubricas[datos.laboratorio_id]) {
     throw new ErrorApi(422, "El laboratorio aún no tiene rúbrica aprobada; no se pueden recibir entregas.");
