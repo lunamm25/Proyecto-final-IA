@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 const URL_USO_IA = "https://github.com/lunamm25/Proyecto-final-IA/blob/main/docs/USO_IA.md";
 
 const objetivos = [
-  "Evaluar las evidencias de los laboratorios de las cohortes 1 y 2 criterio por criterio, citando evidencias concretas.",
+  "Evaluar las evidencias de los laboratorios de los cortes 1 y 2 criterio por criterio, citando evidencias concretas.",
   "Calcular la nota (0,0–5,0) de forma determinista en el backend con las ponderaciones de la rúbrica.",
   "Mantener al docente en el centro: revisa, ajusta con justificación, aprueba y publica cada evaluación.",
   "Consolidar el aprendizaje del estudiante en un informe integral y un mapa mental de competencias en IA.",
@@ -26,7 +26,7 @@ const funcionalidades = [
   { icono: BrainCircuit, titulo: "Evaluación inteligente", texto: "Nivel propuesto por criterio con evidencias citadas, fortalezas y recomendaciones." },
   { icono: ShieldCheck, titulo: "Verificación de código", texto: "Análisis estático y pruebas en un entorno aislado (sandbox)." },
   { icono: UserCheck, titulo: "Revisión docente", texto: "Human-in-the-Loop: ajustes con motivo, historial y publicación controlada." },
-  { icono: FileText, titulo: "Informe integral", texto: "Evolución entre cohortes, dominio por competencia, brechas y plan de fortalecimiento." },
+  { icono: FileText, titulo: "Informe integral", texto: "Evolución entre cortes, dominio por competencia, brechas y plan de fortalecimiento." },
   { icono: Network, titulo: "Mapa mental interactivo", texto: "Competencias coloreadas por dominio, exploración y descarga en PNG o JSON." },
   { icono: Settings2, titulo: "IA configurable", texto: "Proveedor en la nube (Gemini) o local/compatible con OpenAI (Ollama, Groq, OpenRouter)." },
 ];

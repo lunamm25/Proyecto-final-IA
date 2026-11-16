@@ -13,6 +13,7 @@ import {
 } from "@/components/informe/marco-grafica";
 import { SeccionInforme } from "@/components/informe/seccion-informe";
 import { formatearNota } from "@/components/portafolio/estado-entrega";
+import { textoCorte } from "@/lib/corte";
 import type { Evolucion, LaboratorioInforme } from "@/lib/tipos";
 
 const ALTO_GRAFICA = 280;
@@ -26,15 +27,15 @@ function formatearValor(valor: unknown): string {
 }
 
 function textoEvolucion(evolucion: Evolucion | null): string {
-  if (!evolucion) return "Sin datos de evolución entre cohortes.";
+  if (!evolucion) return "Sin datos de evolución entre cortes.";
   return (
-    `Promedio ${evolucion.cohorte_inicial}: ${textoNota(evolucion.promedio_inicial)}; ` +
-    `${evolucion.cohorte_final}: ${textoNota(evolucion.promedio_final)}.`
+    `Promedio ${textoCorte(evolucion.cohorte_inicial)}: ${textoNota(evolucion.promedio_inicial)}; ` +
+    `${textoCorte(evolucion.cohorte_final)}: ${textoNota(evolucion.promedio_final)}.`
   );
 }
 
 function descripcionAccesible(notas: LaboratorioInforme[], evolucion: Evolucion | null): string {
-  const barras = notas.map((n) => `${n.codigo} (${n.cohorte}): ${textoNota(n.nota)}`).join("; ");
+  const barras = notas.map((n) => `${n.codigo} (${textoCorte(n.cohorte)}): ${textoNota(n.nota)}`).join("; ");
   return `Gráfica de barras de la nota por laboratorio, escala de 0 a 5. ${barras}. ${textoEvolucion(evolucion)}`;
 }
 
@@ -44,7 +45,7 @@ function Leyenda() {
       {[1, 2].map((cohorte) => (
         <li key={cohorte} className="flex items-center gap-2">
           <span className="size-3 rounded-sm" style={{ backgroundColor: colorDeCohorte(cohorte) }} />
-          Cohorte {cohorte}
+          Corte {cohorte}
         </li>
       ))}
     </ul>
@@ -53,12 +54,12 @@ function Leyenda() {
 
 function ResumenEvolucion({ evolucion }: { evolucion: Evolucion | null }) {
   if (!evolucion) {
-    return <p className="text-sm text-muted-foreground">Aún no hay datos para comparar las dos cohortes.</p>;
+    return <p className="text-sm text-muted-foreground">Aún no hay datos para comparar los dos cortes.</p>;
   }
   return (
     <p className="text-sm">
-      Promedio {evolucion.cohorte_inicial}: <strong className="tabular-nums">{textoNota(evolucion.promedio_inicial)}</strong>
-      {" → "}{evolucion.cohorte_final}: <strong className="tabular-nums">{textoNota(evolucion.promedio_final)}</strong>
+      Promedio {textoCorte(evolucion.cohorte_inicial)}: <strong className="tabular-nums">{textoNota(evolucion.promedio_inicial)}</strong>
+      {" → "}{textoCorte(evolucion.cohorte_final)}: <strong className="tabular-nums">{textoNota(evolucion.promedio_final)}</strong>
       {evolucion.diferencia !== null && (
         <span className="text-muted-foreground"> ({formatearDiferencia(evolucion.diferencia)} puntos)</span>
       )}
@@ -104,12 +105,12 @@ function Grafica({ notas, evolucion, imprimiendo }: GraficaEvolucionProps) {
   );
 }
 
-/** Evolución cohorte 1 → cohorte 2: nota de cada laboratorio en el orden en que la envía el backend. */
+/** Evolución corte 1 → corte 2: nota de cada laboratorio en el orden en que la envía el backend. */
 export function GraficaEvolucion(props: GraficaEvolucionProps) {
   return (
     <SeccionInforme
       id="titulo-evolucion"
-      titulo="Evolución cohorte 1 → cohorte 2"
+      titulo="Evolución corte 1 → corte 2"
       descripcion="Nota de cada laboratorio evaluado. Los datos están en la tabla «Notas por laboratorio»."
       sinCorte
     >

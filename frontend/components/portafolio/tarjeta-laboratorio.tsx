@@ -66,22 +66,13 @@ function Acciones({ estado, laboratorio, entrega, evaluando, alEvaluar }: Accion
     );
   }
 
+  // Procesando o pendiente: el estudiante no puede abrir la evaluación hasta que se publique; basta el estado.
   return (
-    <>
-      <p className="text-xs text-muted-foreground">
-        {estado === "procesando"
-          ? "La IA está evaluando tu entrega; luego el docente la revisará."
-          : "El docente revisará la evaluación antes de publicarla."}
-      </p>
-      {entrega.ultima_evaluacion && (
-        <Link
-          href={rutaEvaluacion(entrega.ultima_evaluacion.id, { laboratorioId: laboratorio.id })}
-          className={`${CLASE_ENLACE_BOTON} border hover:bg-muted`}
-        >
-          Ver progreso
-        </Link>
-      )}
-    </>
+    <p className="text-xs text-muted-foreground">
+      {estado === "procesando"
+        ? "La IA está evaluando tu entrega; luego el docente la revisará."
+        : "El docente revisará la evaluación antes de publicarla."}
+    </p>
   );
 }
 

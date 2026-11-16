@@ -17,7 +17,7 @@ const TARJETAS: TarjetaPanel[] = [
   {
     href: "/docente/laboratorios",
     titulo: "Laboratorios",
-    descripcion: "Crea y edita los laboratorios de cada cohorte.",
+    descripcion: "Crea y edita los laboratorios de cada corte.",
     Icono: FlaskConical,
     roles: ["docente", "admin"],
   },

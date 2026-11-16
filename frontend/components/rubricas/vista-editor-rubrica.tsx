@@ -8,6 +8,7 @@ import { EditorRubrica } from "@/components/rubricas/editor-rubrica";
 import { listarCohortes, obtenerRubricaVigenteONula } from "@/lib/api";
 import { idDesdeUrl, type Cohorte, type IdNumerico, type Laboratorio, type RubricaVersion } from "@/lib/tipos";
 import { ZONA_HORARIA } from "@/lib/fechas";
+import { textoCorte } from "@/lib/corte";
 import { useCarga } from "@/lib/use-carga";
 
 interface DatosRubrica {
@@ -41,7 +42,7 @@ function Cabecera({ laboratorio, cohorte, vigente }: DatosRubrica) {
     <header className="space-y-2">
       <EnlaceVolver />
       <p className="font-mono text-xs text-muted-foreground">
-        {laboratorio.codigo} · {cohorte.nombre}
+        {laboratorio.codigo} · {textoCorte(cohorte.nombre)}
       </p>
       <h1 className="text-3xl font-bold tracking-tight">Rúbrica: {laboratorio.titulo}</h1>
       {vigente ? (

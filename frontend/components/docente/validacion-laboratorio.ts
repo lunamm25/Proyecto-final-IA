@@ -48,7 +48,7 @@ function errorCodigo(datos: FormularioLaboratorio, cohortes: Cohorte[], idActual
   if (codigo === "") return "El código es obligatorio.";
   if (codigo.length > MAX_CODIGO) return `El código no puede tener más de ${MAX_CODIGO} caracteres.`;
   if (datos.cohorte_id !== "" && codigoRepetido(datos, cohortes, idActual)) {
-    return "Ya existe un laboratorio con este código en la cohorte elegida.";
+    return "Ya existe un laboratorio con este código en el corte elegido.";
   }
   return undefined;
 }
@@ -60,7 +60,7 @@ export function validarLaboratorio(
   idActual: IdNumerico | null,
 ): ErroresLaboratorio {
   const errores: ErroresLaboratorio = {};
-  if (idDesdeUrl(datos.cohorte_id) === null) errores.cohorte_id = "Elige una cohorte.";
+  if (idDesdeUrl(datos.cohorte_id) === null) errores.cohorte_id = "Elige un corte.";
   const codigo = errorCodigo(datos, cohortes, idActual);
   if (codigo) errores.codigo = codigo;
   if (datos.titulo.trim() === "") errores.titulo = "El título es obligatorio.";

@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ClipboardList, Pencil, Plus } from "lucide-react";
+import { ClipboardList, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EstadoVacio, MensajeError } from "@/components/estados";
 import { Aviso, type DatosAviso } from "@/components/docente/aviso";
 import { DialogoLaboratorio } from "@/components/docente/dialogo-laboratorio";
-import { listarCohortes } from "@/lib/api";
-import type { Cohorte, Laboratorio, LaboratorioEnCohorte } from "@/lib/tipos";
+import { eliminarLaboratorio, listarCohortes, mensajeDeError } from "@/lib/api";
+import type { Cohorte, IdNumerico, Laboratorio, LaboratorioEnCohorte } from "@/lib/tipos";
+import { textoCorte } from "@/lib/corte";
 import { useCarga } from "@/lib/use-carga";
 
 /** null = diálogo cerrado; laboratorio null = crear uno nuevo. */
@@ -43,12 +44,23 @@ function EtiquetaRubrica({ version }: { version: number | null }) {
   );
 }
 
-interface FilaLaboratorioProps {
-  laboratorio: LaboratorioEnCohorte;
-  alEditar: () => void;
+function mensajeConfirmarEliminar(laboratorio: Laboratorio): string {
+  return (
+    `¿Eliminar el laboratorio ${laboratorio.codigo} — ${laboratorio.titulo}?\n\n` +
+    "También se borran su rúbrica y todas sus versiones. Esta acción no se puede deshacer. " +
+    "Si el laboratorio ya tiene entregas, el servidor no permitirá borrarlo."
+  );
 }
 
-function FilaLaboratorio({ laboratorio, alEditar }: FilaLaboratorioProps) {
+interface FilaLaboratorioProps {
+  laboratorio: LaboratorioEnCohorte;
+  eliminando: boolean;
+  ocupado: boolean;
+  alEditar: () => void;
+  alEliminar: () => void;
+}
+
+function FilaLaboratorio({ laboratorio, eliminando, ocupado, alEditar, alEliminar }: FilaLaboratorioProps) {
   return (
     <li className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center">
       <div className="min-w-0 flex-1 space-y-1">
@@ -61,8 +73,8 @@ function FilaLaboratorio({ laboratorio, alEditar }: FilaLaboratorioProps) {
           <p className="line-clamp-2 text-sm text-muted-foreground">{laboratorio.descripcion}</p>
         )}
       </div>
-      <div className="flex shrink-0 gap-2">
-        <Button variant="outline" size="sm" onClick={alEditar} aria-label={`Editar ${laboratorio.codigo}`}>
+      <div className="flex shrink-0 flex-wrap gap-2">
+        <Button variant="outline" size="sm" onClick={alEditar} disabled={ocupado} aria-label={`Editar ${laboratorio.codigo}`}>
           <Pencil aria-hidden="true" />
           Editar
         </Button>
@@ -72,6 +84,11 @@ function FilaLaboratorio({ laboratorio, alEditar }: FilaLaboratorioProps) {
             Rúbrica
           </Link>
         </Button>
+        <Button variant="destructive" size="sm" onClick={alEliminar} disabled={ocupado} aria-busy={eliminando}
+          aria-label={`Eliminar ${laboratorio.codigo}`}>
+          {eliminando ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Trash2 aria-hidden="true" />}
+          {eliminando ? "Eliminando…" : "Eliminar"}
+        </Button>
       </div>
     </li>
   );
@@ -79,14 +96,16 @@ function FilaLaboratorio({ laboratorio, alEditar }: FilaLaboratorioProps) {
 
 interface SeccionCohorteProps {
   cohorte: Cohorte;
+  eliminandoId: IdNumerico | null;
   alEditar: (laboratorio: Laboratorio) => void;
+  alEliminar: (laboratorio: Laboratorio) => void;
 }
 
-function SeccionCohorte({ cohorte, alEditar }: SeccionCohorteProps) {
+function SeccionCohorte({ cohorte, eliminandoId, alEditar, alEliminar }: SeccionCohorteProps) {
   return (
     <section aria-labelledby={`cohorte-${cohorte.id}`} className="space-y-3">
       <h2 id={`cohorte-${cohorte.id}`} className="text-xl font-semibold">
-        {cohorte.nombre}
+        {textoCorte(cohorte.nombre)}
       </h2>
       {cohorte.laboratorios.length === 0 ? (
         <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
@@ -95,7 +114,8 @@ function SeccionCohorte({ cohorte, alEditar }: SeccionCohorteProps) {
       ) : (
         <ul className="space-y-3">
           {cohorte.laboratorios.map((lab) => (
-            <FilaLaboratorio key={lab.id} laboratorio={lab} alEditar={() => alEditar(lab)} />
+            <FilaLaboratorio key={lab.id} laboratorio={lab} eliminando={eliminandoId === lab.id}
+              ocupado={eliminandoId !== null} alEditar={() => alEditar(lab)} alEliminar={() => alEliminar(lab)} />
           ))}
         </ul>
       )}
@@ -103,11 +123,12 @@ function SeccionCohorte({ cohorte, alEditar }: SeccionCohorteProps) {
   );
 }
 
-/** Lista de laboratorios por cohorte con crear/editar (RF-02 CA1) y estado de la rúbrica vigente (CA2). */
+/** Lista de laboratorios por corte (cohorte en el backend) con crear/editar/eliminar (RF-02 CA1) y estado de la rúbrica vigente (CA2). */
 export function VistaLaboratorios() {
   const { estado, recargar, refrescar } = useCarga(cargarLaboratorios);
   const [edicion, setEdicion] = useState<Edicion>(null);
   const [aviso, setAviso] = useState<DatosAviso | null>(null);
+  const [eliminandoId, setEliminandoId] = useState<IdNumerico | null>(null);
 
   if (estado.tipo === "cargando") return <EsqueletoLaboratorios />;
   if (estado.tipo === "error") {
@@ -123,6 +144,22 @@ export function VistaLaboratorios() {
     refrescar();
   }
 
+  async function alEliminar(laboratorio: Laboratorio) {
+    if (!window.confirm(mensajeConfirmarEliminar(laboratorio))) return;
+    setEliminandoId(laboratorio.id);
+    setAviso(null);
+    try {
+      await eliminarLaboratorio(laboratorio.id);
+      setAviso({ tipo: "exito", mensaje: `Se eliminó el laboratorio ${laboratorio.codigo}.` });
+      refrescar();
+    } catch (causa) {
+      // 409 (tiene entregas) y 404 traen `detail` en español: se muestra tal cual.
+      setAviso({ tipo: "error", mensaje: mensajeDeError(causa) });
+    } finally {
+      setEliminandoId(null);
+    }
+  }
+
   return (
     <div className="mt-6 space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -133,10 +170,12 @@ export function VistaLaboratorios() {
         </Button>
       </div>
       {cohortes.length === 0 ? (
-        <EstadoVacio titulo="No hay cohortes registradas" mensaje="Cuando el backend cargue las cohortes 1 y 2, aparecerán aquí." />
+        <EstadoVacio titulo="No hay cortes registrados" mensaje="Cuando el backend cargue los cortes 1 y 2, aparecerán aquí." />
       ) : (
         cohortes.map((cohorte) => (
-          <SeccionCohorte key={cohorte.id} cohorte={cohorte} alEditar={(laboratorio) => setEdicion({ laboratorio })} />
+          <SeccionCohorte key={cohorte.id} cohorte={cohorte} eliminandoId={eliminandoId}
+            alEditar={(laboratorio) => setEdicion({ laboratorio })}
+            alEliminar={(laboratorio) => void alEliminar(laboratorio)} />
         ))
       )}
       {edicion && (
