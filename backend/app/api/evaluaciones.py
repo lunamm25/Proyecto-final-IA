@@ -105,7 +105,7 @@ def _respuesta(detalle: servicio.DetalleEvaluacion) -> EvaluacionRespuesta:
         modelo=None if estudiante else ev.modelo,
         temperatura=None if estudiante else ev.temperatura,
         prompt_version=None if estudiante else ev.prompt_version,
-        error=ev.error,
+        error=None if estudiante else ev.error,
         criterios=[_criterio(f, detalle) for f in detalle.criterios],
         retroalimentacion=RetroalimentacionRespuesta.model_validate(final) if final else None,
         retroalimentacion_ia=None

@@ -829,3 +829,23 @@ def test_fallo_al_guardar_la_cache_no_deja_auditoria_huerfana(cli, ia, fabrica_a
     assert len(auditorias(fabrica_api, "generar_informe_ia")) == 1
     with fabrica_api() as s:
         assert s.scalar(select(func.count()).select_from(CacheIA)) == 5
+
+
+# ---------- El texto de `error` de una evaluación nunca llega al estudiante ----------
+
+MARCA_ERROR = "MARCA_ERROR_INTERNO_QX"
+
+
+@pytest.mark.parametrize("ruta", ROUTES[1:])
+@pytest.mark.parametrize("estado", ["error", "publicada"])
+def test_informe_y_mapa_no_incluyen_el_texto_de_error(cli, fabrica_api, ruta, estado):
+    with fabrica_api() as s:
+        for evaluacion in s.scalars(select(Evaluacion)):
+            evaluacion.error = f"{MARCA_ERROR} interno"
+            if evaluacion.estado == "error":
+                evaluacion.estado = estado
+                evaluacion.publicada_en = T0 if estado == "publicada" else None
+        s.commit()
+    respuesta = get(cli, ruta.format(id=ID_EST), ID_EST)
+    assert respuesta.status_code == 200, respuesta.text
+    assert MARCA_ERROR not in respuesta.text

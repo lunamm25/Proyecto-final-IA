@@ -5,6 +5,7 @@ La evaluación de partida se crea con el flujo real (POST /evaluar con evaluador
 """
 
 import copy
+import logging
 from datetime import datetime
 from decimal import Decimal
 
@@ -12,7 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.models import Auditoria, EvaluacionCriterio, RubricaVersion
+from app.models import Auditoria, Evaluacion, EvaluacionCriterio, RubricaVersion
 from app.services import revision
 from app.services.nota import calcular_nota
 from tests.test_auth import ID_ADMIN, ID_DOCENTE, ID_ESTUDIANTE
@@ -205,6 +206,27 @@ def test_ajuste_recalcula_nota_con_nota_py(cliente, datos, ev):
     assert c2.puntaje_normalizado == pytest.approx(0.0)
     assert c2.ajuste_docente == "El informe es confuso"
     assert fila(datos, ev, "C1").puntaje_normalizado == pytest.approx(0.75)
+
+
+MSG_NO_RECALCULA = "No se puede recalcular la nota con los datos actuales."
+TEXTO_INTERNO = "MARCADOR_INTERNO criterio C9 en https://interno.ejemplo/ruta"
+
+
+def test_fallo_al_recalcular_no_expone_el_detalle(cliente, datos, ev, monkeypatch, caplog):
+    def _calcular_roto(*_args, **_kwargs):
+        raise ValueError(TEXTO_INTERNO)
+
+    monkeypatch.setattr(revision, "calcular_nota", _calcular_roto)
+    with caplog.at_level(logging.WARNING, logger="app.services.revision"):
+        r = ajustar(cliente, ev, "C1", {"nivel_final": "Excelente", "motivo": "Muy completo"})
+    assert error(r, 409) == MSG_NO_RECALCULA
+    assert "MARCADOR_INTERNO" not in r.text and "C9" not in r.text
+    registros = [x.getMessage() for x in caplog.records if x.name == "app.services.revision"]
+    assert len(registros) == 1
+    assert str(ev) in registros[0]
+    assert "ValueError" in registros[0] and "MARCADOR_INTERNO" in registros[0]
+    assert "interno.ejemplo" not in registros[0]
+    assert fila(datos, ev, "C1").nivel_final == "Bueno"
 
 
 def test_ajuste_a_todo_maximo_da_5(cliente, datos, ev):
@@ -637,3 +659,40 @@ def test_estudiante_sin_edicion_ve_texto_de_la_ia(cliente, ev):
     cuerpo = ver(cliente, ev, ID_ESTUDIANTE).json()
     assert cuerpo["retroalimentacion"]["retroalimentacion_general"] == "Buen trabajo"
     assert cuerpo["criterios"][0]["justificacion"] == "Justificación de C1"
+
+
+# ---------- El texto de `error` nunca llega al estudiante ----------
+
+MARCA_ERROR = "MARCA_ERROR_INTERNO_QX"
+
+
+def poner_error(fabrica, evaluacion_id: int, estado: str) -> None:
+    with fabrica() as s:
+        evaluacion = s.get(Evaluacion, evaluacion_id)
+        evaluacion.estado = estado
+        evaluacion.error = f"{MARCA_ERROR} en app/servicio_interno.py"
+        s.commit()
+
+
+def test_estudiante_no_ve_el_texto_de_error_aunque_este_publicada(cliente, datos, ev):
+    poner_error(datos, ev, "publicada")
+    respuesta = ver(cliente, ev, ID_ESTUDIANTE)
+    assert respuesta.status_code == 200, respuesta.text
+    assert respuesta.json()["error"] is None
+    assert MARCA_ERROR not in respuesta.text
+
+
+def test_estudiante_evaluacion_en_error_403_sin_el_texto(cliente, datos, ev):
+    poner_error(datos, ev, "error")
+    respuesta = ver(cliente, ev, ID_ESTUDIANTE)
+    assert error(respuesta, 403) == MSG_PENDIENTE
+    assert MARCA_ERROR not in respuesta.text
+
+
+@pytest.mark.parametrize("usuario", [ID_DOCENTE, ID_ADMIN])
+@pytest.mark.parametrize("estado", ["error", "publicada"])
+def test_docente_y_admin_ven_el_texto_de_error(cliente, datos, ev, usuario, estado):
+    poner_error(datos, ev, estado)
+    respuesta = ver(cliente, ev, usuario)
+    assert respuesta.status_code == 200, respuesta.text
+    assert respuesta.json()["error"] == f"{MARCA_ERROR} en app/servicio_interno.py"
