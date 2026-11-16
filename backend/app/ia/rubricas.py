@@ -1,18 +1,43 @@
-"""Extracción de rúbricas: texto del documento -> RubricaSchema mediante el LLM (RF-03 CA1)."""
+"""Extracción de rúbricas: texto del documento -> RubricaSchema mediante el LLM (RF-03 CA1).
+
+Los puntajes de los niveles los decide el código, no el LLM: se conservan solo si aparecen en
+el documento; si no, con 3 niveles se asignan 5.0 / 3.5 / 0.0 de mayor a menor desempeño.
+"""
 
 import io
+import re
+from collections import Counter
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 
 from app.ia.providers import LLMProvider
-from app.ia.schemas import RubricaSchema
+from app.ia.schemas import Criterio, RubricaSchema
 
 CARPETA_PROMPTS = Path(__file__).resolve().parent / "prompts"
 EXTENSIONES_TEXTO = {".md", ".txt"}
 MARCADOR_TEXTO = "{texto_rubrica}"
+SEPARADOR_ENCABEZADO = "---"
+
+# Puntajes que asigna el código, de mayor a menor desempeño, cuando el documento no los trae.
+PUNTAJES_TRES_NIVELES = (5.0, 3.5, 0.0)
+# Acotado y anclado: evita el retroceso cuadrático con cadenas largas de dígitos (ReDoS).
+_NUMERO = r"(?<![\d.,])\d{1,6}(?:[.,]\d{1,4})?(?!\d)"
+_RE_NUMERO = re.compile(_NUMERO)
+_RE_RANGO = re.compile(rf"({_NUMERO})\s*(?:[-–—]|a)\s*({_NUMERO})")
+_CENTESIMA = Decimal("0.01")
+
+# Encabezados y pies de página: la línea con "Página N" y sus vecinas, repetidas en ≥3 páginas.
+_RE_MARCA_PAGINA = re.compile(r"\b(?:p[aá]gina|page|p[aá]g\.?)\s*\d+", re.IGNORECASE)
+MIN_REPETICIONES_PAGINA = 3
 
 
 def cargar_prompt(nombre: str) -> tuple[str, str]:
-    """Lee prompts/<nombre>.md y devuelve (versión, cuerpo)."""
+    """Lee prompts/<nombre>.md y devuelve (versión, cuerpo).
+
+    El archivo empieza con 'version: x.y'. Si las líneas que siguen sin línea en blanco
+    terminan en '---', son metadatos (p. ej. el historial de cambios) y no se envían al modelo.
+    Un '---' más abajo, dentro del cuerpo, se conserva.
+    """
     ruta = CARPETA_PROMPTS / f"{nombre}.md"
     if not ruta.is_file():
         raise FileNotFoundError(f"No existe el prompt '{nombre}' en {CARPETA_PROMPTS}.")
@@ -22,7 +47,13 @@ def cargar_prompt(nombre: str) -> tuple[str, str]:
         raise ValueError(f"El prompt '{nombre}' debe empezar con la línea 'version: x.y'.")
     version = primera.split(":", 1)[1].strip()
     resto = lineas[1:]
-    while resto and resto[0].strip() in ("", "---"):
+    for indice, linea in enumerate(resto):
+        if not linea.strip():
+            break
+        if linea.strip() == SEPARADOR_ENCABEZADO:
+            resto = resto[indice + 1 :]
+            break
+    while resto and not resto[0].strip():
         resto = resto[1:]
     return version, "\n".join(resto).strip() + "\n"
 
@@ -35,11 +66,104 @@ def construir_prompt_rubrica(texto: str) -> str:
     return _PLANTILLA_EXTRAER_RUBRICA.replace(MARCADOR_TEXTO, texto.strip())
 
 
+def _clave_linea(linea: str) -> str:
+    """Línea sin espacios repetidos y con los números reemplazados (para comparar páginas)."""
+    return re.sub(r"\d+", "#", " ".join(linea.split()))
+
+
+def quitar_encabezados_pagina(texto: str) -> str:
+    """Quita los encabezados/pies que se repiten en cada página para que no tapen el título.
+
+    Se quita la línea con "Página N" y sus vecinas inmediatas cuando se repiten en al menos 3
+    páginas; así no se borran encabezados de tabla ni frases que se repiten una o dos veces.
+    """
+    lineas = texto.splitlines()
+    claves = [_clave_linea(linea) for linea in lineas]
+    conteo = Counter(claves)
+    marcas = {
+        i
+        for i, linea in enumerate(lineas)
+        if _RE_MARCA_PAGINA.search(linea) and conteo[claves[i]] >= MIN_REPETICIONES_PAGINA
+    }
+    vecinas = {
+        j
+        for i in marcas
+        for j in (i - 1, i + 1)
+        if 0 <= j < len(lineas) and claves[j] and conteo[claves[j]] >= MIN_REPETICIONES_PAGINA
+    }
+    quitar = marcas | vecinas
+    return "\n".join(linea for i, linea in enumerate(lineas) if i not in quitar).strip()
+
+
+def _a_decimal(texto: str) -> Decimal | None:
+    """Convierte '4,5' o '4.5' en Decimal redondeado a centésimas (None si no es número)."""
+    try:
+        return Decimal(texto.replace(",", ".")).quantize(_CENTESIMA, rounding=ROUND_HALF_UP)
+    except InvalidOperation:
+        return None
+
+
+def numeros_del_documento(texto: str) -> set[Decimal]:
+    """Números de un fragmento más el punto medio de cada rango ('4.5-5.0' -> 4.75)."""
+    numeros = {d for n in _RE_NUMERO.findall(texto) if (d := _a_decimal(n)) is not None}
+    for minimo, maximo in _RE_RANGO.findall(texto):
+        a, b = _a_decimal(minimo), _a_decimal(maximo)
+        if a is not None and b is not None:
+            numeros.add(((a + b) / 2).quantize(_CENTESIMA, rounding=ROUND_HALF_UP))
+    return numeros
+
+
+def _numeros_del_nivel(nombre: str, lineas: list[str]) -> set[Decimal]:
+    """Números de las líneas que nombran el nivel y de la siguiente ('Excelente (4.5-5.0)')."""
+    clave = " ".join(nombre.split()).casefold()
+    numeros: set[Decimal] = set()
+    if not clave:
+        return numeros
+    for indice, linea in enumerate(lineas):
+        if clave in linea:
+            numeros |= numeros_del_documento("\n".join(lineas[indice : indice + 2]))
+    return numeros
+
+
+def _puntajes_del_documento(criterio: Criterio, lineas: list[str]) -> bool:
+    """True si cada puntaje aparece junto al nombre de su nivel y todos son distintos."""
+    puntajes = [_a_decimal(str(n.puntaje)) for n in criterio.niveles]
+    junto_al_nombre = all(
+        p in _numeros_del_nivel(n.nombre, lineas)
+        for n, p in zip(criterio.niveles, puntajes, strict=True)
+    )
+    return len(set(puntajes)) == len(puntajes) and junto_al_nombre
+
+
+def asignar_puntajes(rubrica: RubricaSchema, texto: str) -> RubricaSchema:
+    """Conserva los puntajes que están en el documento; si no, 3 niveles -> 5.0 / 3.5 / 0.0.
+
+    Con otra cantidad de niveles no se inventan puntajes: queda lo que devolvió el modelo y el
+    validador del backend reporta la inconsistencia (RF-03 CA2). Un puntaje solo cuenta como del
+    documento si aparece en la línea que nombra su nivel o en la siguiente: un número suelto en
+    otra parte (minutos, numeración de secciones) no basta.
+    """
+    lineas = [" ".join(linea.split()).casefold() for linea in texto.splitlines()]
+    criterios = []
+    for criterio in rubrica.criterios:
+        sin_puntajes = not _puntajes_del_documento(criterio, lineas)
+        if sin_puntajes and len(criterio.niveles) == len(PUNTAJES_TRES_NIVELES):
+            niveles = [
+                nivel.model_copy(update={"puntaje": puntaje})
+                for nivel, puntaje in zip(criterio.niveles, PUNTAJES_TRES_NIVELES, strict=True)
+            ]
+            criterio = criterio.model_copy(update={"niveles": niveles})
+        criterios.append(criterio)
+    return rubrica.model_copy(update={"criterios": criterios})
+
+
 def extraer_rubrica(texto: str, proveedor: LLMProvider) -> RubricaSchema:
     """Convierte el texto de una rúbrica en un RubricaSchema validado."""
     if not texto or not texto.strip():
         raise ValueError("El texto de la rúbrica está vacío; no hay nada que extraer.")
-    return proveedor.generar_json(construir_prompt_rubrica(texto), RubricaSchema)
+    limpio = quitar_encabezados_pagina(texto) or texto.strip()
+    rubrica = proveedor.generar_json(construir_prompt_rubrica(limpio), RubricaSchema)
+    return asignar_puntajes(rubrica, limpio)
 
 
 def _texto_docx(datos: bytes) -> str:
