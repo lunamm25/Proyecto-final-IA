@@ -39,7 +39,12 @@ from app.services.errores import (
 )
 from app.services.evaluador_ia import Evaluador, ResultadoIA, SolicitudEvaluacion
 from app.services.fechas import a_utc
-from app.services.material import CargadorMaterial, resumen_verificacion, sanear_verificacion
+from app.services.material import (
+    CargadorMaterial,
+    Material,
+    resumen_verificacion,
+    sanear_verificacion,
+)
 from app.services.nota import calcular_nota
 from app.services.rubricas import validar_rubrica
 from app.services.secretos import detalle_error_tachado
@@ -62,6 +67,7 @@ MSG_SIN_VERSION = "La entrega no tiene una versión de rúbrica aprobada; no se 
 MSG_RUBRICA_INCONSISTENTE = (
     "La versión de la rúbrica de esta entrega tiene inconsistencias; no se puede evaluar: {}"
 )
+MSG_RUBRICA_NO_LISTA = "La rúbrica de este laboratorio no está lista. Avisa a tu docente."
 MSG_PENDIENTE = "La evaluación está pendiente de revisión docente."
 MSG_ERROR_GENERICO = (
     "No se pudo completar la evaluación automática. Intenta de nuevo o contacta al docente."
@@ -135,12 +141,14 @@ def _entrega_visible(db: Session, entrega_id: int, perfil: Perfil) -> Entrega:
     return entrega
 
 
-def _version_evaluable(db: Session, entrega: Entrega) -> RubricaVersion:
-    """Versión de rúbrica de la entrega, aprobada y sin inconsistencias (o 409)."""
+def _version_evaluable(db: Session, entrega: Entrega, perfil: Perfil) -> RubricaVersion:
+    """Versión aprobada y sin inconsistencias (o 409; el estudiante no ve la lista)."""
     version = db.get(RubricaVersion, entrega.rubrica_version_id)
     if version is None or version.estado != "aprobada":
         raise ConflictoError(MSG_SIN_VERSION)
     inconsistencias = validar_rubrica(version.contenido)
+    if inconsistencias and not _es_docente(perfil):
+        raise ConflictoError(MSG_RUBRICA_NO_LISTA)
     if inconsistencias:
         raise ConflictoError(MSG_RUBRICA_INCONSISTENTE.format(" ".join(inconsistencias)))
     return version
@@ -276,7 +284,7 @@ def lanzar_evaluacion(
     el lanzamiento termina en 409; el lanzamiento y su auditoría van en otro commit.
     """
     entrega = _entrega_visible(db, entrega_id, perfil)
-    _version_evaluable(db, entrega)
+    _version_evaluable(db, entrega, perfil)
     recuperar_atascadas(db, entrega.id)
     _comprobar_relanzamiento(db, entrega.id, perfil)
     config = configuracion_ia(db, settings)
@@ -349,6 +357,8 @@ def _guardar_exito(
 ) -> None:
     """Calcula la nota con nota.py y guarda criterios, resultado, verificación y auditoría.
 
+    `verificacion` son las columnas de verificaciones_codigo (ver `_fila_verificacion`).
+
     Si la evaluación ya no está en `procesando` (p. ej. se dio por atascada), no escribe nada
     del resultado: solo deja constancia en auditoría de que se descartó.
     """
@@ -383,11 +393,7 @@ def _guardar_exito(
     evaluacion.resultado = _resultado_json(resultado)
     evaluacion.error = None
     if verificacion is not None:
-        db.add(
-            VerificacionCodigo(
-                evaluacion_id=evaluacion.id, metricas=verificacion, sandbox=TIPO_SANDBOX
-            )
-        )
+        db.add(VerificacionCodigo(evaluacion_id=evaluacion.id, **verificacion))
     db.add(
         Auditoria(
             usuario_id=usuario_id,
@@ -427,6 +433,35 @@ def _auditar_descarte(
     )
 
 
+def _fila_verificacion(material: Material) -> dict[str, Any] | None:
+    """Columnas de verificaciones_codigo: resumen del sandbox (si se ejecutó) y análisis estático.
+
+    `metricas` guarda los 3 campos del sandbox (los únicos que muestran el detalle y la traza) y,
+    en `estatico`, los conteos del análisis estático.
+    """
+    sandbox = resumen_verificacion(material.resultados_verificacion)
+    estatico = material.analisis_estatico
+    if sandbox is None and not estatico:
+        return None
+    metricas: dict[str, Any] = dict(sandbox or {})
+    fila: dict[str, Any] = {"sandbox": TIPO_SANDBOX if sandbox is not None else None}
+    if estatico:
+        metricas["estatico"] = estatico.get("resumen")
+        for columna in ("sintaxis", "ruff", "complejidad", "tests"):
+            fila[columna] = estatico.get(columna)
+    fila["metricas"] = metricas
+    return fila
+
+
+def _verificacion_para_ia(material: Material) -> Any:
+    """Lo que se ofrece a la IA: el resumen del sandbox y los conteos del análisis estático."""
+    estatico = material.analisis_estatico
+    if not estatico:
+        return material.resultados_verificacion
+    base = material.resultados_verificacion
+    return {**(base if isinstance(base, dict) else {}), "estatico": estatico.get("resumen")}
+
+
 def _solicitud(
     db: Session, evaluacion: Evaluacion, entrega: Entrega, cargar_material: CargadorMaterial
 ) -> tuple[RubricaVersion, SolicitudEvaluacion, dict[str, Any] | None]:
@@ -438,14 +473,14 @@ def _solicitud(
     material = cargar_material(db, entrega)
     if not material.texto_informe.strip() and not (material.resumen_codigo or "").strip():
         raise DominioError(MSG_SIN_TEXTO)
-    verificacion = resumen_verificacion(material.resultados_verificacion)
+    verificacion = _fila_verificacion(material)
     solicitud = SolicitudEvaluacion(
         rubrica=version.contenido,
         descripcion=laboratorio.descripcion or "",
         objetivos=laboratorio.objetivos or "",
         texto_informe=material.texto_informe,
         resumen_codigo=material.resumen_codigo,
-        resultados_verificacion=sanear_verificacion(material.resultados_verificacion),
+        resultados_verificacion=sanear_verificacion(_verificacion_para_ia(material)),
         proveedor=evaluacion.proveedor or "",
         modelo=evaluacion.modelo or "",
         temperatura=evaluacion.temperatura or 0.0,

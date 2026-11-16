@@ -119,14 +119,18 @@ def crear_entrega(
     settings: Annotated[Settings, Depends(get_settings)],
     almacen: Annotated[AlmacenArchivos, Depends(obtener_almacen)],
     laboratorio_id: Annotated[int, Form()],
-    pdf: Annotated[UploadFile | None, File(description="Informe en PDF con texto.")] = None,
-    codigo_zip: Annotated[
-        UploadFile | None, File(alias="zip", description="Código en ZIP (≤ 20 MB).")
+    pdf: Annotated[
+        UploadFile | None, File(description="Informe en PDF con texto (obligatorio).")
     ] = None,
-    github_url: Annotated[str | None, Form(description="https://github.com/usuario/repo")] = None,
+    codigo_zip: Annotated[
+        UploadFile | None, File(alias="zip", description="Código en ZIP, opcional (≤ 20 MB).")
+    ] = None,
+    github_url: Annotated[
+        str | None, Form(description="Opcional: https://github.com/usuario/repo")
+    ] = None,
     extras: Annotated[str | None, Form(description="Objeto JSON pequeño (opcional).")] = None,
 ) -> EntregaRespuesta:
-    """Crea la entrega del estudiante: al menos uno de PDF, ZIP o URL de GitHub."""
+    """Crea la entrega del estudiante: PDF obligatorio; ZIP y URL de GitHub opcionales."""
     fila = servicio_entregas.crear_entrega(
         db,
         estudiante,

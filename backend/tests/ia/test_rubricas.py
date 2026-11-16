@@ -60,7 +60,7 @@ def test_prompt_incluye_texto_y_reglas_clave() -> None:
     assert "punto medio" in prompt
     assert "límite superior" not in prompt
     assert "Excelente, Competente, Insuficiente" in prompt
-    assert "5.0, 3.5 y 0.0" in prompt
+    assert "No inventes puntajes" in prompt
     assert "evidencia esperada" in prompt
     assert "incluyendo el subtítulo" in prompt
     assert "nómbralos de forma concreta" in prompt
@@ -88,8 +88,9 @@ def test_respuesta_invalida_reintenta() -> None:
 
 def test_cargar_prompt_devuelve_version() -> None:
     version, cuerpo = cargar_prompt("extraer_rubrica")
-    assert version == "1.0"
-    assert VERSION_PROMPT_EXTRAER_RUBRICA == "1.0"
+    assert version == "1.1"
+    assert VERSION_PROMPT_EXTRAER_RUBRICA == "1.1"
+    assert "cambios:" not in cuerpo
     assert "{texto_rubrica}" in cuerpo
 
 
