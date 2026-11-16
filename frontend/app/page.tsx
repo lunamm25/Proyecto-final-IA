@@ -21,7 +21,7 @@ const objetivos = [
 ];
 
 const funcionalidades = [
-  { icono: FolderOpen, titulo: "Portafolio académico", texto: "Entrega por laboratorio: informe PDF, código (ZIP o GitHub) e imágenes opcionales." },
+  { icono: FolderOpen, titulo: "Portafolio académico", texto: "Entrega por laboratorio: informe en PDF obligatorio; código en ZIP y enlace de GitHub opcionales." },
   { icono: ClipboardCheck, titulo: "Gestión de rúbricas", texto: "Carga, extracción con IA, validación automática, edición y versionado." },
   { icono: BrainCircuit, titulo: "Evaluación inteligente", texto: "Nivel propuesto por criterio con evidencias citadas, fortalezas y recomendaciones." },
   { icono: ShieldCheck, titulo: "Verificación de código", texto: "Análisis estático y pruebas en un entorno aislado (sandbox)." },
