@@ -3,16 +3,26 @@ import zipfile
 
 import pytest
 
-from tests.test_auth import ID_ADMIN, ID_DOCENTE, ID_ESTUDIANTE, con_token, token_hs
+from app.main import crear_app
+from tests.test_auth import (
+    ID_ADMIN,
+    ID_DOCENTE,
+    ID_ESTUDIANTE,
+    ajustes,
+    con_token,
+    preparar,
+    token_hs,
+)
 
 RUTA = "/api/sandbox/ejecutar"
 DOCENTE = con_token(token_hs(ID_DOCENTE))
 
 
 @pytest.fixture
-def client(cliente_api):
-    """Cliente con BD de prueba y perfiles de cada rol (el endpoint exige rol docente)."""
-    return cliente_api
+def client(fabrica_api):
+    """Cliente con el sandbox habilitado y perfiles de cada rol (el endpoint exige docente)."""
+    config = ajustes(sandbox_habilitado=True)
+    return preparar(crear_app(config), fabrica_api, config)
 
 
 def _zip_bytes(archivos: dict[str, str]) -> bytes:
@@ -82,3 +92,21 @@ def test_endpoint_admin_puede_ejecutar(client):
     respuesta = _enviar(client, con_token(token_hs(ID_ADMIN)))
     assert respuesta.status_code == 200
     assert "hola" in respuesta.json()["stdout"]
+
+
+def test_endpoint_apagado_por_defecto_responde_404(cliente_api):
+    """Sin SANDBOX_HABILITADO el endpoint no existe, ni siquiera para un docente."""
+    respuesta = _enviar(cliente_api, DOCENTE)
+    assert respuesta.status_code == 404
+    assert "stdout" not in respuesta.json()
+
+
+def test_endpoint_apagado_responde_404_sin_token(cliente_api):
+    """Apagado tampoco revela que existe: 404 y no 401."""
+    assert _enviar(cliente_api).status_code == 404
+
+
+def test_sandbox_habilitado_es_false_por_defecto():
+    from app.config import Settings
+
+    assert Settings(_env_file=None).sandbox_habilitado is False

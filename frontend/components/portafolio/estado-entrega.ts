@@ -1,0 +1,60 @@
+import type { Entrega, IdNumerico } from "@/lib/tipos";
+
+/** Estado del laboratorio tal como lo ve el estudiante (RF-04 CA4 y RF-05 CA6). */
+export type EstadoLaboratorio = "sin_entregar" | "sin_evaluar" | "procesando" | "pendiente" | "publicada" | "error";
+
+export const TEXTO_ESTADO: Record<EstadoLaboratorio, string> = {
+  sin_entregar: "Sin entregar",
+  sin_evaluar: "Sin evaluar",
+  procesando: "En evaluación",
+  pendiente: "Pendiente de revisión docente",
+  publicada: "Publicada",
+  error: "Error en la evaluación",
+};
+
+export const CLASES_ESTADO: Record<EstadoLaboratorio, string> = {
+  sin_entregar: "border-zinc-300 bg-zinc-100 text-zinc-700",
+  sin_evaluar: "border-sky-300 bg-sky-50 text-sky-800",
+  procesando: "border-violet-300 bg-violet-50 text-violet-800",
+  pendiente: "border-amber-300 bg-amber-50 text-amber-800",
+  publicada: "border-emerald-300 bg-emerald-50 text-emerald-800",
+  error: "border-red-300 bg-red-50 text-red-800",
+};
+
+/**
+ * Estado a partir de `ultima_evaluacion`. Para el estudiante, el backend envía "pendiente_revision" (y nota null)
+ * mientras la evaluación no esté publicada; cualquier estado intermedio también se muestra como pendiente.
+ */
+export function estadoDeLaboratorio(entrega: Entrega | undefined): EstadoLaboratorio {
+  if (!entrega) return "sin_entregar";
+  const ultima = entrega.ultima_evaluacion;
+  if (!ultima) return "sin_evaluar";
+  if (ultima.estado === "publicada") return "publicada";
+  if (ultima.estado === "error") return "error";
+  if (ultima.estado === "procesando") return "procesando";
+  return "pendiente";
+}
+
+/** Nota del backend solo si la evaluación está publicada (nunca se inventa ni se calcula). */
+export function notaVisible(entrega: Entrega | undefined): number | null {
+  const ultima = entrega?.ultima_evaluacion;
+  return ultima?.estado === "publicada" ? ultima.nota : null;
+}
+
+/** Formatea la nota que envía el backend con coma decimal (3.6 → "3,6"). No la calcula. */
+export function formatearNota(nota: number): string {
+  return nota.toFixed(1).replace(".", ",");
+}
+
+/** Devuelve la entrega más reciente de cada laboratorio. */
+export function ultimaEntregaPorLaboratorio(entregas: Entrega[]): Map<IdNumerico, Entrega> {
+  const mapa = new Map<IdNumerico, Entrega>();
+  for (const entrega of entregas) {
+    const actual = mapa.get(entrega.laboratorio.id);
+    if (!actual || entrega.creada_en > actual.creada_en) mapa.set(entrega.laboratorio.id, entrega);
+  }
+  return mapa;
+}
+
+/** Fecha en hora de Bogotá (ver lib/fechas.ts). */
+export { formatearFecha } from "@/lib/fechas";
