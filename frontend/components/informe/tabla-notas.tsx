@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SeccionInforme } from "@/components/informe/seccion-informe";
 import { textoNota } from "@/components/informe/formato-informe";
+import { textoCorte } from "@/lib/corte";
 import { rutaEvaluacion } from "@/lib/rutas-evaluacion";
 import type { LaboratorioInforme } from "@/lib/tipos";
 
@@ -12,7 +13,7 @@ export function TablaNotas({ laboratorios }: { laboratorios: LaboratorioInforme[
         <table className="w-full min-w-md text-left text-sm">
           <thead className="text-muted-foreground">
             <tr>
-              <th scope="col" className="py-2 pr-4 font-medium">Cohorte</th>
+              <th scope="col" className="py-2 pr-4 font-medium">Corte</th>
               <th scope="col" className="py-2 pr-4 font-medium">Código</th>
               <th scope="col" className="py-2 pr-4 font-medium">Laboratorio</th>
               <th scope="col" className="py-2 text-right font-medium">Nota</th>
@@ -21,7 +22,7 @@ export function TablaNotas({ laboratorios }: { laboratorios: LaboratorioInforme[
           <tbody>
             {laboratorios.map((lab) => (
               <tr key={lab.laboratorio_id} className="border-t break-inside-avoid">
-                <td className="py-2 pr-4">{lab.cohorte}</td>
+                <td className="py-2 pr-4">{textoCorte(lab.cohorte)}</td>
                 <td className="py-2 pr-4 font-mono text-xs">{lab.codigo}</td>
                 <td className="py-2 pr-4">
                   <Link

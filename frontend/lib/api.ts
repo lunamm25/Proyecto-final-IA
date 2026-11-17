@@ -1,5 +1,5 @@
 // Cliente único del API (contrato §11). Añade el JWT de Supabase y traduce los errores al español.
-// Modo mock: si NEXT_PUBLIC_USAR_MOCKS=true o falta NEXT_PUBLIC_API_URL, responde con lib/mocks.ts.
+// Modo mock (nunca en producción): si NEXT_PUBLIC_USAR_MOCKS=true o falta NEXT_PUBLIC_API_URL, responde con lib/mocks.ts.
 // En modo mock el rol de /api/yo sale del email de la sesión: contiene "admin" → admin,
 // contiene "docente" → docente; cualquier otro → estudiante.
 import {
@@ -70,7 +70,13 @@ import type {
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
 
-export const MODO_MOCK = process.env.NEXT_PUBLIC_USAR_MOCKS === "true" || API_URL === "";
+const ES_PRODUCCION = process.env.NODE_ENV === "production";
+
+/** Datos simulados solo fuera de producción. En producción siempre se usa el backend real. */
+export const MODO_MOCK = !ES_PRODUCCION && (process.env.NEXT_PUBLIC_USAR_MOCKS === "true" || API_URL === "");
+
+const MENSAJE_FALTA_API_URL =
+  "La aplicación no está bien configurada: falta la dirección del servidor (NEXT_PUBLIC_API_URL). Avisa al equipo.";
 
 export class ErrorApi extends Error {
   readonly status: number;
@@ -120,6 +126,10 @@ function mensajeSinPermiso(detalle: string): string {
 }
 
 function mensajePorEstado(status: number, cuerpo: unknown): string {
+  if (status === 503 && esErrorRespuesta(cuerpo) && typeof cuerpo.detail === "string" && cuerpo.detail.trim() !== "") {
+    // 503 trae un `detail` en español pensado para el usuario (IA o almacenamiento no disponibles).
+    return cuerpo.detail;
+  }
   if (status >= 500) return "El servidor tuvo un problema. Intenta de nuevo en unos minutos.";
   const base = MENSAJES_POR_ESTADO[status] ?? `Error inesperado del servidor (código ${status}).`;
   if (!esErrorRespuesta(cuerpo)) return base;
@@ -170,6 +180,7 @@ async function fetchConLimite(url: string, opciones: RequestInit, limite?: Limit
 }
 
 async function enviar(metodo: Metodo, ruta: string, cuerpo?: unknown, limite?: LimiteEspera): Promise<Response> {
+  if (API_URL === "") throw new ErrorApi(0, MENSAJE_FALTA_API_URL);
   const cabeceras = new Headers({ Accept: "application/json" });
   const token = await obtenerToken();
   if (token) cabeceras.set("Authorization", `Bearer ${token}`);
@@ -328,7 +339,7 @@ function validarCodigoUnicoMock(datos: LaboratorioEntrada, idActual: IdNumerico 
   if (!cohorte) throw noEncontrado();
   const codigo = datos.codigo.trim().toLowerCase();
   if (cohorte.laboratorios.some((l) => l.id !== idActual && l.codigo.trim().toLowerCase() === codigo)) {
-    throw new ErrorApi(409, `Ya existe un laboratorio con el código ${datos.codigo} en esta cohorte.`);
+    throw new ErrorApi(409, `Ya existe un laboratorio con el código ${datos.codigo} en este corte.`);
   }
 }
 
@@ -344,9 +355,8 @@ const PATRON_GITHUB_MOCK = /^https:\/\/github\.com\/[A-Za-z0-9][A-Za-z0-9-]{0,38
  * laboratorio existente con rúbrica aprobada (422).
  */
 function validarEntregaMock(datos: NuevaEntrega): void {
-  if (!datos.pdf && !datos.zip && !datos.github_url?.trim()) {
-    throw new ErrorApi(422, "Debes adjuntar al menos uno: el PDF del informe, el ZIP del código o la URL de GitHub.");
-  }
+  // Igual que el backend (MSG_PDF_OBLIGATORIO): sin PDF, 422. ZIP y GitHub son opcionales.
+  if (!(datos.pdf instanceof File)) throw new ErrorApi(422, "El informe en PDF es obligatorio.");
   if (!existeLaboratorioMock(datos.laboratorio_id)) throw new ErrorApi(422, "El laboratorio no existe.");
   if (!estadoMock.rubricas[datos.laboratorio_id]) {
     throw new ErrorApi(422, "El laboratorio aún no tiene rúbrica aprobada; no se pueden recibir entregas.");
@@ -890,6 +900,10 @@ export async function actualizarLaboratorio(id: IdNumerico, datos: LaboratorioEn
 export async function eliminarLaboratorio(id: IdNumerico): Promise<void> {
   if (MODO_MOCK) {
     await simulado(() => {
+      // Igual que el backend: 409 si el laboratorio tiene entregas.
+      if (estadoMock.entregas.some((entrega) => entrega.laboratorio.id === id)) {
+        throw new ErrorApi(409, "No se puede borrar: el laboratorio tiene entregas");
+      }
       estadoMock.cohortes.forEach((cohorte) => {
         cohorte.laboratorios = cohorte.laboratorios.filter((l) => l.id !== id);
       });

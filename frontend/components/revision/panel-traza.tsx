@@ -1,12 +1,16 @@
 import { EstadoVacio } from "@/components/estados";
 import { formatearFechaHora } from "@/components/evaluaciones/estado-evaluacion";
 import { NoDisponible, PanelVerificacion } from "@/components/revision/panel-verificacion";
+import { RespuestaCruda, respuestasCrudasDe, sinRespuestasCrudas } from "@/components/revision/respuesta-cruda";
 import { nombreVisible } from "@/lib/perfil";
 import type { Evaluacion, EventoTraza, JsonValor, Traza } from "@/lib/tipos";
 
 const TEXTO_ACCION: Record<string, string> = {
   lanzar_evaluacion: "Evaluación solicitada",
   evaluacion_completada: "Evaluación completada por la IA",
+  evaluacion_ia: "Evaluación completada por la IA",
+  evaluacion_ia_error: "Error en la evaluación de la IA",
+  evaluacion_ia_descartada: "Resultado de la IA descartado",
   revisar: "Paso a revisión",
   ajustar_criterio: "Ajuste de criterio",
   ajuste_criterio: "Ajuste de criterio",
@@ -42,7 +46,9 @@ function fecha(iso: string | null): string {
 }
 
 function ItemEvento({ evento }: { evento: EventoTraza }) {
-  const hayCambio = evento.antes !== null || evento.despues !== null;
+  // La respuesta cruda se muestra aparte (colapsada); aquí solo el resto del cambio.
+  const despues = sinRespuestasCrudas(evento.despues);
+  const hayCambio = evento.antes !== null || despues !== null;
   return (
     <li className="rounded-lg border p-3 text-sm">
       <div className="flex flex-wrap justify-between gap-2">
@@ -59,7 +65,7 @@ function ItemEvento({ evento }: { evento: EventoTraza }) {
           <span className="text-muted-foreground">{describir(evento.antes)}</span>
           <span aria-hidden="true"> → </span>
           <span className="sr-only"> cambió a </span>
-          <span className="font-medium">{describir(evento.despues)}</span>
+          <span className="font-medium">{describir(despues)}</span>
         </p>
       )}
       {evento.motivo && <p className="mt-1">Motivo: {evento.motivo}</p>}
@@ -67,8 +73,17 @@ function ItemEvento({ evento }: { evento: EventoTraza }) {
   );
 }
 
+/** Respuestas crudas del evento más reciente que las tenga (la última ejecución de la IA). */
+function ultimasRespuestasCrudas(eventos: EventoTraza[]): string[] {
+  const conCrudas = eventos.filter((evento) => respuestasCrudasDe(evento).length > 0);
+  if (conCrudas.length === 0) return [];
+  const ultimo = conCrudas.reduce((a, b) => (Date.parse(b.fecha) >= Date.parse(a.fecha) ? b : a));
+  return respuestasCrudasDe(ultimo);
+}
+
 /** Trazabilidad de la evaluación (RNF-03): modelo, versiones, fechas, verificación técnica y eventos de auditoría. */
 export function PanelTraza({ traza, evaluacion }: { traza: Traza; evaluacion: Evaluacion }) {
+  const respuestasCrudas = ultimasRespuestasCrudas(traza.eventos);
   return (
     <div className="space-y-4">
       <dl className="grid gap-3 rounded-lg border p-3 sm:grid-cols-3">
@@ -97,10 +112,17 @@ export function PanelTraza({ traza, evaluacion }: { traza: Traza; evaluacion: Ev
           </ol>
         )}
       </div>
-      <NoDisponible
-        titulo="Respuesta cruda del modelo no disponible"
-        mensaje="El servidor todavía no incluye la respuesta original del modelo en la traza."
-      />
+      <div>
+        <h4 className="mb-2 text-sm font-semibold">Respuesta cruda de la IA</h4>
+        {respuestasCrudas.length > 0 ? (
+          <RespuestaCruda respuestas={respuestasCrudas} />
+        ) : (
+          <NoDisponible
+            titulo="Sin respuesta cruda registrada"
+            mensaje="La traza de esta evaluación no incluye la respuesta original del modelo."
+          />
+        )}
+      </div>
     </div>
   );
 }

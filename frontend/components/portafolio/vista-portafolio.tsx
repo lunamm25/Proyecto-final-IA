@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { EstadoVacio, MensajeError } from "@/components/estados";
@@ -9,7 +8,7 @@ import { TarjetaLaboratorio } from "@/components/portafolio/tarjeta-laboratorio"
 import { ultimaEntregaPorLaboratorio } from "@/components/portafolio/estado-entrega";
 import { evaluarEntrega, listarCohortes, listarTodasLasEntregas, mensajeDeError } from "@/lib/api";
 import type { Cohorte, Entrega, IdNumerico } from "@/lib/tipos";
-import { rutaEvaluacion } from "@/lib/rutas-evaluacion";
+import { textoCorte } from "@/lib/corte";
 import { useCarga } from "@/lib/use-carga";
 
 interface DatosPortafolio {
@@ -17,7 +16,7 @@ interface DatosPortafolio {
   entregas: Map<IdNumerico, Entrega>;
 }
 
-type Aviso = { tipo: "exito" | "error"; mensaje: string; evaluacionId?: IdNumerico; laboratorioId?: IdNumerico };
+type Aviso = { tipo: "exito" | "error"; mensaje: string };
 
 function EsqueletoPortafolio() {
   return (
@@ -45,20 +44,7 @@ function AvisoAccion({ aviso }: { aviso: Aviso }) {
       }`}
     >
       {exito && <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" />}
-      <p>
-        {aviso.mensaje}
-        {aviso.evaluacionId !== undefined && (
-          <>
-            {" "}
-            <Link
-              href={rutaEvaluacion(aviso.evaluacionId, { laboratorioId: aviso.laboratorioId })}
-              className="font-medium underline underline-offset-4"
-            >
-              Ver progreso
-            </Link>
-          </>
-        )}
-      </p>
+      <p>{aviso.mensaje}</p>
     </div>
   );
 }
@@ -74,7 +60,7 @@ function SeccionCohorte({ cohorte, entregas, evaluandoId, alEvaluar }: SeccionCo
   return (
     <section aria-labelledby={`cohorte-${cohorte.id}`} className="space-y-3">
       <h2 id={`cohorte-${cohorte.id}`} className="text-xl font-semibold">
-        {cohorte.nombre}
+        {textoCorte(cohorte.nombre)}
       </h2>
       {cohorte.laboratorios.length === 0 ? (
         <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
@@ -116,16 +102,14 @@ export function VistaPortafolio() {
   const { estado, recargar, refrescar } = useCarga(cargar);
 
   const alEvaluar = useCallback(
-    async (entregaId: IdNumerico, laboratorioId: IdNumerico) => {
+    async (entregaId: IdNumerico) => {
       setEvaluandoId(entregaId);
       setAviso(null);
       try {
-        const { evaluacion_id: evaluacionId } = await evaluarEntrega(entregaId);
+        await evaluarEntrega(entregaId);
         setAviso({
           tipo: "exito",
           mensaje: "Tu entrega se envió a evaluación. Quedó pendiente de revisión docente: verás la nota cuando se publique.",
-          evaluacionId,
-          laboratorioId,
         });
         refrescar();
       } catch (causa) {
@@ -146,8 +130,8 @@ export function VistaPortafolio() {
   if (cohortes.length === 0) {
     return (
       <EstadoVacio
-        titulo="Aún no hay cohortes"
-        mensaje="Cuando el docente registre las cohortes y sus laboratorios, aparecerán aquí."
+        titulo="Aún no hay cortes"
+        mensaje="Cuando el docente registre los cortes y sus laboratorios, aparecerán aquí."
       />
     );
   }
@@ -162,7 +146,7 @@ export function VistaPortafolio() {
             cohorte={cohorte}
             entregas={entregas}
             evaluandoId={evaluandoId}
-            alEvaluar={(id, laboratorioId) => void alEvaluar(id, laboratorioId)}
+            alEvaluar={(id) => void alEvaluar(id)}
           />
         ))}
       </div>
