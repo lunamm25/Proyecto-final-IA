@@ -24,7 +24,7 @@ const funcionalidades = [
   { icono: FolderOpen, titulo: "Portafolio académico", texto: "Entrega por laboratorio: informe PDF, código (ZIP o GitHub) e imágenes opcionales." },
   { icono: ClipboardCheck, titulo: "Gestión de rúbricas", texto: "Carga, extracción con IA, validación automática, edición y versionado." },
   { icono: BrainCircuit, titulo: "Evaluación inteligente", texto: "Nivel propuesto por criterio con evidencias citadas, fortalezas y recomendaciones." },
-  { icono: ShieldCheck, titulo: "Verificación de código", texto: "Análisis estático y pruebas en un entorno aislado (sandbox)." },
+  { icono: ShieldCheck, titulo: "Verificación de código", texto: "Análisis estático del código (sintaxis, estilo y complejidad), sin ejecutarlo." },
   { icono: UserCheck, titulo: "Revisión docente", texto: "Human-in-the-Loop: ajustes con motivo, historial y publicación controlada." },
   { icono: FileText, titulo: "Informe integral", texto: "Evolución entre cortes, dominio por competencia, brechas y plan de fortalecimiento." },
   { icono: Network, titulo: "Mapa mental interactivo", texto: "Competencias coloreadas por dominio, exploración y descarga en PNG o JSON." },
