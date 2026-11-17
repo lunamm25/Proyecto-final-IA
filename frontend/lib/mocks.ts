@@ -314,6 +314,7 @@ function entregaMock(datos: DatosEntregaMock): Entrega {
 const ANA: EstudianteResumen = { id: "est-1", nombre: "Ana Estudiante" };
 const JUAN: EstudianteResumen = { id: "est-2", nombre: "Juan Pérez" };
 
+// Todas con PDF: el PDF es obligatorio (MSG_PDF_OBLIGATORIO); ZIP y GitHub son opcionales.
 export const entregasMock: Entrega[] = [
   entregaMock({ id: 1, estudiante: ANA, laboratorio_id: 1, rubrica_version_id: 101, tiene_pdf: true, tiene_zip: true,
     github_url: null, creada_en: "2026-09-02T14:00:00Z", ultima_evaluacion: { id: 6, estado: "publicada", nota: 3.6 } }),
@@ -327,7 +328,7 @@ export const entregasMock: Entrega[] = [
     ultima_evaluacion: { id: 2, estado: "borrador", nota: 3.8 } }),
   entregaMock({ id: 5, estudiante: ANA, laboratorio_id: 5, rubrica_version_id: 105, tiene_pdf: true, tiene_zip: false,
     github_url: null, creada_en: "2026-11-12T14:00:00Z", ultima_evaluacion: null }),
-  entregaMock({ id: 6, estudiante: ANA, laboratorio_id: 6, rubrica_version_id: 106, tiene_pdf: false, tiene_zip: true,
+  entregaMock({ id: 6, estudiante: ANA, laboratorio_id: 6, rubrica_version_id: 106, tiene_pdf: true, tiene_zip: true,
     github_url: null, creada_en: "2026-11-11T14:00:00Z", ultima_evaluacion: { id: 4, estado: "error", nota: null } }),
   entregaMock({ id: 7, estudiante: JUAN, laboratorio_id: 3, rubrica_version_id: 103, tiene_pdf: true, tiene_zip: true,
     github_url: null, creada_en: "2026-11-09T14:00:00Z", ultima_evaluacion: { id: 5, estado: "aprobada", nota: 4.6 } }),
@@ -459,7 +460,7 @@ const evaluacionEnRevisionMock: Evaluacion = {
   rubrica_version_id: 102,
   estado: "en_revision",
   nota: 3.1,
-  // Entrega solo con URL de GitHub: el código no se ejecutó en el sandbox (verificación "no disponible").
+  // Entrega con PDF y URL de GitHub, sin ZIP: el código no se ejecutó en el sandbox (verificación "no disponible").
   verificacion: null,
   creada_en: "2026-09-20T15:00:00Z",
 };
@@ -532,9 +533,20 @@ export const trazaMock: Traza = {
       id: 2,
       fecha: "2026-10-15T15:01:10Z",
       usuario: null,
-      accion: "evaluacion_completada",
-      antes: { estado: "procesando" },
-      despues: { estado: "borrador" },
+      // Como el backend: accion "evaluacion_ia" con las respuestas crudas del modelo y la versión del prompt.
+      accion: "evaluacion_ia",
+      antes: null,
+      despues: {
+        version_prompt: "evaluacion-v1",
+        respuestas_crudas: [
+          '{\n  "criterios": [\n    {\n      "criterio_id": "c1",\n      "nivel_elegido": "Excelente",\n' +
+            '      "justificacion": "El informe explica con claridad la técnica de few-shot y la compara con zero-shot.",\n' +
+            '      "evidencias": ["Usamos tres ejemplos etiquetados antes de la pregunta..."]\n    },\n' +
+            '    {\n      "criterio_id": "c2",\n      "nivel_elegido": "Bueno",\n' +
+            '      "justificacion": "Reporta métricas, pero sin análisis de errores.",\n' +
+            '      "evidencias": ["La precisión subió de 0,71 a 0,84."]\n    }\n  ]\n}',
+        ],
+      },
       motivo: null,
     },
     {

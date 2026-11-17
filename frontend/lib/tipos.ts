@@ -213,12 +213,12 @@ export interface FiltrosEntregas {
 }
 
 /**
- * Datos para POST /api/entregas (multipart, solo estudiante): laboratorio_id y al menos uno de pdf, zip o github_url.
- * `extras` es un objeto JSON pequeño (se envía como texto), no archivos.
+ * Datos para POST /api/entregas (multipart, solo estudiante): laboratorio_id y pdf obligatorios; zip y github_url
+ * opcionales (solo se envían si tienen valor). `extras` es un objeto JSON pequeño (se envía como texto), no archivos.
  */
 export interface NuevaEntrega {
   laboratorio_id: IdNumerico;
-  pdf?: File;
+  pdf: File;
   zip?: File;
   github_url?: string;
   extras?: Record<string, string>;
@@ -399,7 +399,10 @@ export interface EventoTraza {
   motivo: string | null;
 }
 
-/** GET /api/evaluaciones/{id}/traza (TrazaRespuesta). Trae la verificación técnica si hubo; nunca la respuesta cruda. */
+/**
+ * GET /api/evaluaciones/{id}/traza (TrazaRespuesta). Trae la verificación técnica si hubo. Las respuestas crudas del
+ * modelo vienen dentro de los eventos (`despues.respuestas_crudas`, p. ej. en "evaluacion_ia"), sin claves.
+ */
 export interface Traza {
   /** Resumen de la ejecución en sandbox (null si no se ejecutó). */
   verificacion?: VerificacionResumen | null;
